@@ -1925,6 +1925,16 @@ function __schemaFkName(m)    { return ''; }   // ditto
 `;
 
   // src/parser.js
+  var __subLocsOn = false;
+  var setSubLocs = (on) => {
+    __subLocsOn = on;
+  };
+  var __sub = (node, subLocs) => {
+    if (subLocs && Array.isArray(node))
+      Object.defineProperty(node, "subLocs", { value: subLocs, enumerable: false, configurable: true, writable: true });
+    return node;
+  };
+  var __spl = (child) => child && child.subLocs ? child.subLocs : Array.isArray(child) ? child.map(() => null) : [];
   var parserInstance = {
     symbolIds: { $accept: 0, $end: 1, error: 2, Root: 3, Body: 4, Line: 5, TERMINATOR: 6, Expression: 7, ExpressionLine: 8, Statement: 9, Return: 10, STATEMENT: 11, Import: 12, Export: 13, Value: 14, Code: 15, Operation: 16, Assign: 17, ReactiveAssign: 18, ComputedAssign: 19, ReadonlyAssign: 20, Effect: 21, Gate: 22, If: 23, Try: 24, While: 25, For: 26, Switch: 27, Class: 28, Component: 29, Render: 30, Throw: 31, Yield: 32, Def: 33, Enum: 34, Schema: 35, CodeLine: 36, OperationLine: 37, Assignable: 38, Literal: 39, Parenthetical: 40, Range: 41, Invocation: 42, DoIife: 43, This: 44, Super: 45, MetaProperty: 46, MapLiteral: 47, Atom: 48, JS: 49, Regex: 50, UNDEFINED: 51, NULL: 52, BOOL: 53, INFINITY: 54, NAN: 55, SYMBOL: 56, NUMBER: 57, String: 58, Identifier: 59, IDENTIFIER: 60, Property: 61, PROPERTY: 62, STRING: 63, STRING_START: 64, Interpolations: 65, STRING_END: 66, InterpolationChunk: 67, INTERPOLATION_START: 68, INTERPOLATION_END: 69, INDENT: 70, OUTDENT: 71, REGEX: 72, REGEX_START: 73, REGEX_END: 74, RegexWithIndex: 75, ",": 76, "=": 77, REACTIVE_ASSIGN: 78, COMPUTED_ASSIGN: 79, Block: 80, READONLY_ASSIGN: 81, GATE: 82, EFFECT: 83, SimpleAssignable: 84, Array: 85, Object: 86, Subjectable: 87, ThisProperty: 88, ".": 89, "?.": 90, INDEX_START: 91, INDEX_END: 92, Slice: 93, PICK_START: 94, PickList: 95, OptComma: 96, PICK_END: 97, OPTPICK_START: 98, ES6_OPTIONAL_INDEX: 99, "{": 100, ObjAssignable: 101, ":": 102, FOR: 103, ForVariables: 104, FOROF: 105, "}": 106, WHEN: 107, OWN: 108, AssignList: 109, AssignObj: 110, ObjRestValue: 111, SimpleObjAssignable: 112, "[": 113, "]": 114, "@": 115, "...": 116, ObjSpreadExpr: 117, SUPER: 118, Arguments: 119, DYNAMIC_IMPORT: 120, MAP_START: 121, MapAssignList: 122, MAP_END: 123, MapAssignObj: 124, MapAssignable: 125, PickItem: 126, PickKey: 127, Elisions: 128, ArgElisionList: 129, OptElisions: 130, ArgElision: 131, Arg: 132, Elision: 133, RangeDots: 134, "..": 135, DEF: 136, CALL_START: 137, ParamList: 138, CALL_END: 139, PARAM_START: 140, PARAM_END: 141, ArrowKind: 142, "->": 143, "=>": 144, Param: 145, ParamVar: 146, Splat: 147, ES6_OPTIONAL_CALL: 148, ArgList: 149, SimpleArgs: 150, THIS: 151, NEW_TARGET: 152, IMPORT_META: 153, "(": 154, ")": 155, RETURN: 156, THROW: 157, YIELD: 158, FROM: 159, IfBlock: 160, IF: 161, IfElseTail: 162, ELSE: 163, UnlessBlock: 164, UNLESS: 165, POST_IF: 166, POST_UNLESS: 167, TRY: 168, Catch: 169, FINALLY: 170, CATCH: 171, SWITCH: 172, Cases: 173, When: 174, LEADING_WHEN: 175, WhileSource: 176, WHILE: 177, UNTIL: 178, Loop: 179, LOOP: 180, FORIN: 181, BY: 182, FORAS: 183, AWAIT: 184, FORASAWAIT: 185, ForValue: 186, ClassName: 187, CLASS: 188, EXTENDS: 189, ENUM: 190, SCHEMA: 191, SCHEMA_BODY: 192, COMPONENT: 193, ComponentBody: 194, ComponentLine: 195, OFFER: 196, ACCEPT: 197, RENDER: 198, IMPORT: 199, ImportDefaultSpecifier: 200, ImportNamespaceSpecifier: 201, ImportSpecifierList: 202, ImportSpecifier: 203, AS: 204, DEFAULT: 205, IMPORT_ALL: 206, EXPORT: 207, ExportSpecifierList: 208, EXPORT_ALL: 209, ExportSpecifier: 210, UNARY: 211, DO: 212, DO_IIFE: 213, UNARY_MATH: 214, "-": 215, "+": 216, "?": 217, PRESENCE: 218, "--": 219, "++": 220, MATH: 221, "**": 222, SHIFT: 223, COMPARE: 224, "&": 225, "^": 226, "|": 227, "||": 228, "??": 229, "&&": 230, RELATION: 231, TERNARY: 232, COMPOUND_ASSIGN: 233 },
     tokenNames: { 2: "error", 6: "TERMINATOR", 11: "STATEMENT", 49: "JS", 51: "UNDEFINED", 52: "NULL", 53: "BOOL", 54: "INFINITY", 55: "NAN", 56: "SYMBOL", 57: "NUMBER", 60: "IDENTIFIER", 62: "PROPERTY", 63: "STRING", 64: "STRING_START", 66: "STRING_END", 68: "INTERPOLATION_START", 69: "INTERPOLATION_END", 70: "INDENT", 71: "OUTDENT", 72: "REGEX", 73: "REGEX_START", 74: "REGEX_END", 76: ",", 77: "=", 78: "REACTIVE_ASSIGN", 79: "COMPUTED_ASSIGN", 81: "READONLY_ASSIGN", 82: "GATE", 83: "EFFECT", 89: ".", 90: "?.", 91: "INDEX_START", 92: "INDEX_END", 94: "PICK_START", 97: "PICK_END", 98: "OPTPICK_START", 99: "ES6_OPTIONAL_INDEX", 100: "{", 102: ":", 103: "FOR", 105: "FOROF", 106: "}", 107: "WHEN", 108: "OWN", 113: "[", 114: "]", 115: "@", 116: "...", 118: "SUPER", 120: "DYNAMIC_IMPORT", 121: "MAP_START", 123: "MAP_END", 135: "..", 136: "DEF", 137: "CALL_START", 139: "CALL_END", 140: "PARAM_START", 141: "PARAM_END", 143: "->", 144: "=>", 148: "ES6_OPTIONAL_CALL", 151: "THIS", 152: "NEW_TARGET", 153: "IMPORT_META", 154: "(", 155: ")", 156: "RETURN", 157: "THROW", 158: "YIELD", 159: "FROM", 161: "IF", 163: "ELSE", 165: "UNLESS", 166: "POST_IF", 167: "POST_UNLESS", 168: "TRY", 170: "FINALLY", 171: "CATCH", 172: "SWITCH", 175: "LEADING_WHEN", 177: "WHILE", 178: "UNTIL", 180: "LOOP", 181: "FORIN", 182: "BY", 183: "FORAS", 184: "AWAIT", 185: "FORASAWAIT", 188: "CLASS", 189: "EXTENDS", 190: "ENUM", 191: "SCHEMA", 192: "SCHEMA_BODY", 193: "COMPONENT", 196: "OFFER", 197: "ACCEPT", 198: "RENDER", 199: "IMPORT", 204: "AS", 205: "DEFAULT", 206: "IMPORT_ALL", 207: "EXPORT", 209: "EXPORT_ALL", 211: "UNARY", 212: "DO", 213: "DO_IIFE", 214: "UNARY_MATH", 215: "-", 216: "+", 217: "?", 218: "PRESENCE", 219: "--", 220: "++", 221: "MATH", 222: "**", 223: "SHIFT", 224: "COMPARE", 225: "&", 226: "^", 227: "|", 228: "||", 229: "??", 230: "&&", 231: "RELATION", 232: "TERNARY", 233: "COMPOUND_ASSIGN" },
@@ -1946,12 +1956,13 @@ function __schemaFkName(m)    { return ''; }   // ditto
     ruleTable: [0, 0, 3, 0, 3, 1, 4, 1, 4, 3, 4, 2, 5, 1, 5, 1, 5, 1, 9, 1, 9, 1, 9, 1, 9, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 7, 1, 8, 1, 8, 1, 14, 1, 14, 1, 14, 1, 14, 1, 14, 1, 14, 1, 14, 1, 14, 1, 14, 1, 14, 1, 39, 1, 39, 1, 39, 1, 39, 1, 39, 1, 39, 1, 39, 1, 39, 1, 39, 1, 48, 1, 48, 1, 59, 1, 61, 1, 58, 1, 58, 3, 65, 1, 65, 2, 67, 3, 67, 5, 67, 2, 67, 1, 50, 1, 50, 3, 75, 3, 75, 1, 17, 3, 17, 4, 17, 5, 18, 3, 18, 4, 18, 5, 19, 3, 19, 4, 19, 3, 20, 3, 20, 4, 20, 5, 22, 3, 21, 3, 21, 4, 21, 3, 21, 2, 21, 3, 21, 2, 38, 1, 38, 1, 38, 1, 87, 1, 87, 1, 84, 1, 84, 1, 84, 3, 84, 3, 84, 4, 84, 6, 84, 4, 84, 6, 84, 5, 84, 5, 84, 7, 84, 7, 84, 4, 84, 5, 84, 7, 86, 10, 86, 12, 86, 11, 86, 13, 86, 4, 109, 0, 109, 1, 109, 3, 109, 4, 109, 6, 110, 1, 110, 1, 110, 3, 110, 5, 110, 3, 110, 5, 112, 1, 112, 1, 112, 1, 101, 1, 101, 3, 101, 4, 101, 1, 111, 2, 111, 2, 117, 1, 117, 1, 117, 1, 117, 1, 117, 1, 117, 2, 117, 2, 117, 2, 117, 2, 117, 3, 117, 3, 117, 4, 117, 6, 117, 5, 117, 5, 117, 7, 117, 7, 47, 4, 122, 0, 122, 1, 122, 3, 122, 4, 122, 6, 124, 3, 124, 5, 124, 2, 95, 1, 95, 3, 95, 4, 95, 6, 126, 1, 126, 3, 126, 3, 126, 5, 127, 1, 127, 1, 125, 1, 125, 1, 125, 1, 125, 1, 125, 1, 125, 1, 125, 1, 125, 1, 125, 1, 125, 1, 125, 1, 125, 1, 125, 1, 125, 1, 85, 2, 85, 3, 85, 4, 129, 1, 129, 3, 129, 4, 129, 4, 129, 6, 131, 1, 131, 2, 130, 1, 130, 2, 128, 1, 128, 2, 133, 1, 133, 2, 134, 1, 134, 1, 41, 5, 93, 3, 93, 2, 93, 2, 93, 1, 33, 6, 33, 3, 15, 5, 15, 2, 36, 5, 36, 2, 142, 1, 142, 1, 138, 0, 138, 1, 138, 3, 138, 4, 138, 6, 145, 1, 145, 3, 145, 2, 145, 1, 146, 1, 146, 1, 146, 1, 146, 1, 147, 2, 42, 2, 42, 2, 42, 3, 42, 2, 42, 2, 119, 2, 119, 4, 149, 1, 149, 3, 149, 4, 149, 4, 149, 6, 132, 1, 132, 1, 132, 1, 132, 1, 150, 1, 150, 3, 44, 1, 44, 1, 88, 2, 45, 3, 45, 4, 45, 6, 46, 3, 46, 3, 80, 2, 80, 3, 40, 3, 40, 5, 96, 0, 96, 1, 10, 2, 10, 4, 10, 1, 31, 2, 31, 4, 32, 1, 32, 2, 32, 4, 32, 3, 160, 3, 160, 4, 162, 4, 162, 5, 162, 2, 164, 3, 164, 5, 23, 1, 23, 1, 23, 3, 23, 3, 23, 7, 23, 5, 23, 3, 23, 3, 24, 2, 24, 3, 24, 4, 24, 5, 169, 3, 169, 3, 169, 3, 169, 2, 27, 5, 27, 7, 27, 4, 27, 6, 173, 1, 173, 2, 174, 3, 174, 4, 176, 2, 176, 4, 176, 2, 176, 4, 25, 2, 25, 2, 25, 2, 25, 1, 179, 2, 179, 2, 179, 3, 26, 5, 26, 7, 26, 7, 26, 9, 26, 9, 26, 5, 26, 7, 26, 6, 26, 8, 26, 5, 26, 7, 26, 6, 26, 8, 26, 5, 26, 7, 26, 3, 26, 5, 26, 5, 26, 7, 26, 7, 26, 9, 26, 9, 26, 5, 26, 7, 26, 6, 26, 8, 26, 5, 26, 7, 26, 6, 26, 8, 26, 5, 26, 7, 26, 3, 26, 5, 186, 1, 186, 3, 104, 1, 104, 3, 187, 1, 187, 1, 28, 1, 28, 2, 28, 3, 28, 4, 28, 2, 28, 3, 28, 4, 28, 5, 34, 3, 35, 2, 29, 4, 29, 6, 194, 1, 194, 3, 194, 2, 195, 1, 195, 1, 195, 1, 195, 2, 195, 2, 30, 2, 30, 2, 12, 2, 12, 4, 12, 4, 12, 5, 12, 7, 12, 6, 12, 9, 202, 1, 202, 3, 202, 4, 202, 4, 202, 6, 203, 1, 203, 3, 203, 1, 203, 3, 200, 1, 201, 3, 13, 3, 13, 5, 13, 2, 13, 2, 13, 2, 13, 2, 13, 4, 13, 5, 13, 6, 13, 2, 13, 2, 13, 2, 13, 2, 13, 3, 13, 5, 13, 4, 13, 5, 13, 7, 208, 1, 208, 3, 208, 4, 208, 4, 208, 6, 210, 1, 210, 3, 210, 3, 210, 1, 210, 3, 37, 2, 37, 2, 37, 2, 16, 2, 16, 2, 16, 2, 16, 2, 16, 2, 16, 2, 16, 2, 16, 2, 16, 4, 16, 2, 16, 2, 16, 2, 16, 2, 16, 3, 16, 3, 16, 3, 16, 3, 16, 3, 16, 3, 16, 3, 16, 3, 16, 3, 16, 3, 16, 3, 16, 3, 16, 3, 16, 3, 16, 3, 16, 3, 16, 3, 16, 3, 16, 3, 16, 5, 16, 3, 16, 5, 16, 4, 43, 2],
     ruleActions: (rule, vals, locs, shared) => {
       const $ = vals;
+      const $L = locs;
       const $0 = vals.length - 1;
       switch (rule) {
         case 1:
-          return ["program"];
+          return __sub(["program"], __subLocsOn ? [null] : null);
         case 2:
-          return ["program", ...$[$0]];
+          return __sub(["program", ...$[$0]], __subLocsOn ? [null, ...__spl($[$0])] : null);
         case 3:
         case 62:
         case 117:
@@ -1961,24 +1972,22 @@ function __schemaFkName(m)    { return ''; }   // ditto
         case 198:
         case 218:
         case 238:
-        case 247:
         case 299:
         case 350:
         case 366:
         case 383:
         case 412:
-          return [$[$0]];
+          return __sub([$[$0]], __subLocsOn ? [$L[$0]] : null);
         case 4:
         case 118:
         case 156:
         case 163:
         case 219:
         case 239:
-        case 248:
         case 367:
         case 384:
         case 413:
-          return [...$[$0 - 2], $[$0]];
+          return __sub([...$[$0 - 2], $[$0]], __subLocsOn ? [...__spl($[$0 - 2]), $L[$0]] : null);
         case 5:
         case 64:
         case 201:
@@ -2106,14 +2115,14 @@ function __schemaFkName(m)    { return ''; }   // ditto
           return "null";
         case 55:
         case 185:
-          return ["symbol", $[$0]];
+          return __sub(["symbol", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 61:
-          return ["str", ...$[$0 - 1]];
+          return __sub(["str", ...$[$0 - 1]], __subLocsOn ? [null, ...__spl($[$0 - 1])] : null);
         case 63:
         case 195:
         case 199:
         case 300:
-          return [...$[$0 - 1], $[$0]];
+          return __sub([...$[$0 - 1], $[$0]], __subLocsOn ? [...__spl($[$0 - 1]), $L[$0]] : null);
         case 65:
         case 237:
         case 241:
@@ -2123,53 +2132,53 @@ function __schemaFkName(m)    { return ''; }   // ditto
         case 66:
           return "";
         case 69:
-          return ["regex", $[$0 - 1]];
+          return __sub(["regex", $[$0 - 1]], __subLocsOn ? [null, $L[$0 - 1]] : null);
         case 70:
-          return ["regex-index", $[$0 - 2], $[$0]];
+          return __sub(["regex-index", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 71:
-          return ["regex-index", $[$0], null];
+          return __sub(["regex-index", $[$0], null], __subLocsOn ? [null, $L[$0], null] : null);
         case 72:
         case 125:
-          return ["=", $[$0 - 2], $[$0]];
+          return __sub(["=", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 73:
-          return ["=", $[$0 - 3], $[$0]];
+          return __sub(["=", $[$0 - 3], $[$0]], __subLocsOn ? [null, $L[$0 - 3], $L[$0]] : null);
         case 74:
         case 126:
-          return ["=", $[$0 - 4], $[$0 - 1]];
+          return __sub(["=", $[$0 - 4], $[$0 - 1]], __subLocsOn ? [null, $L[$0 - 4], $L[$0 - 1]] : null);
         case 75:
-          return ["state", $[$0 - 2], $[$0]];
+          return __sub(["state", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 76:
-          return ["state", $[$0 - 3], $[$0]];
+          return __sub(["state", $[$0 - 3], $[$0]], __subLocsOn ? [null, $L[$0 - 3], $L[$0]] : null);
         case 77:
-          return ["state", $[$0 - 4], $[$0 - 1]];
+          return __sub(["state", $[$0 - 4], $[$0 - 1]], __subLocsOn ? [null, $L[$0 - 4], $L[$0 - 1]] : null);
         case 78:
         case 80:
-          return ["computed", $[$0 - 2], $[$0]];
+          return __sub(["computed", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 79:
-          return ["computed", $[$0 - 3], $[$0]];
+          return __sub(["computed", $[$0 - 3], $[$0]], __subLocsOn ? [null, $L[$0 - 3], $L[$0]] : null);
         case 81:
-          return ["readonly", $[$0 - 2], $[$0]];
+          return __sub(["readonly", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 82:
-          return ["readonly", $[$0 - 3], $[$0]];
+          return __sub(["readonly", $[$0 - 3], $[$0]], __subLocsOn ? [null, $L[$0 - 3], $L[$0]] : null);
         case 83:
-          return ["readonly", $[$0 - 4], $[$0 - 1]];
+          return __sub(["readonly", $[$0 - 4], $[$0 - 1]], __subLocsOn ? [null, $L[$0 - 4], $L[$0 - 1]] : null);
         case 84:
-          return ["gate", $[$0 - 2], $[$0]];
+          return __sub(["gate", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 85:
         case 87:
-          return ["effect", $[$0 - 2], $[$0]];
+          return __sub(["effect", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 86:
-          return ["effect", $[$0 - 3], $[$0]];
+          return __sub(["effect", $[$0 - 3], $[$0]], __subLocsOn ? [null, $L[$0 - 3], $L[$0]] : null);
         case 88:
         case 89:
         case 90:
-          return ["effect", null, $[$0]];
+          return __sub(["effect", null, $[$0]], __subLocsOn ? [null, null, $L[$0]] : null);
         case 98:
         case 145:
-          return [".", $[$0 - 2], $[$0]];
+          return __sub([".", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 99:
         case 146:
-          return ["?.", $[$0 - 2], $[$0]];
+          return __sub(["?.", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 100:
         case 102:
         case 147:
@@ -2180,22 +2189,22 @@ function __schemaFkName(m)    { return ''; }   // ditto
           return ["[]", $[$0 - 5], $[$0 - 2]];
         case 104:
         case 149:
-          return [".{}", $[$0 - 4], ...$[$0 - 2]];
+          return __sub([".{}", $[$0 - 4], ...$[$0 - 2]], __subLocsOn ? [null, $L[$0 - 4], ...__spl($[$0 - 2])] : null);
         case 105:
         case 150:
-          return ["?.{}", $[$0 - 4], ...$[$0 - 2]];
+          return __sub(["?.{}", $[$0 - 4], ...$[$0 - 2]], __subLocsOn ? [null, $L[$0 - 4], ...__spl($[$0 - 2])] : null);
         case 106:
         case 151:
-          return [".{}", $[$0 - 6], ...$[$0 - 3]];
+          return __sub([".{}", $[$0 - 6], ...$[$0 - 3]], __subLocsOn ? [null, $L[$0 - 6], ...__spl($[$0 - 3])] : null);
         case 107:
         case 152:
-          return ["?.{}", $[$0 - 6], ...$[$0 - 3]];
+          return __sub(["?.{}", $[$0 - 6], ...$[$0 - 3]], __subLocsOn ? [null, $L[$0 - 6], ...__spl($[$0 - 3])] : null);
         case 108:
           return [$[$0 - 1][0], $[$0 - 3], ...$[$0 - 1].slice(1)];
         case 109:
-          return ["optindex", $[$0 - 4], $[$0 - 1]];
+          return __sub(["optindex", $[$0 - 4], $[$0 - 1]], __subLocsOn ? [null, $L[$0 - 4], $L[$0 - 1]] : null);
         case 110:
-          return ["optindex", $[$0 - 6], $[$0 - 2]];
+          return __sub(["optindex", $[$0 - 6], $[$0 - 2]], __subLocsOn ? [null, $L[$0 - 6], $L[$0 - 2]] : null);
         case 111:
           return ["object-comprehension", $[$0 - 8], $[$0 - 6], [["for-of", $[$0 - 4], $[$0 - 2], false]], []];
         case 112:
@@ -2205,7 +2214,7 @@ function __schemaFkName(m)    { return ''; }   // ditto
         case 114:
           return ["object-comprehension", $[$0 - 11], $[$0 - 9], [["for-of", $[$0 - 6], $[$0 - 4], true]], [$[$0 - 2]]];
         case 115:
-          return ["object", ...$[$0 - 2]];
+          return __sub(["object", ...$[$0 - 2]], __subLocsOn ? [null, ...__spl($[$0 - 2])] : null);
         case 116:
         case 154:
         case 196:
@@ -2219,7 +2228,7 @@ function __schemaFkName(m)    { return ''; }   // ditto
         case 240:
         case 385:
         case 414:
-          return [...$[$0 - 3], $[$0]];
+          return __sub([...$[$0 - 3], $[$0]], __subLocsOn ? [...__spl($[$0 - 3]), $L[$0]] : null);
         case 120:
         case 158:
         case 165:
@@ -2227,59 +2236,59 @@ function __schemaFkName(m)    { return ''; }   // ditto
         case 242:
         case 387:
         case 416:
-          return [...$[$0 - 5], ...$[$0 - 2]];
+          return __sub([...$[$0 - 5], ...$[$0 - 2]], __subLocsOn ? [...__spl($[$0 - 5]), ...__spl($[$0 - 2])] : null);
         case 121:
-          return [null, $[$0], $[$0]];
+          return __sub([null, $[$0], $[$0]], __subLocsOn ? [null, $L[$0], $L[$0]] : null);
         case 123:
         case 159:
-          return [":", $[$0 - 2], $[$0]];
+          return __sub([":", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 124:
         case 160:
-          return [":", $[$0 - 4], $[$0 - 1]];
+          return __sub([":", $[$0 - 4], $[$0 - 1]], __subLocsOn ? [null, $L[$0 - 4], $L[$0 - 1]] : null);
         case 131:
-          return ["dynamicKey", $[$0 - 1]];
+          return __sub(["dynamicKey", $[$0 - 1]], __subLocsOn ? [null, $L[$0 - 1]] : null);
         case 132:
           return ["[]", "this", $[$0 - 1]];
         case 134:
         case 135:
         case 161:
         case 230:
-          return ["...", $[$0]];
+          return __sub(["...", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 141:
         case 234:
-          return ["super", ...$[$0]];
+          return __sub(["super", ...$[$0]], __subLocsOn ? [null, ...__spl($[$0])] : null);
         case 142:
         case 143:
         case 144:
         case 232:
         case 235:
-          return [$[$0 - 1], ...$[$0]];
+          return __sub([$[$0 - 1], ...$[$0]], __subLocsOn ? [$L[$0 - 1], ...__spl($[$0])] : null);
         case 153:
-          return ["map-literal", ...$[$0 - 2]];
+          return __sub(["map-literal", ...$[$0 - 2]], __subLocsOn ? [null, ...__spl($[$0 - 2])] : null);
         case 166:
-          return [$[$0], $[$0], null];
+          return __sub([$[$0], $[$0], null], __subLocsOn ? [$L[$0], $L[$0], null] : null);
         case 167:
-          return [$[$0 - 2], $[$0], null];
+          return __sub([$[$0 - 2], $[$0], null], __subLocsOn ? [$L[$0 - 2], $L[$0], null] : null);
         case 168:
-          return [$[$0 - 2], $[$0 - 2], $[$0]];
+          return __sub([$[$0 - 2], $[$0 - 2], $[$0]], __subLocsOn ? [$L[$0 - 2], $L[$0 - 2], $L[$0]] : null);
         case 169:
-          return [$[$0 - 4], $[$0 - 2], $[$0]];
+          return __sub([$[$0 - 4], $[$0 - 2], $[$0]], __subLocsOn ? [$L[$0 - 4], $L[$0 - 2], $L[$0]] : null);
         case 186:
-          return ["array"];
+          return __sub(["array"], __subLocsOn ? [null] : null);
         case 187:
-          return ["array", ...$[$0 - 1]];
+          return __sub(["array", ...$[$0 - 1]], __subLocsOn ? [null, ...__spl($[$0 - 1])] : null);
         case 188:
-          return ["array", ...$[$0 - 2], ...$[$0 - 1]];
+          return __sub(["array", ...$[$0 - 2], ...$[$0 - 1]], __subLocsOn ? [null, ...__spl($[$0 - 2]), ...__spl($[$0 - 1])] : null);
         case 190:
-          return [...$[$0 - 2], ...$[$0]];
+          return __sub([...$[$0 - 2], ...$[$0]], __subLocsOn ? [...__spl($[$0 - 2]), ...__spl($[$0])] : null);
         case 191:
-          return [...$[$0 - 3], ...$[$0]];
+          return __sub([...$[$0 - 3], ...$[$0]], __subLocsOn ? [...__spl($[$0 - 3]), ...__spl($[$0])] : null);
         case 192:
-          return [...$[$0 - 2], ...$[$0 - 1]];
+          return __sub([...$[$0 - 2], ...$[$0 - 1]], __subLocsOn ? [...__spl($[$0 - 2]), ...__spl($[$0 - 1])] : null);
         case 193:
-          return [...$[$0 - 5], ...$[$0 - 4], ...$[$0 - 2], ...$[$0 - 1]];
+          return __sub([...$[$0 - 5], ...$[$0 - 4], ...$[$0 - 2], ...$[$0 - 1]], __subLocsOn ? [...__spl($[$0 - 5]), ...__spl($[$0 - 4]), ...__spl($[$0 - 2]), ...__spl($[$0 - 1])] : null);
         case 197:
-          return [...$[$0]];
+          return __sub([...$[$0]], __subLocsOn ? [...__spl($[$0])] : null);
         case 200:
           return null;
         case 202:
@@ -2288,88 +2297,92 @@ function __schemaFkName(m)    { return ''; }   // ditto
         case 246:
           return "...";
         case 204:
-          return [$[$0 - 2], $[$0 - 3], $[$0 - 1]];
+          return __sub([$[$0 - 2], $[$0 - 3], $[$0 - 1]], __subLocsOn ? [$L[$0 - 2], $L[$0 - 3], $L[$0 - 1]] : null);
         case 205:
         case 440:
         case 442:
         case 443:
         case 456:
         case 458:
-          return [$[$0 - 1], $[$0 - 2], $[$0]];
+          return __sub([$[$0 - 1], $[$0 - 2], $[$0]], __subLocsOn ? [$L[$0 - 1], $L[$0 - 2], $L[$0]] : null);
         case 206:
-          return [$[$0], $[$0 - 1], null];
+          return __sub([$[$0], $[$0 - 1], null], __subLocsOn ? [$L[$0], $L[$0 - 1], null] : null);
         case 207:
-          return [$[$0 - 1], null, $[$0]];
+          return __sub([$[$0 - 1], null, $[$0]], __subLocsOn ? [$L[$0 - 1], null, $L[$0]] : null);
         case 208:
-          return [$[$0], null, null];
+          return __sub([$[$0], null, null], __subLocsOn ? [$L[$0], null, null] : null);
         case 209:
-          return ["def", $[$0 - 4], $[$0 - 2], $[$0]];
+          return __sub(["def", $[$0 - 4], $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 4], $L[$0 - 2], $L[$0]] : null);
         case 210:
           return ["def", $[$0 - 1], [], $[$0]];
         case 211:
         case 213:
-          return [$[$0 - 1], $[$0 - 3], $[$0]];
+          return __sub([$[$0 - 1], $[$0 - 3], $[$0]], __subLocsOn ? [$L[$0 - 1], $L[$0 - 3], $L[$0]] : null);
         case 212:
         case 214:
           return [$[$0 - 1], [], $[$0]];
         case 223:
         case 349:
-          return ["default", $[$0 - 2], $[$0]];
+          return __sub(["default", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 224:
-          return ["rest", $[$0]];
+          return __sub(["rest", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 225:
-          return ["expansion"];
+          return __sub(["expansion"], __subLocsOn ? [null] : null);
         case 231:
-          return ["tagged-template", $[$0 - 1], $[$0]];
+          return __sub(["tagged-template", $[$0 - 1], $[$0]], __subLocsOn ? [null, $L[$0 - 1], $L[$0]] : null);
         case 233:
-          return ["optcall", $[$0 - 2], ...$[$0]];
+          return __sub(["optcall", $[$0 - 2], ...$[$0]], __subLocsOn ? [null, $L[$0 - 2], ...__spl($[$0])] : null);
+        case 247:
+          return [$[$0]];
+        case 248:
+          return [...$[$0 - 2], $[$0]];
         case 249:
         case 250:
           return "this";
         case 251:
-          return [".", "this", $[$0]];
+          return __sub([".", "this", $[$0]], __subLocsOn ? [null, null, $L[$0]] : null);
         case 252:
-          return [".", "super", $[$0]];
+          return __sub([".", "super", $[$0]], __subLocsOn ? [null, null, $L[$0]] : null);
         case 253:
           return ["[]", "super", $[$0 - 1]];
         case 254:
           return ["[]", "super", $[$0 - 2]];
         case 255:
-          return [".", "new", $[$0]];
+          return __sub([".", "new", $[$0]], __subLocsOn ? [null, null, $L[$0]] : null);
         case 256:
-          return [".", "import", $[$0]];
+          return __sub([".", "import", $[$0]], __subLocsOn ? [null, null, $L[$0]] : null);
         case 257:
-          return ["block"];
+          return __sub(["block"], __subLocsOn ? [null] : null);
         case 258:
-          return ["block", ...$[$0 - 1]];
+          return __sub(["block", ...$[$0 - 1]], __subLocsOn ? [null, ...__spl($[$0 - 1])] : null);
         case 259:
           return $[$0 - 1].length === 1 ? (Array.isArray($[$0 - 1][0]) && ($[$0 - 1][0].parenthesized = true), $[$0 - 1][0]) : ["block", ...$[$0 - 1]];
         case 260:
           return $[$0 - 2].length === 1 ? (Array.isArray($[$0 - 2][0]) && ($[$0 - 2][0].parenthesized = true), $[$0 - 2][0]) : ["block", ...$[$0 - 2]];
         case 263:
-          return ["return", $[$0]];
+          return __sub(["return", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 264:
-          return ["return", $[$0 - 1]];
+          return __sub(["return", $[$0 - 1]], __subLocsOn ? [null, $L[$0 - 1]] : null);
         case 265:
-          return ["return"];
+          return __sub(["return"], __subLocsOn ? [null] : null);
         case 266:
-          return ["throw", $[$0]];
+          return __sub(["throw", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 267:
-          return ["throw", $[$0 - 1]];
+          return __sub(["throw", $[$0 - 1]], __subLocsOn ? [null, $L[$0 - 1]] : null);
         case 268:
-          return ["yield"];
+          return __sub(["yield"], __subLocsOn ? [null] : null);
         case 269:
-          return ["yield", $[$0]];
+          return __sub(["yield", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 270:
-          return ["yield", $[$0 - 1]];
+          return __sub(["yield", $[$0 - 1]], __subLocsOn ? [null, $L[$0 - 1]] : null);
         case 271:
-          return ["yield-from", $[$0]];
+          return __sub(["yield-from", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 272:
         case 274:
-          return ["if", $[$0 - 1], $[$0]];
+          return __sub(["if", $[$0 - 1], $[$0]], __subLocsOn ? [null, $L[$0 - 1], $L[$0]] : null);
         case 273:
         case 275:
-          return ["if", $[$0 - 2], $[$0 - 1], $[$0]];
+          return __sub(["if", $[$0 - 2], $[$0 - 1], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0 - 1], $L[$0]] : null);
         case 277:
           return ["if", ["!", $[$0 - 1]], $[$0]];
         case 278:
@@ -2378,45 +2391,45 @@ function __schemaFkName(m)    { return ''; }   // ditto
         case 282:
           return ["if", $[$0], [$[$0 - 2]]];
         case 283:
-          return ["?:", $[$0 - 4], $[$0 - 6], $[$0 - 1]];
+          return __sub(["?:", $[$0 - 4], $[$0 - 6], $[$0 - 1]], __subLocsOn ? [null, $L[$0 - 4], $L[$0 - 6], $L[$0 - 1]] : null);
         case 284:
-          return ["?:", $[$0 - 2], $[$0 - 4], $[$0]];
+          return __sub(["?:", $[$0 - 2], $[$0 - 4], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0 - 4], $L[$0]] : null);
         case 285:
         case 286:
           return ["if", ["!", $[$0]], [$[$0 - 2]]];
         case 287:
-          return ["try", $[$0]];
+          return __sub(["try", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 288:
-          return ["try", $[$0 - 1], $[$0]];
+          return __sub(["try", $[$0 - 1], $[$0]], __subLocsOn ? [null, $L[$0 - 1], $L[$0]] : null);
         case 289:
-          return ["try", $[$0 - 2], $[$0]];
+          return __sub(["try", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 290:
-          return ["try", $[$0 - 3], $[$0 - 2], $[$0]];
+          return __sub(["try", $[$0 - 3], $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 3], $L[$0 - 2], $L[$0]] : null);
         case 291:
         case 292:
         case 293:
         case 422:
         case 425:
         case 427:
-          return [$[$0 - 1], $[$0]];
+          return __sub([$[$0 - 1], $[$0]], __subLocsOn ? [$L[$0 - 1], $L[$0]] : null);
         case 294:
-          return [null, $[$0]];
+          return __sub([null, $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 295:
-          return ["switch", $[$0 - 3], $[$0 - 1], null];
+          return __sub(["switch", $[$0 - 3], $[$0 - 1], null], __subLocsOn ? [null, $L[$0 - 3], $L[$0 - 1], null] : null);
         case 296:
-          return ["switch", $[$0 - 5], $[$0 - 3], $[$0 - 1]];
+          return __sub(["switch", $[$0 - 5], $[$0 - 3], $[$0 - 1]], __subLocsOn ? [null, $L[$0 - 5], $L[$0 - 3], $L[$0 - 1]] : null);
         case 297:
-          return ["switch", null, $[$0 - 1], null];
+          return __sub(["switch", null, $[$0 - 1], null], __subLocsOn ? [null, null, $L[$0 - 1], null] : null);
         case 298:
-          return ["switch", null, $[$0 - 3], $[$0 - 1]];
+          return __sub(["switch", null, $[$0 - 3], $[$0 - 1]], __subLocsOn ? [null, null, $L[$0 - 3], $L[$0 - 1]] : null);
         case 301:
-          return ["when", $[$0 - 1], $[$0]];
+          return __sub(["when", $[$0 - 1], $[$0]], __subLocsOn ? [null, $L[$0 - 1], $L[$0]] : null);
         case 302:
-          return ["when", $[$0 - 2], $[$0 - 1]];
+          return __sub(["when", $[$0 - 2], $[$0 - 1]], __subLocsOn ? [null, $L[$0 - 2], $L[$0 - 1]] : null);
         case 303:
-          return ["while", $[$0]];
+          return __sub(["while", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 304:
-          return ["while", $[$0 - 2], $[$0]];
+          return __sub(["while", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 305:
           return ["while", ["!", $[$0]]];
         case 306:
@@ -2427,39 +2440,39 @@ function __schemaFkName(m)    { return ''; }   // ditto
         case 309:
           return $[$0].length === 2 ? [$[$0][0], $[$0][1], [$[$0 - 1]]] : [$[$0][0], $[$0][1], $[$0][2], [$[$0 - 1]]];
         case 311:
-          return ["loop", $[$0]];
+          return __sub(["loop", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 312:
           return ["loop", [$[$0]]];
         case 313:
-          return ["loop-n", $[$0 - 1], $[$0]];
+          return __sub(["loop-n", $[$0 - 1], $[$0]], __subLocsOn ? [null, $L[$0 - 1], $L[$0]] : null);
         case 314:
-          return ["for-in", $[$0 - 3], $[$0 - 1], null, null, $[$0]];
+          return __sub(["for-in", $[$0 - 3], $[$0 - 1], null, null, $[$0]], __subLocsOn ? [null, $L[$0 - 3], $L[$0 - 1], null, null, $L[$0]] : null);
         case 315:
-          return ["for-in", $[$0 - 5], $[$0 - 3], null, $[$0 - 1], $[$0]];
+          return __sub(["for-in", $[$0 - 5], $[$0 - 3], null, $[$0 - 1], $[$0]], __subLocsOn ? [null, $L[$0 - 5], $L[$0 - 3], null, $L[$0 - 1], $L[$0]] : null);
         case 316:
-          return ["for-in", $[$0 - 5], $[$0 - 3], $[$0 - 1], null, $[$0]];
+          return __sub(["for-in", $[$0 - 5], $[$0 - 3], $[$0 - 1], null, $[$0]], __subLocsOn ? [null, $L[$0 - 5], $L[$0 - 3], $L[$0 - 1], null, $L[$0]] : null);
         case 317:
-          return ["for-in", $[$0 - 7], $[$0 - 5], $[$0 - 1], $[$0 - 3], $[$0]];
+          return __sub(["for-in", $[$0 - 7], $[$0 - 5], $[$0 - 1], $[$0 - 3], $[$0]], __subLocsOn ? [null, $L[$0 - 7], $L[$0 - 5], $L[$0 - 1], $L[$0 - 3], $L[$0]] : null);
         case 318:
-          return ["for-in", $[$0 - 7], $[$0 - 5], $[$0 - 3], $[$0 - 1], $[$0]];
+          return __sub(["for-in", $[$0 - 7], $[$0 - 5], $[$0 - 3], $[$0 - 1], $[$0]], __subLocsOn ? [null, $L[$0 - 7], $L[$0 - 5], $L[$0 - 3], $L[$0 - 1], $L[$0]] : null);
         case 319:
-          return ["for-of", $[$0 - 3], $[$0 - 1], false, null, $[$0]];
+          return __sub(["for-of", $[$0 - 3], $[$0 - 1], false, null, $[$0]], __subLocsOn ? [null, $L[$0 - 3], $L[$0 - 1], null, null, $L[$0]] : null);
         case 320:
-          return ["for-of", $[$0 - 5], $[$0 - 3], false, $[$0 - 1], $[$0]];
+          return __sub(["for-of", $[$0 - 5], $[$0 - 3], false, $[$0 - 1], $[$0]], __subLocsOn ? [null, $L[$0 - 5], $L[$0 - 3], null, $L[$0 - 1], $L[$0]] : null);
         case 321:
-          return ["for-of", $[$0 - 3], $[$0 - 1], true, null, $[$0]];
+          return __sub(["for-of", $[$0 - 3], $[$0 - 1], true, null, $[$0]], __subLocsOn ? [null, $L[$0 - 3], $L[$0 - 1], null, null, $L[$0]] : null);
         case 322:
-          return ["for-of", $[$0 - 5], $[$0 - 3], true, $[$0 - 1], $[$0]];
+          return __sub(["for-of", $[$0 - 5], $[$0 - 3], true, $[$0 - 1], $[$0]], __subLocsOn ? [null, $L[$0 - 5], $L[$0 - 3], null, $L[$0 - 1], $L[$0]] : null);
         case 323:
-          return ["for-as", $[$0 - 3], $[$0 - 1], false, null, $[$0]];
+          return __sub(["for-as", $[$0 - 3], $[$0 - 1], false, null, $[$0]], __subLocsOn ? [null, $L[$0 - 3], $L[$0 - 1], null, null, $L[$0]] : null);
         case 324:
-          return ["for-as", $[$0 - 5], $[$0 - 3], false, $[$0 - 1], $[$0]];
+          return __sub(["for-as", $[$0 - 5], $[$0 - 3], false, $[$0 - 1], $[$0]], __subLocsOn ? [null, $L[$0 - 5], $L[$0 - 3], null, $L[$0 - 1], $L[$0]] : null);
         case 325:
         case 327:
-          return ["for-as", $[$0 - 3], $[$0 - 1], true, null, $[$0]];
+          return __sub(["for-as", $[$0 - 3], $[$0 - 1], true, null, $[$0]], __subLocsOn ? [null, $L[$0 - 3], $L[$0 - 1], null, null, $L[$0]] : null);
         case 326:
         case 328:
-          return ["for-as", $[$0 - 5], $[$0 - 3], true, $[$0 - 1], $[$0]];
+          return __sub(["for-as", $[$0 - 5], $[$0 - 3], true, $[$0 - 1], $[$0]], __subLocsOn ? [null, $L[$0 - 5], $L[$0 - 3], null, $L[$0 - 1], $L[$0]] : null);
         case 329:
           return ["for-in", [], $[$0 - 1], null, null, $[$0]];
         case 330:
@@ -2504,56 +2517,56 @@ function __schemaFkName(m)    { return ''; }   // ditto
         case 418:
         case 419:
         case 421:
-          return [$[$0 - 2], $[$0]];
+          return __sub([$[$0 - 2], $[$0]], __subLocsOn ? [$L[$0 - 2], $L[$0]] : null);
         case 354:
-          return ["class", null, null];
+          return __sub(["class", null, null], __subLocsOn ? [null, null, null] : null);
         case 355:
-          return ["class", null, null, $[$0]];
+          return __sub(["class", null, null, $[$0]], __subLocsOn ? [null, null, null, $L[$0]] : null);
         case 356:
-          return ["class", null, $[$0]];
+          return __sub(["class", null, $[$0]], __subLocsOn ? [null, null, $L[$0]] : null);
         case 357:
-          return ["class", null, $[$0 - 1], $[$0]];
+          return __sub(["class", null, $[$0 - 1], $[$0]], __subLocsOn ? [null, null, $L[$0 - 1], $L[$0]] : null);
         case 358:
-          return ["class", $[$0], null];
+          return __sub(["class", $[$0], null], __subLocsOn ? [null, $L[$0], null] : null);
         case 359:
-          return ["class", $[$0 - 1], null, $[$0]];
+          return __sub(["class", $[$0 - 1], null, $[$0]], __subLocsOn ? [null, $L[$0 - 1], null, $L[$0]] : null);
         case 360:
-          return ["class", $[$0 - 2], $[$0]];
+          return __sub(["class", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 361:
-          return ["class", $[$0 - 3], $[$0 - 1], $[$0]];
+          return __sub(["class", $[$0 - 3], $[$0 - 1], $[$0]], __subLocsOn ? [null, $L[$0 - 3], $L[$0 - 1], $L[$0]] : null);
         case 362:
-          return ["enum", $[$0 - 1], $[$0]];
+          return __sub(["enum", $[$0 - 1], $[$0]], __subLocsOn ? [null, $L[$0 - 1], $L[$0]] : null);
         case 363:
-          return ["schema", $[$0]];
+          return __sub(["schema", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 364:
           return ["component", null, ["block", ...$[$0 - 1]]];
         case 365:
           return ["component", $[$0 - 3], ["block", ...$[$0 - 1]]];
         case 372:
-          return ["offer", $[$0]];
+          return __sub(["offer", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 373:
-          return ["accept", $[$0]];
+          return __sub(["accept", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 374:
         case 375:
-          return ["render", $[$0]];
+          return __sub(["render", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 376:
         case 379:
-          return ["import", "{}", $[$0]];
+          return __sub(["import", "{}", $[$0]], __subLocsOn ? [null, null, $L[$0]] : null);
         case 377:
         case 378:
-          return ["import", $[$0 - 2], $[$0]];
+          return __sub(["import", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 380:
-          return ["import", $[$0 - 4], $[$0]];
+          return __sub(["import", $[$0 - 4], $[$0]], __subLocsOn ? [null, $L[$0 - 4], $L[$0]] : null);
         case 381:
-          return ["import", $[$0 - 4], $[$0 - 2], $[$0]];
+          return __sub(["import", $[$0 - 4], $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 4], $L[$0 - 2], $L[$0]] : null);
         case 382:
-          return ["import", $[$0 - 7], $[$0 - 4], $[$0]];
+          return __sub(["import", $[$0 - 7], $[$0 - 4], $[$0]], __subLocsOn ? [null, $L[$0 - 7], $L[$0 - 4], $L[$0]] : null);
         case 393:
-          return ["*", $[$0]];
+          return __sub(["*", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 394:
-          return ["export", "{}"];
+          return __sub(["export", "{}"], __subLocsOn ? [null, null] : null);
         case 395:
-          return ["export", $[$0 - 2]];
+          return __sub(["export", $[$0 - 2]], __subLocsOn ? [null, $L[$0 - 2]] : null);
         case 396:
         case 397:
         case 398:
@@ -2562,7 +2575,7 @@ function __schemaFkName(m)    { return ''; }   // ditto
         case 404:
         case 405:
         case 406:
-          return ["export", $[$0]];
+          return __sub(["export", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 400:
           return ["export", ["=", $[$0 - 2], $[$0]]];
         case 401:
@@ -2570,71 +2583,71 @@ function __schemaFkName(m)    { return ''; }   // ditto
         case 402:
           return ["export", ["=", $[$0 - 4], $[$0 - 1]]];
         case 407:
-          return ["export-default", $[$0]];
+          return __sub(["export-default", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 408:
-          return ["export-default", $[$0 - 1]];
+          return __sub(["export-default", $[$0 - 1]], __subLocsOn ? [null, $L[$0 - 1]] : null);
         case 409:
-          return ["export-all", $[$0]];
+          return __sub(["export-all", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 410:
-          return ["export-from", "{}", $[$0]];
+          return __sub(["export-from", "{}", $[$0]], __subLocsOn ? [null, null, $L[$0]] : null);
         case 411:
-          return ["export-from", $[$0 - 4], $[$0]];
+          return __sub(["export-from", $[$0 - 4], $[$0]], __subLocsOn ? [null, $L[$0 - 4], $L[$0]] : null);
         case 423:
         case 424:
         case 426:
         case 461:
-          return ["do-iife", $[$0]];
+          return __sub(["do-iife", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 428:
-          return ["-", $[$0]];
+          return __sub(["-", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 429:
-          return ["+", $[$0]];
+          return __sub(["+", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 430:
-          return ["?", $[$0 - 1]];
+          return __sub(["?", $[$0 - 1]], __subLocsOn ? [null, $L[$0 - 1]] : null);
         case 431:
-          return ["presence", $[$0 - 1]];
+          return __sub(["presence", $[$0 - 1]], __subLocsOn ? [null, $L[$0 - 1]] : null);
         case 432:
-          return ["await", $[$0]];
+          return __sub(["await", $[$0]], __subLocsOn ? [null, $L[$0]] : null);
         case 433:
-          return ["await", $[$0 - 1]];
+          return __sub(["await", $[$0 - 1]], __subLocsOn ? [null, $L[$0 - 1]] : null);
         case 434:
-          return ["--", $[$0], false];
+          return __sub(["--", $[$0], false], __subLocsOn ? [null, $L[$0], null] : null);
         case 435:
-          return ["++", $[$0], false];
+          return __sub(["++", $[$0], false], __subLocsOn ? [null, $L[$0], null] : null);
         case 436:
-          return ["--", $[$0 - 1], true];
+          return __sub(["--", $[$0 - 1], true], __subLocsOn ? [null, $L[$0 - 1], null] : null);
         case 437:
-          return ["++", $[$0 - 1], true];
+          return __sub(["++", $[$0 - 1], true], __subLocsOn ? [null, $L[$0 - 1], null] : null);
         case 438:
-          return ["+", $[$0 - 2], $[$0]];
+          return __sub(["+", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 439:
-          return ["-", $[$0 - 2], $[$0]];
+          return __sub(["-", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 441:
-          return ["**", $[$0 - 2], $[$0]];
+          return __sub(["**", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 444:
-          return ["&", $[$0 - 2], $[$0]];
+          return __sub(["&", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 445:
-          return ["^", $[$0 - 2], $[$0]];
+          return __sub(["^", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 446:
-          return ["|", $[$0 - 2], $[$0]];
+          return __sub(["|", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 447:
         case 448:
         case 449:
         case 450:
         case 451:
         case 452:
-          return ["control", $[$0 - 1], $[$0 - 2], $[$0]];
+          return __sub(["control", $[$0 - 1], $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 1], $L[$0 - 2], $L[$0]] : null);
         case 453:
-          return ["&&", $[$0 - 2], $[$0]];
+          return __sub(["&&", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 454:
-          return ["||", $[$0 - 2], $[$0]];
+          return __sub(["||", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 455:
-          return ["??", $[$0 - 2], $[$0]];
+          return __sub(["??", $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 2], $L[$0]] : null);
         case 457:
-          return ["?:", $[$0 - 4], $[$0 - 2], $[$0]];
+          return __sub(["?:", $[$0 - 4], $[$0 - 2], $[$0]], __subLocsOn ? [null, $L[$0 - 4], $L[$0 - 2], $L[$0]] : null);
         case 459:
-          return [$[$0 - 3], $[$0 - 4], $[$0 - 1]];
+          return __sub([$[$0 - 3], $[$0 - 4], $[$0 - 1]], __subLocsOn ? [$L[$0 - 3], $L[$0 - 4], $L[$0 - 1]] : null);
         case 460:
-          return [$[$0 - 2], $[$0 - 3], $[$0]];
+          return __sub([$[$0 - 2], $[$0 - 3], $[$0]], __subLocsOn ? [$L[$0 - 2], $L[$0 - 3], $L[$0]] : null);
       }
     },
     parseError(str, hash) {
@@ -2654,7 +2667,7 @@ function __schemaFkName(m)    { return ''; }   // ditto
       }
     },
     parse(input) {
-      let EOF, TERROR, action, errStr, expected, len, lex, lexer, loc, locs, newState, p, parseTable, preErrorSymbol, r, recovering, rv, sharedState, state, stk, symbol, tokenLen, tokenLine, tokenLoc, tokenText, vals;
+      let EOF, TERROR, action, errStr, expected, last, len, lex, lexer, loc, locs, n, newState, p, parseTable, preErrorSymbol, r, recovering, rv, sharedState, state, stk, symbol, tokenLen, tokenLine, tokenLoc, tokenText, vals;
       [stk, vals, locs] = [[0], [null], []];
       [parseTable, tokenText, tokenLine, tokenLen, recovering] = [this.parseTable, "", 0, 0, 0];
       [TERROR, EOF] = [2, 1];
@@ -2727,7 +2740,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           len = this.ruleTable[-action * 2 + 1];
           rv.$ = vals[vals.length - len];
           loc = locs[locs.length - (len || 1)];
-          rv._$ = { r: loc.r, c: loc.c };
+          last = len ? locs[locs.length - 1] : loc;
+          n = last != null && last.r === loc.r && loc.c != null && last.c != null ? last.c + (last.n || 0) - loc.c : loc.n || 0;
+          rv._$ = { r: loc.r, c: loc.c, n };
           r = this.ruleActions.call(rv, -action, vals, locs, sharedState.ctx);
           if (r != null)
             rv.$ = r;
@@ -8635,12 +8650,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             let [, params, methodBody] = func;
             if ((!params || Array.isArray(params) && params.length === 0) && this.containsIt(methodBody))
               params = ["it"];
-            let paramStr = Array.isArray(params) ? params.map((p) => {
-              let base = this.formatParam(p);
-              if (p?.type)
-                base += `: ${p.type}`;
-              return base;
-            }).join(", ") : "";
+            let paramStr = Array.isArray(params) ? params.map((p) => this.formatParam(p)).join(", ") : "";
             const boundEvent = eventMethodTypes.get(name);
             if (boundEvent && Array.isArray(params) && params.length > 0) {
               const firstParam = params[0];
@@ -11160,6 +11170,84 @@ if (typeof globalThis !== 'undefined') {
 //# sourceMappingURL=data:application/json;base64,` + b64 + `
 `;
   }
+  var MARK_OPEN = "";
+  var MARK_SHUT = "";
+  var MARK_SEP = "";
+
+  class MarkerRecorder {
+    constructor() {
+      this.nextId = 1;
+      this.meta = new Map;
+    }
+    wrap(kind, loc, text, data = null) {
+      if (loc == null || text == null || text === "")
+        return text;
+      const id = this.nextId++;
+      this.meta.set(id, { kind, loc, data });
+      return `${MARK_OPEN}${id}${MARK_SEP}${text}${MARK_SHUT}${id}${MARK_SEP}`;
+    }
+    get active() {
+      return this.nextId > 1;
+    }
+  }
+  function stripMarkers(markedCode, recorder) {
+    let out = "";
+    let offset = 0, line = 0, column = 0;
+    const marks = [];
+    const stack = [];
+    const readTag = (i) => {
+      let j = i + 1;
+      const sepAt = markedCode.indexOf(MARK_SEP, j);
+      if (sepAt < 0)
+        throw new Error("markers: unterminated tag");
+      const id = Number(markedCode.slice(j, sepAt));
+      if (!Number.isInteger(id))
+        throw new Error("markers: malformed marker id");
+      return { id, next: sepAt + 1 };
+    };
+    for (let i = 0;i < markedCode.length; ) {
+      const ch = markedCode[i];
+      if (ch === MARK_OPEN) {
+        const { id, next } = readTag(i);
+        const meta = recorder.meta.get(id);
+        if (!meta)
+          throw new Error(`markers: unknown open id ${id}`);
+        stack.push({ id, meta, genStart: offset, genLine: line, genCol: column });
+        i = next;
+        continue;
+      }
+      if (ch === MARK_SHUT) {
+        const { id, next } = readTag(i);
+        const open = stack.pop();
+        if (!open || open.id !== id)
+          throw new Error(`markers: unbalanced close id ${id}`);
+        marks.push({
+          kind: open.meta.kind,
+          loc: open.meta.loc,
+          data: open.meta.data,
+          genStart: open.genStart,
+          genEnd: offset,
+          genLine: open.genLine,
+          genCol: open.genCol
+        });
+        i = next;
+        continue;
+      }
+      out += ch;
+      if (ch === `
+`) {
+        line++;
+        column = 0;
+      } else {
+        column++;
+      }
+      offset++;
+      i++;
+    }
+    if (stack.length)
+      throw new Error("markers: unclosed marker(s)");
+    return { code: out, marks };
+  }
 
   // src/stdlib.js
   function getStdlibCode() {
@@ -11209,6 +11297,22 @@ globalThis.warn   ??= console.warn;
 globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
 // rip:stdlib:end
 `;
+  }
+
+  // src/params.js
+  function ripToTs(typeStr) {
+    if (!typeStr)
+      return typeStr;
+    return typeStr.replace(/::/g, ":");
+  }
+  function emitTsParam({ name, ripType, optional, hasDefault }, mode) {
+    let isOptional = optional || mode === "declaration" && hasDefault;
+    let type = ripToTs(ripType);
+    if (type)
+      return `${name}${isOptional ? "?" : ""}: ${type}`;
+    if (isOptional)
+      return `${name}?: any`;
+    return name;
   }
 
   // src/error.js
@@ -11758,12 +11862,41 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
       this.moduleBindings = new Set;
       this.collectModuleBindings(sexpr);
       this.validateComprehensionFilters(sexpr);
-      let code = this.emit(sexpr);
+      let code;
+      if (this.options.exactMarks) {
+        this.markRecorder = new MarkerRecorder;
+        const marked = this.emit(sexpr);
+        const stripped = stripMarkers(marked, this.markRecorder);
+        this.markRecorder = null;
+        code = stripped.code;
+        this.exactMarks = stripped.marks;
+      } else {
+        code = this.emit(sexpr);
+      }
       if (this.sourceMap)
         this.buildMappings();
       return code;
     }
+    markIdent(code, node, loc) {
+      if (!this.markRecorder || !loc)
+        return code;
+      if (typeof node === "string" || node instanceof String) {
+        const name = str(node);
+        if (/^[A-Za-z_$][\w$]*$/.test(name))
+          return this.markRecorder.wrap("ident", loc, code);
+      }
+      return code;
+    }
     buildMappings() {
+      this._exactSrc = new Set;
+      if (this.exactMarks) {
+        for (const m of this.exactMarks) {
+          if (!m.loc)
+            continue;
+          this.sourceMap.addMapping(m.genLine, m.genCol, m.loc.r, m.loc.c);
+          this._exactSrc.add(m.loc.r + ":" + m.loc.c);
+        }
+      }
       if (this._importEntries) {
         let importLineOffset = 0;
         for (let entry of this._importEntries) {
@@ -11902,6 +12035,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
         return ranges;
       };
       for (let { name, origLine, origCol } of subs) {
+        if (this._exactSrc?.has(origLine + ":" + origCol))
+          continue;
         let escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         let re = new RegExp("\\b" + escaped + "\\b", "g");
         let m;
@@ -12873,7 +13008,14 @@ function _setDataSection() {
       let bodyCode = this.emitFunctionBody(body, params, sideEffectOnly);
       let isAsync = this.containsAwait(body);
       let isGen = this.containsYield(body);
-      return `${isAsync ? "async " : ""}function${isGen ? "*" : ""} ${cleanName}(${paramList}) ${bodyCode}`;
+      let ret = this.inlineReturnType(name);
+      return `${isAsync ? "async " : ""}function${isGen ? "*" : ""} ${cleanName}(${paramList})${ret} ${bodyCode}`;
+    }
+    inlineReturnType(name) {
+      if (!this.options.inlineTypes)
+        return "";
+      let rt = meta(name, "returnType");
+      return rt ? `: ${ripToTs(rt)}` : "";
     }
     emitThinArrow(head, rest, context, sexpr) {
       let [params, body] = rest;
@@ -14364,18 +14506,21 @@ export default ${expr[1]}`;
         return `${tagCode}\`${content.slice(1, -1)}\``;
       return `${tagCode}\`${content}\``;
     }
+    escapeTemplateText(s) {
+      return s.replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
+    }
     emitString(head, rest) {
       let result = "`";
       for (let part of rest) {
         if (part instanceof String) {
-          result += this.extractStringContent(part);
+          result += this.escapeTemplateText(this.extractStringContent(part));
         } else if (typeof part === "string") {
           if (part.startsWith('"') || part.startsWith("'")) {
             if (this.options.debug)
               console.warn("[Rip] Unexpected quoted primitive in str:", part);
-            result += part.slice(1, -1);
+            result += this.escapeTemplateText(part.slice(1, -1));
           } else {
-            result += part;
+            result += this.escapeTemplateText(part);
           }
         } else if (Array.isArray(part)) {
           if (part.length === 1 && typeof part[0] === "string" && !Array.isArray(part[0])) {
@@ -14451,16 +14596,67 @@ export default ${expr[1]}`;
       this.restMiddleParam = null;
       return params.map((p) => this.formatParam(p)).join(", ");
     }
+    destructuredType(node) {
+      if (this.is(node, "object")) {
+        let parts = [], hasType = false;
+        for (let pair of node.slice(1)) {
+          if (this.is(pair, "...")) {
+            parts.push("[key: string]: unknown");
+            continue;
+          }
+          let [op, key, value] = pair;
+          let propName = str(key);
+          if (op === "=") {
+            let t2 = key instanceof String ? key.type : null;
+            if (t2)
+              hasType = true;
+            parts.push(`${propName}?: ${t2 ? ripToTs(t2) : "any"}`);
+            continue;
+          }
+          if (this.is(value, "object") || this.is(value, "array")) {
+            let inner = this.destructuredType(value);
+            if (inner.hasType)
+              hasType = true;
+            parts.push(`${propName}: ${inner.type}`);
+            continue;
+          }
+          let t = value instanceof String && value.type || key instanceof String && key.type || null;
+          if (t)
+            hasType = true;
+          parts.push(`${propName}: ${t ? ripToTs(t) : "any"}`);
+        }
+        return { type: `{${parts.join(", ")}}`, hasType };
+      }
+      if (this.is(node, "array")) {
+        let parts = [], hasType = false;
+        for (let el of node.slice(1)) {
+          if (el === "," || el === "...")
+            continue;
+          if (this.is(el, "...")) {
+            parts.push("...any[]");
+            continue;
+          }
+          let typedEl = this.is(el, "=") ? el[1] : el;
+          let t = typedEl instanceof String ? typedEl.type : null;
+          if (t)
+            hasType = true;
+          parts.push(t ? ripToTs(t) : "any");
+        }
+        return { type: `[${parts.join(", ")}]`, hasType };
+      }
+      return { type: "any", hasType: false };
+    }
     formatParam(param) {
       if (typeof param === "string")
         return param;
       if (param instanceof String) {
         if (this.options.inlineTypes) {
-          let opt = meta(param, "optional") ? "?" : "";
-          if (param.type)
-            return `${param.valueOf()}${opt}: ${param.type.replace(/::/g, ":")}`;
-          if (opt)
-            return `${param.valueOf()}?: any`;
+          return emitTsParam({
+            name: param.valueOf(),
+            ripType: param.type,
+            optional: !!meta(param, "optional"),
+            hasDefault: false
+          }, "implementation");
         }
         return param.valueOf();
       }
@@ -14476,6 +14672,18 @@ export default ${expr[1]}`;
       }
       if (this.is(param, ".") && param[1] === "this")
         return param[2];
+      if ((this.is(param, "object") || this.is(param, "array")) && this.options.inlineTypes) {
+        let { type, hasType } = this.destructuredType(param);
+        let saved = this.options.inlineTypes;
+        this.options.inlineTypes = false;
+        let pattern;
+        try {
+          pattern = this.formatParam(param);
+        } finally {
+          this.options.inlineTypes = saved;
+        }
+        return hasType ? `${pattern}: ${type}` : pattern;
+      }
       if (this.is(param, "array")) {
         let els = param.slice(1).map((el) => {
           if (el === ",")
@@ -14571,10 +14779,11 @@ export default ${expr[1]}`;
 `;
         }
         let firstIsSuper = autoAssignments.length > 0 && statements.length > 0 && Array.isArray(statements[0]) && statements[0][0] === "super";
-        let genStatements = (stmts) => {
+        let genStatements = (stmts, locBase = null) => {
           stmts.forEach((stmt, index) => {
             let isLast = index === stmts.length - 1;
             let h = Array.isArray(stmt) ? stmt[0] : null;
+            let stmtLoc = locBase != null && body.subLocs ? body.subLocs[locBase + index] : null;
             if (!isLast && h === "comprehension") {
               let [, expr, iters, guards] = stmt;
               code += this.indent() + this.emitComprehensionAsLoop(expr, iters, guards) + `
@@ -14633,7 +14842,7 @@ export default ${expr[1]}`;
             let ctx = needsReturn ? "value" : "statement";
             let sc = this.emit(stmt, ctx);
             if (needsReturn)
-              code += this.indent() + "return " + sc + `;
+              code += this.indent() + "return " + this.markIdent(sc, stmt, stmtLoc) + `;
 `;
             else
               code += this.indent() + this.addSemicolon(stmt, sc) + `
@@ -14656,7 +14865,8 @@ export default ${expr[1]}`;
           for (let a of autoAssignments)
             code += this.indent() + a + `;
 `;
-          genStatements(statements);
+          let locBase = this.is(body, "block") && body.subLocs && statements.length === body.length - 1 ? 1 : null;
+          genStatements(statements, locBase);
         }
         if (sideEffectOnly && statements.length > 0) {
           let lastH = Array.isArray(statements[statements.length - 1]) ? statements[statements.length - 1][0] : null;
@@ -16139,6 +16349,7 @@ if (typeof globalThis !== 'undefined') {
           return token[0];
         }
       };
+      setSubLocs(!!this.options.exactMarks);
       let sexpr;
       try {
         sexpr = parser.parse(source);
@@ -16184,6 +16395,7 @@ if (typeof globalThis !== 'undefined') {
         inlineTypes: this.options.inlineTypes,
         schemaMode: this.options.schemaMode,
         foldProjections: this.options.foldProjections,
+        exactMarks: this.options.exactMarks,
         sourceMap
       });
       let code = generator.compile(sexpr);
@@ -16255,8 +16467,8 @@ if (typeof globalThis !== 'undefined') {
     return new CodeEmitter({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.16.2";
-  var BUILD_DATE = "2026-06-27@05:18:39GMT";
+  var VERSION = "3.16.3";
+  var BUILD_DATE = "2026-06-27@12:04:52GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
