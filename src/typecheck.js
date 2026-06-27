@@ -743,8 +743,6 @@ export function patchUninitializedTypes(ts, service, compiledEntries) {
 export const SKIP_CODES = new Set([
   2389, // Function implementation name must match overload (DTS + compiled body)
   2391, // Function implementation is missing (DTS overload sigs separated from implementations)
-  2393, // Duplicate function implementation
-  2394, // Overload signature not compatible with implementation (untyped compiled params)
   2567, // Enum declarations can only merge with namespace or other enum (DTS + compiled body)
   2842, // Unused renaming of destructured property (DTS overload has renamed param unused in declaration)
   // RFC 12 phase 2 — 1064 recovered. The async return type is now emitted
