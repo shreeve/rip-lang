@@ -1504,7 +1504,10 @@ export class CodeEmitter {
     let v = this.emit(value, 'value'), r = this.emit(regex, 'value');
     let idx = captureIndex !== null ? this.emit(captureIndex, 'value') : '0';
     let allowNL = r.includes('/m') ? ', true' : '';
-    return `(_ = toMatchable(${v}${allowNL}).match(${r})) && _[${idx}]`;
+    // Wrap in outer parens so the whole `(_ = …) && _[idx]` is a single
+    // operand — otherwise `not`/`unless` negates only the assignment and
+    // leaves `&& _[idx]` dangling (a precedence bug; `!A && B` ≠ `!(A && B)`).
+    return `((_ = toMatchable(${v}${allowNL}).match(${r})) && _[${idx}])`;
   }
 
   emitIndexAccess(head, rest) {

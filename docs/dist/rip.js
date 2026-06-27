@@ -2776,10 +2776,10 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     int: "integer",
     whole: "integer",
     float: "number",
-    money: "number",
-    money_even: "number",
+    money: "integer",
+    money_even: "integer",
     cents: "integer",
-    cents_even: "integer",
+    decimal: "string",
     bool: "boolean",
     truthy: "boolean",
     falsy: "boolean",
@@ -12796,7 +12796,7 @@ function _setDataSection() {
       let v = this.emit(value, "value"), r = this.emit(regex, "value");
       let idx = captureIndex !== null ? this.emit(captureIndex, "value") : "0";
       let allowNL = r.includes("/m") ? ", true" : "";
-      return `(_ = toMatchable(${v}${allowNL}).match(${r})) && _[${idx}]`;
+      return `((_ = toMatchable(${v}${allowNL}).match(${r})) && _[${idx}])`;
     }
     emitIndexAccess(head, rest) {
       let [arr, index] = rest;
@@ -16252,7 +16252,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.2";
-  var BUILD_DATE = "2026-06-27@02:04:57GMT";
+  var BUILD_DATE = "2026-06-27@03:50:14GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

@@ -321,3 +321,19 @@ test "heregex forward slashes", '''
   [_, proto, host, path] = "https://rip-lang.org/docs".match(pattern)
   host
   ''', "rip-lang.org"
+
+# match-index under `not`/`unless`: the whole `(_ = match) && _[idx]` must be
+# parenthesized so negation doesn't leave `&& _[idx]` dangling (which threw on
+# a miss, evaluating `_[idx]` against a null match).
+test "match-index unless miss", '''
+  f = (v) ->
+    return "miss" unless v[/[0-9]+/]
+    "hit"
+  f("abc")
+  ''', "miss"
+test "match-index unless hit", '''
+  f = (v) ->
+    return "miss" unless v[/([0-9]+)/]
+    _[1]
+  f("x42")
+  ''', "42"
