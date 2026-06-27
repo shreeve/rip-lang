@@ -3360,6 +3360,55 @@ export class CodeEmitter {
     return params.map(p => this.formatParam(p)).join(', ');
   }
 
+  // TS type literal for a destructuring-pattern param, matching the shape
+  // dts.js's collectDestructured* emits so the inline check-path surface and
+  // the `.d.ts` agree. Produces only the type (the binding pattern is emitted
+  // separately, type-free, by formatParam). Returns { type, hasType }.
+  destructuredType(node) {
+    if (this.is(node, 'object')) {
+      let parts = [], hasType = false;
+      for (let pair of node.slice(1)) {
+        if (this.is(pair, '...')) { parts.push('[key: string]: unknown'); continue; }
+        let [op, key, value] = pair;
+        let propName = str(key);
+        // Defaulted member (`{name:: T = v}` → `(= name v)`): the type sits on
+        // the key wrapper and the default makes it optional.
+        if (op === '=') {
+          let t = key instanceof String ? key.type : null;
+          if (t) hasType = true;
+          parts.push(`${propName}?: ${t ? ripToTs(t) : 'any'}`);
+          continue;
+        }
+        // Nested object/array value — recurse.
+        if (this.is(value, 'object') || this.is(value, 'array')) {
+          let inner = this.destructuredType(value);
+          if (inner.hasType) hasType = true;
+          parts.push(`${propName}: ${inner.type}`);
+          continue;
+        }
+        // Shorthand (`{a}`) or rename (`{name: local}`): the type rides
+        // whichever of key/value is the typed String wrapper.
+        let t = (value instanceof String && value.type) || (key instanceof String && key.type) || null;
+        if (t) hasType = true;
+        parts.push(`${propName}: ${t ? ripToTs(t) : 'any'}`);
+      }
+      return { type: `{${parts.join(', ')}}`, hasType };
+    }
+    if (this.is(node, 'array')) {
+      let parts = [], hasType = false;
+      for (let el of node.slice(1)) {
+        if (el === ',' || el === '...') continue;
+        if (this.is(el, '...')) { parts.push('...any[]'); continue; }
+        let typedEl = this.is(el, '=') ? el[1] : el;
+        let t = typedEl instanceof String ? typedEl.type : null;
+        if (t) hasType = true;
+        parts.push(t ? ripToTs(t) : 'any');
+      }
+      return { type: `[${parts.join(', ')}]`, hasType };
+    }
+    return { type: 'any', hasType: false };
+  }
+
   formatParam(param) {
     if (typeof param === 'string') return param;
     if (param instanceof String) {
@@ -3408,6 +3457,22 @@ export class CodeEmitter {
       return `${this.formatParam(param[1])} = ${this.emit(param[2], 'value')}`;
     }
     if (this.is(param, '.') && param[1] === 'this') return param[2];
+    // RFC 12 phase 2 — typed destructuring on the check path. A type cannot be
+    // written *inside* a binding pattern (`{name: userName: T}` is a syntax
+    // error); it goes on the whole pattern (`{name: userName}: {name: T}`).
+    // Emit the binding pattern with inline types OFF (so it is byte-identical
+    // to the runtime emission and reuses the same logic) and append a single
+    // TS type literal computed by `destructuredType`. Without this, the inline
+    // emitter produced invalid TS that the interleave's param-copy had to
+    // overwrite — this makes the inline params self-sufficient.
+    if ((this.is(param, 'object') || this.is(param, 'array')) && this.options.inlineTypes) {
+      let { type, hasType } = this.destructuredType(param);
+      let saved = this.options.inlineTypes;
+      this.options.inlineTypes = false;
+      let pattern;
+      try { pattern = this.formatParam(param); } finally { this.options.inlineTypes = saved; }
+      return hasType ? `${pattern}: ${type}` : pattern;
+    }
     if (this.is(param, 'array')) {
       let els = param.slice(1).map(el => {
         if (el === ',') return '';

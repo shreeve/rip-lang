@@ -1670,15 +1670,16 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
         // When multiple sigs target the same codeLine (overloads), only apply
         // from the last one — that's the implementation signature whose types
         // should annotate the function body.
-        // The param/return copy runs for ALL impls — it is a no-op when the
-        // inline param emitter already produced identical params, but it still
-        // repairs constructs the inline emitter renders incorrectly (notably
-        // destructured-rename params, `{name: userName}: {...}`). Only the
-        // redundant adjacent SIGNATURE injection is retired for self-sufficient
-        // functions (below); the copy stays so those impls keep correct params.
+        // Self-sufficient impls (single-signature, inline-annotated, incl.
+        // correctly-typed destructuring) need no copy at all — the inline
+        // emitter already produced the full, valid signature. They skip both
+        // the param/return copy here and the signature injection below; only
+        // the header `declare` is removed (via `moved`). The copy still runs
+        // for everything else (overloads, generics, arrow-assigned functions).
         const lastByLine = new Map();
         for (const inj of injections) lastByLine.set(inj.codeLine, inj);
         for (const inj of lastByLine.values()) {
+          if (isSelfSufficient(inj)) continue;
           const sig = inj.sig.replace(/^declare /, '');
           const sigParams = extractFnParams(sig);
           if (sigParams !== null) {
