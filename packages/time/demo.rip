@@ -35,6 +35,13 @@ show 'naive string is UTC',  time.utc('2026-06-15 18:30:45').toISOString()
 show 'asUTC (08:00 ET→UTC)', base.toZone('ET').asUTC().toISOString()
 show 'asZone ET (18:30 ET)', base.asZone('ET').toISOString()
 
+head 'to / as — the `zones` gem, one-to-one (toZone = to, asZone = as)'
+z = time.utc('2013-08-03T11:43:00Z')                                # one instant
+show 'convert      z.toZone PT',     z.toZone('US/Pacific').format('HH:mm ZZ')
+show 'reinterpret  z.asZone PT',     z.asZone('US/Pacific').format('HH:mm ZZ')
+show 'as→then→to (Caracas→PT)',      z.asZone('America/Caracas').toZone('US/Pacific').format('HH:mm ZZ')
+show 'naive string as UTC',          time.utc('2013-08-03 11:43').format('HH:mm ZZ')
+
 head 'Arithmetic'
 show 'add 3 days',           base.add(3, :day).format('YYYY-MM-DD')
 show 'subtract 90 min',      base.subtract(90, :minute).format('HH:mm')
