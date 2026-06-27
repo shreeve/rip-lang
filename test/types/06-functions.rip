@@ -293,20 +293,20 @@ badWrap:: Promise<number[]> = wrap 'hi'
 
 # ── Arrow-assignment self-sufficiency (RFC 12 phase 2) ──
 # A thin-arrow assignment with an explicit return type is now emitted fully
-# inline on the check path (`labelThin = function(n: number): string {…}`), so
+# inline on the check path (`arrowThin = function(n: number): string {…}`), so
 # it carries its own type and needs no header copy. A fat-arrow assignment
 # moves its own `declare function` header out of the shadow: without that the
-# header collides with the `let incFat` binding and TS reports a spurious
+# header collides with the `let arrowFat` binding and TS reports a spurious
 # TS2630 ("cannot assign to … because it is a function") — masked on the CLI
 # but surfaced in the editor. Both forms still enforce their typed params and
 # return types.
-labelThin = (n:: number):: string -> "n=#{n}"
-incFat = (n:: number) => n + 1
+arrowThin = (n:: number):: string -> "n=#{n}"
+arrowFat = (n:: number) => n + 1
 
-console.log 'labelThin:', labelThin(7)
-console.log 'incFat:', incFat(41)
+console.log 'arrowThin:', arrowThin(7)
+console.log 'arrowFat:', arrowFat(41)
 
 # @ts-expect-error — thin-arrow return type enforced (returns string, not number)
-badLabel:: number = labelThin(7)
+badArrowThin:: number = arrowThin(7)
 # @ts-expect-error — fat-arrow typed param enforced (number, not string)
-incFat('nope')
+arrowFat('nope')
