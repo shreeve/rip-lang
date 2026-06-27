@@ -698,6 +698,18 @@ class Time
       shifted = new Date(target - offset2 * 60000)
     new Time({ fromInstance: shifted, zone: iana })
 
+  # Legible names for the two zone operations (otherwise hidden behind tz()'s
+  # keepLocalTime flag), mirroring the `zones` gem's to/as distinction:
+  #   toZone — CONVERT: same instant, shown in `zone` (the wall-clock changes)
+  #   asZone — REINTERPRET: same wall-clock numbers, now in `zone` (the instant changes)
+  toZone: (zone) -> @tz(zone)
+  asZone: (zone) -> @tz(zone, true)
+
+  # Reinterpret this instance's wall-clock as UTC — keep the numbers, label them
+  # UTC (the instant shifts). The inverse — show this instant in UTC — is utc().
+  # This is the primitive for a naive (zoneless) timestamp that is really UTC.
+  asUTC: -> @utc(true)
+
   # The IANA zone name this instance is anchored to, or null for local/UTC.
   timezone: -> @$z
 

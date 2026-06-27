@@ -821,6 +821,22 @@ test "age: blank/invalid → null", ->
   eq age(''),           null
   eq age('not-a-date'), null
 
+# ==[ toZone / asZone / asUTC ]==
+
+console.log "\ntoZone / asZone / asUTC"
+
+test "toZone converts — same instant, new clock", ->
+  d = time.utc('2026-06-15T12:00:00Z')
+  eq d.toZone('America/New_York').toISOString(), '2026-06-15T12:00:00.000Z'
+
+test "asZone reinterprets — wall-clock kept, instant shifts", ->
+  d = time.utc('2026-06-15T12:00:00Z')
+  eq d.asZone('America/New_York').toISOString(), '2026-06-15T16:00:00.000Z'
+
+test "asUTC labels the wall-clock as UTC", ->
+  ny = time.utc('2026-06-15T12:00:00Z').toZone('America/New_York')   # 08:00 EDT
+  eq ny.asUTC().toISOString(), '2026-06-15T08:00:00.000Z'
+
 # ==[ Summary ]==
 
 console.log "\n#{'='.repeat(60)}"

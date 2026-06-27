@@ -42,6 +42,7 @@ d = time.parse('Apr 19, 2026', 'MMM D, YYYY')
 - `weekday()` getter and setter (Sunday-start US)
 - `utc()` / `local()` / `isUTC()` / `utcOffset()`
 - `.tz('HT')` / `.tz('Pacific/Honolulu')` — arbitrary IANA zones with DST-aware offsets (backed by `Intl`)
+- `.toZone(zone)` / `.asZone(zone)` / `.asUTC()` — legible *convert* vs *reinterpret* (à la the `zones` gem): `toZone` keeps the instant and changes the clock; `asZone`/`asUTC` keep the wall-clock numbers and change the zone (the instant shifts) — the latter is how you treat a naive timestamp that is really UTC
 - Short aliases for every US zone: `ET CT MT PT AKT HT AZ AST ChST SST`
 - `daysInMonth` / `isLeapYear` / `quarter` / `dayOfYear` / `weekOfYear`
 - `time.parse(input, format)` — explicit format parsing built in
