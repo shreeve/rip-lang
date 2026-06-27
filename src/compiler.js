@@ -3269,9 +3269,13 @@ export class CodeEmitter {
     return `${tagCode}\`${content}\``;
   }
 
-  // Escape literal text for safe inclusion in a JS template literal: a raw
-  // backtick would close the literal early, and a literal `${` would be read as
-  // an interpolation. (Rip interpolation is `#{}`, so `${` in source is literal.)
+  // Escape literal text for safe inclusion in the emitted JS template literal:
+  // a raw backtick would close the literal early, and a literal `${` would be
+  // read by JS as an interpolation. This is about the JS *output*, not Rip
+  // syntax — Rip interpolates BOTH `#{...}` and `${...}`, and both are already
+  // split into separate interpolation parts before we get here, so a literal
+  // segment shouldn't actually contain `${`; the escape is a defensive guard
+  // that keeps the helper correct for any literal text.
   escapeTemplateText(s) {
     return s.replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
   }

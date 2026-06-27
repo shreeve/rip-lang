@@ -538,6 +538,9 @@ test 'postfix if in interpolation', 'n = 3; "#{n} item#{"" if n is 1 else "s"}"'
 # template literal — regression: a raw backtick closed the template early,
 # breaking compilation of the surrounding code.
 test 'literal backtick in interpolated string', 'x = 1; "a `b` #{x}"', 'a `b` 1'
+# Both interpolation forms must coexist with a literal backtick.
+test 'literal backtick with ${} interpolation', 'x = 1; "a `b` ${x}"', 'a `b` 1'
+test 'literal backtick with both #{} and ${}', 'x = 1; y = 2; "`#{x}` and `${y}`"', '`1` and `2`'
 test 'literal backtick in interpolated heredoc', '''x = 2
 """tick `t` #{x}"""''', 'tick `t` 2'
 
