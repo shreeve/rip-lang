@@ -20,6 +20,7 @@ import { installSchemaSupport, foldDerivedSchemas } from './schema/schema.js';
 import { SourceMapGenerator } from './sourcemaps.js';
 import { stringify, getStdlibCode } from './stdlib.js';
 import { emitTsParam } from './params.js';
+import { EmitBuilder } from './builder.js';
 import { RipError, toRipError } from './error.js';
 
 // =============================================================================
@@ -319,12 +320,40 @@ export class CodeEmitter {
     this.moduleBindings = new Set();
     this.collectModuleBindings(sexpr);
     this.validateComprehensionFilters(sexpr);
-    let code = this.emit(sexpr);
+
+    let code;
+    if (this.options.useBuilder) {
+      // RFC 12 phase 1 seam. Route emission through a position-tracking builder.
+      // Today this is the fallback path — `emitTo` writes `emit(node)` verbatim,
+      // so output is byte-identical to the string emitter (guarded by the
+      // builder byte-equivalence test) while handlers are converted to record
+      // exact marks incrementally. `this.builderMarks` exposes the recorded
+      // positions for the map / the correctness corpus.
+      const builder = new EmitBuilder();
+      this.builder = builder;
+      this.emitTo(sexpr, 'statement', builder);
+      this.builder = null;
+      code = builder.toString();
+      this.builderMarks = builder.marks;
+    } else {
+      code = this.emit(sexpr);
+    }
 
     // Build source map mappings from generation-time recorded entries
     if (this.sourceMap) this.buildMappings();
 
     return code;
+  }
+
+  // RFC 12 phase 1 adapter. Emit `sexpr` into a position-tracking builder.
+  // Converted handlers (added incrementally) write their output piecewise and
+  // call `builder.mark(loc)` / `builder.span(loc, fn)` to record exact source→
+  // generated positions. Until a handler is converted it falls back to writing
+  // `emit(node)` verbatim: byte-identical output, cursor advanced, no interior
+  // marks. The byte-equivalence gate (test/builder.test.js) ensures every
+  // conversion keeps the generated JS identical to the string emitter.
+  emitTo(sexpr, context, builder) {
+    builder.write(this.emit(sexpr, context));
   }
 
   // Build source map from generation-time recorded entries.
@@ -4953,6 +4982,8 @@ export class Compiler {
       schemaMode: this.options.schemaMode,
       // Opt-in: fold derived projection schemas to self-contained literals.
       foldProjections: this.options.foldProjections,
+      // RFC 12 phase 1: route emission through the position-tracking builder.
+      useBuilder: this.options.useBuilder,
       sourceMap,
     });
     let code = generator.compile(sexpr);
