@@ -11,6 +11,10 @@
 // don't. No emitter wiring here — that's the next slice.
 
 import { MarkerRecorder, stripMarkers } from '../src/markers.js';
+import { compileToJS } from '../src/compiler.js';
+import { readdirSync, readFileSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
 const isColor = process.stdout.isTTY !== false;
 const green = s => isColor ? `\x1b[32m${s}\x1b[0m` : s;
@@ -97,6 +101,33 @@ const loc = (r, c, n) => ({ r, c, n });
   let threw = false;
   try { stripMarkers(truncated, rec); } catch { threw = true; }
   check('unbalanced/truncated markers throw', threw);
+}
+
+// 7. byte-equivalence: exactMarks-stripped output must equal a normal compile,
+// with no sentinel leaking into the generated code. This is the gate that lets
+// handlers wrap identifiers behind markers without altering emitted JS.
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const typeDir = resolve(here, 'types');
+  const opts = { sourceMap: true, types: 'emit', skipPreamble: true, stubComponents: true, inlineTypes: true };
+  let sources = [
+    'age = (dob:: string, asOf:: string) -> asOf\nasOf = "x"\n',
+    'f = (x:: number) -> x + 1\n',
+  ];
+  try {
+    for (const fn of readdirSync(typeDir).filter(f => f.endsWith('.rip'))) {
+      sources.push(readFileSync(resolve(typeDir, fn), 'utf8'));
+    }
+  } catch {}
+  let diffs = 0, stray = 0;
+  for (const src of sources) {
+    const off = compileToJS(src, opts);
+    const on  = compileToJS(src, { ...opts, exactMarks: true });
+    if (off !== on) diffs++;
+    if (/[\uE000\uE001\uE002]/.test(on)) stray++;
+  }
+  check(`exactMarks output is byte-identical to normal (${sources.length} sources)`, diffs === 0, `${diffs} differ`);
+  check('no marker sentinels leak into generated code', stray === 0, `${stray} leaked`);
 }
 
 console.log(bold('\n── Source-position markers (RFC 12 phase 1 bridge) ──\n'));
