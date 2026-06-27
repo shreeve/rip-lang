@@ -461,6 +461,10 @@ function reclassifyColonTypes(tokens) {
       else if (depth === 0) {
         if (g === '->' || g === '=>') return false;
         if (BINDING_OPS.has(g)) return true;
+        // Typed effect/gate: `name: T ~> …` — an EFFECT/GATE that is NOT the
+        // first token after `:` follows a type (a bare `name: ~> …` schema
+        // getter has it first, so j === start, and stays excluded).
+        if ((g === 'EFFECT' || g === 'GATE') && j > start) return true;
         if (g === 'TERMINATOR' || g === 'INDENT' || g === 'OUTDENT') return false;
       }
     }
