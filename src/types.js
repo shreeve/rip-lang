@@ -482,6 +482,14 @@ function reclassifyColonTypes(tokens) {
         tokens[i][0] = 'TYPE_ANNOTATION';
         continue;
       }
+      // Parameterless def return type: `def foo: T` (foo is tagged PROPERTY
+      // because a `:` follows; retag it back to IDENTIFIER).
+      if ((prevTag === 'IDENTIFIER' || prevTag === 'PROPERTY') &&
+          tokens[i - 2]?.[0] === 'DEF') {
+        if (prevTag === 'PROPERTY') prev[0] = 'IDENTIFIER';
+        tokens[i][0] = 'TYPE_ANNOTATION';
+        continue;
+      }
       // Statement-level typed declaration (top level, name at statement start,
       // binding operator before any arrow).
       if (stack.length === 0 &&
