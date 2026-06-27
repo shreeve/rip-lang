@@ -298,3 +298,15 @@ console.log("wrapped:", wrapped)
 
 // @ts-expect-error — T is preserved, so "hi" return isn't assignable to number[]
 let badWrap: Promise<number[]> = wrap("hi")
+
+// ── Arrow-assignment self-sufficiency (RFC 12 phase 2) ──
+const labelThin = (n: number): string => `n=${n}`
+const incFat = (n: number) => n + 1
+
+console.log('labelThin:', labelThin(7))
+console.log('incFat:', incFat(41))
+
+// @ts-expect-error — thin-arrow return type enforced (returns string, not number)
+let badLabel: number = labelThin(7)
+// @ts-expect-error — fat-arrow typed param enforced (number, not string)
+incFat('nope')

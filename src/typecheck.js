@@ -1153,6 +1153,82 @@ function replaceFnParams(line, newParams) {
   return depth === 0 ? line.slice(0, idx + 1) + newParams + line.slice(i - 1) : line;
 }
 
+// Skip a string/template/regex literal starting at `s[i]` (the opening quote),
+// returning the index just past the closing quote. Honors backslash escapes.
+function skipStringLiteral(s, i) {
+  const q = s[i];
+  i++;
+  while (i < s.length) {
+    if (s[i] === '\\') { i += 2; continue; }
+    if (s[i] === q) return i + 1;
+    i++;
+  }
+  return i;
+}
+
+// Recognize a compiled module-scope fat-arrow assignment for `name`:
+//   NAME = (params) => …        NAME = ident => …
+//   NAME = async (params) => …  NAME = async ident => …
+// Returns null when `line` is not such an assignment, else
+// `{ hasInlineReturn }` — whether an inline `: T` return annotation already
+// sits between the params and `=>`. (There is no generator-arrow form; thin
+// arrows lower to `= function(` and are matched separately.) A structural
+// scan, not a regex: generated param lists can contain nested parens, default
+// values, and string literals, so the params span and the implementation `=>`
+// must be located by balanced, string-aware scanning.
+function analyzeArrowImpl(line, name) {
+  const pre = new RegExp(`^\\s*${name}\\s*=\\s*`).exec(line);
+  if (!pre) return null;
+  const s = line;
+  let i = pre[0].length;
+  const skipWs = () => { while (i < s.length && (s[i] === ' ' || s[i] === '\t')) i++; };
+  skipWs();
+  // `async ` is the modifier — but only when real params follow. A bare
+  // identifier param named `async` (`NAME = async => …`) is not the modifier;
+  // don't consume it as one (it would otherwise mis-parse as no params).
+  if (s.startsWith('async', i) && /\s/.test(s[i + 5] || '')) {
+    let k = i + 5;
+    while (k < s.length && (s[k] === ' ' || s[k] === '\t')) k++;
+    if (!(s[k] === '=' && s[k + 1] === '>')) i = k;
+  }
+
+  // Parameter list: `(...)` (balanced, string-aware) or a bare identifier.
+  if (s[i] === '(') {
+    let depth = 0;
+    for (; i < s.length; i++) {
+      const c = s[i];
+      if (c === '"' || c === "'" || c === '`') { i = skipStringLiteral(s, i) - 1; continue; }
+      if (c === '(') depth++;
+      else if (c === ')' && --depth === 0) { i++; break; }
+    }
+    if (depth !== 0) return null;
+  } else if (/[A-Za-z_$]/.test(s[i] || '')) {
+    while (i < s.length && /[\w$]/.test(s[i])) i++;
+  } else {
+    return null;
+  }
+  skipWs();
+
+  // Optional inline return type `: T` between the params and `=>`. Latent
+  // today (fat-arrow return types aren't expressible yet), but recognized so
+  // the self-sufficiency check stays correct once they are.
+  let hasInlineReturn = false;
+  if (s[i] === ':') {
+    hasInlineReturn = true;
+    let depth = 0;
+    for (; i < s.length; i++) {
+      const c = s[i];
+      if (c === '"' || c === "'" || c === '`') { i = skipStringLiteral(s, i) - 1; continue; }
+      if (c === '=' && s[i + 1] === '>' && depth === 0) break;
+      if (c === '(' || c === '[' || c === '{' || c === '<') depth++;
+      else if (c === ')' || c === ']' || c === '}' || c === '>') depth--;
+    }
+    skipWs();
+  }
+
+  return (s[i] === '=' && s[i + 1] === '>') ? { hasInlineReturn } : null;
+}
+
 // Depth-aware split of a parameter list on top-level commas. Respects
 // nested parens, brackets, braces, and angle brackets so callback types
 // like `(fn: (x: number) => void)` and generic types like `Map<K, V>`
@@ -1422,22 +1498,26 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
       const injections = [];
       const moved = new Set();
       for (const fn of fnSigs) {
-        // Match the impl in either of two shapes:
+        // Match the impl in one of three shapes:
         //   1. top-level: `function NAME(`, `function NAME<`,
         //      `async function NAME(`, `export function NAME(`
-        //   2. bare-name arrow assignment: `NAME = function(`,
+        //   2. thin-arrow assignment: `NAME = function(`,
         //      `NAME = async function(`, `NAME = function*(`
-        // Pattern (2) is how Rip emits arrow assignments at module
-        // scope: `name = (...) -> ...` becomes `name = function(...) {…}`.
-        // We deliberately do NOT match `obj.NAME = function(`: the DTS
-        // emits `declare function NAME(...)` only for module-scope,
-        // bare-name arrow assignments. A property-style match would
-        // pick up an unrelated `obj.NAME = ...` line that happens to
-        // share the function name and apply the wrong signature there.
+        //      (`name = (...) -> ...` lowers to `name = function(...) {…}`)
+        //   3. fat-arrow assignment: `NAME = (...) => …`, `NAME = x => …`,
+        //      `NAME = async (...) => …` (`name = (...) => ...`). Without this
+        //      the own-file `declare function NAME` survives next to the
+        //      `let NAME` / `NAME = … =>` binding and TS reports TS2630
+        //      ("cannot assign to NAME because it is a function") — visible in
+        //      the editor shadow even when CLI `rip check` masks it.
+        // We deliberately do NOT match `obj.NAME = …`: the DTS emits
+        // `declare function NAME(...)` only for module-scope, bare-name
+        // assignments. A property-style match would pick up an unrelated
+        // `obj.NAME = ...` line sharing the name and apply the wrong signature.
         const topLevelPat = new RegExp(`^(?:export\\s+)?(?:async\\s+)?function\\s+${fn.name}\\s*[(<]`);
         const arrowAssignPat = new RegExp(`^\\s*${fn.name}\\s*=\\s*(?:async\\s+)?function\\s*\\*?\\s*\\(`);
         for (let j = 0; j < cl.length; j++) {
-          if (topLevelPat.test(cl[j]) || arrowAssignPat.test(cl[j])) {
+          if (topLevelPat.test(cl[j]) || arrowAssignPat.test(cl[j]) || analyzeArrowImpl(cl[j], fn.name)) {
             injections.push({ codeLine: j, sig: fn.sig });
             moved.add(fn.idx);
             break;
@@ -1541,11 +1621,32 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
           if (!nm || sigCountByName.get(nm) !== 1) return false;
           if (extractTypeParams(inj.sig)) return false;
           const impl = cl[inj.codeLine];
+          // Arrow detection is authoritative and runs first: it's a precise
+          // structural scan, so a fat-arrow line can't be misread by the
+          // function-form brace heuristic below (which would otherwise pick a
+          // nested object-literal `{` on an expression body). A fat-arrow
+          // assignment (`NAME = (params) => …`) emits its params inline, so it
+          // is self-sufficient when it carries an inline return type, OR when
+          // the header has no return type to preserve. Fat-arrow return types
+          // aren't expressible yet, so the header never carries one — moving it
+          // (no copy) is complete and lossless. Once they are, an arrow that
+          // lacks the inline return while the header has one is NOT self-
+          // sufficient and falls through to the copy fallback (return preserved).
+          const arrow = analyzeArrowImpl(impl, nm);
+          if (arrow) {
+            if (arrow.hasInlineReturn) return true;
+            if (!hasExplicitReturn(inj.sig)) return true;
+            return false;
+          }
+          // Function-form impl (`def`, thin-arrow `= function(`): self-sufficient
+          // when an inline return type sits between the params `)` and the `{`.
           const braceIdx = impl.lastIndexOf('{');
-          if (braceIdx < 0) return false;
-          const head = impl.slice(0, braceIdx);
-          const afterParen = head.slice(head.lastIndexOf(')') + 1).trim();
-          return afterParen.startsWith(':');
+          if (braceIdx >= 0) {
+            const head = impl.slice(0, braceIdx);
+            const afterParen = head.slice(head.lastIndexOf(')') + 1).trim();
+            if (afterParen.startsWith(':')) return true;
+          }
+          return false;
         }
 
         // First pass: copy typed params AND return types from signatures to
