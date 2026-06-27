@@ -18,10 +18,10 @@ count = 0
 ratio = 3.14
 items = ['a', 'b', 'c']
 
-def double(n:: number)
+def double(n: number)
   n * 2
 
-def expectString(x:: string)
+def expectString(x: string)
   x
 
 # ──────────────────────────────────────────────────
@@ -104,10 +104,10 @@ console.log insideIf, a, b
 # shadow TS rewrites straight-line assignments to `let x = value;`
 # so TS can infer types from the initializer.
 
-def expectNum(x:: number)
+def expectNum(x: number)
   x
 
-def process(data:: string[])
+def process(data: string[])
   csv = data.join ', '
   loud = csv.toUpperCase()
   loud
@@ -116,7 +116,7 @@ out = process items
 # @ts-expect-error — out inferred as string
 expectNum out
 
-def filterBy(query:: string)
+def filterBy(query: string)
   q = query.toLowerCase()
   items.filter (s) -> s.includes(q)
 
@@ -134,7 +134,7 @@ console.log out, matches
 # and shadow TS. patchUninitializedTypes walks into the branch to
 # find the first assignment and infers the type.
 
-def search(data:: string[], query:: string)
+def search(data: string[], query: string)
   if query.length > 0
     needle = query.toLowerCase()
     hits = data.filter (n) -> n.toLowerCase().includes(needle)
@@ -160,13 +160,13 @@ console.log found
 # annotation inline on the function-top hoist (collectTypedLocals); no
 # DTS-header → body reconciliation pass is involved.
 
-def firstOr(fallback:: number)
-  res:: number | null = null
+def firstOr(fallback: number)
+  res: number | null = null
   res = 42
   res ?? fallback
 
-def pickLabel(flag:: boolean)
-  tag:: string | null = null
+def pickLabel(flag: boolean)
+  tag: string | null = null
   if flag
     tag = "yes"
   tag ?? "no"

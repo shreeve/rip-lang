@@ -2,7 +2,7 @@ import './db.rip'
 import { get, post, patch, read } from '@rip-lang/server'
 import { User, Product, Order, OrderItem, OrderLine, UserPublic, ProductPublic, OrderPublic } from './models.rip'
 
-def errorResponse(errors:: { form?: string, field?: Partial<Record<string, string>> }, status = 400)
+def errorResponse(errors: { form?: string, field?: Partial<Record<string, string>> }, status = 400)
   return Response.json({ errors }, { status })
 
 # No auth in this demo — the "current user" is always the seeded user (id 1).
@@ -18,7 +18,7 @@ patch '/api/user' ->
   lastName  = read 'lastName',  'name'
   phone     = read 'phone',     'text'
 
-  field:: Partial<Record<keyof UserPublic, string>> = {}
+  field: Partial<Record<keyof UserPublic, string>> = {}
   if not firstName then field.firstName = 'Enter a first name'
   if not lastName then field.lastName = 'Enter a last name'
 
@@ -56,7 +56,7 @@ post '/api/orders' ->
   if not raw?.length then return errorResponse({ form: 'Invalid order data' })
 
   total = 0
-  items:: OrderItem[] = []
+  items: OrderItem[] = []
   for line in raw
     result = OrderLine.safe(line)
     if not result.ok

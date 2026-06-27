@@ -91,7 +91,7 @@ TIMEOUT_MS    =! 10000
 # ==[ Error Classes ]==
 
 export class HTTPError extends Error
-  constructor: (response:: Response, request:: Request, options:: HttpOptions) ->
+  constructor: (response: Response, request: Request, options: HttpOptions) ->
     super("Request failed with status #{response.status}")
     @response = response
     @request  = request
@@ -104,7 +104,7 @@ export interface HTTPError
   options: HttpOptions
 
 export class TimeoutError extends Error
-  constructor: (request:: Request) ->
+  constructor: (request: Request) ->
     super('Request timed out')
     @request = request
     @name    = 'TimeoutError'
@@ -114,7 +114,7 @@ export interface TimeoutError
 
 # ==[ Helpers ]==
 
-def buildUrl(input, opts:: HttpOptions = {})
+def buildUrl(input, opts: HttpOptions = {})
   base = opts.prefixUrl
   origin = globalThis.location?.origin or null
   # In the browser, default `base` to the current page origin so callers
@@ -144,21 +144,21 @@ def buildUrl(input, opts:: HttpOptions = {})
 
   url
 
-def mergeHeaders(a?:: HeadersInit, b?:: HeadersInit)
+def mergeHeaders(a?: HeadersInit, b?: HeadersInit)
   result = new Headers(a ?? {})
   if b
     h = new Headers(b)
     h.forEach (v, k) -> result.set(k, v)
   result
 
-def mergeHooks(a:: Hooks = {}, b:: Hooks = {})
+def mergeHooks(a: Hooks = {}, b: Hooks = {})
   return
     beforeRequest: [...(a.beforeRequest ?? []), ...(b.beforeRequest ?? [])]
     afterResponse: [...(a.afterResponse ?? []), ...(b.afterResponse ?? [])]
     beforeRetry:   [...(a.beforeRetry   ?? []), ...(b.beforeRetry   ?? [])]
     beforeError:   [...(a.beforeError   ?? []), ...(b.beforeError   ?? [])]
 
-def mergeOptions(defaults:: HttpOptions = {}, overrides:: HttpOptions = {})
+def mergeOptions(defaults: HttpOptions = {}, overrides: HttpOptions = {})
   opts = { ...defaults, ...overrides }
   if defaults.headers or overrides.headers
     opts.headers = mergeHeaders(defaults.headers, overrides.headers)
@@ -202,7 +202,7 @@ def retryDelay(attempt, res, cfg)
 
 # ==[ Core Request ]==
 
-def request(input, opts:: HttpOptions = {})
+def request(input, opts: HttpOptions = {})
   method          = (opts.method ?? 'GET').toUpperCase()
   timeout         = opts.timeout ?? TIMEOUT_MS
   throwHttpErrors = opts.throwHttpErrors ?? true
@@ -260,7 +260,7 @@ def request(input, opts:: HttpOptions = {})
   # Retry loop
   retryCount = 0
   loop
-    res:: Response | null = null
+    res: Response | null = null
 
     try
       res = fetch!(req.clone())
@@ -324,7 +324,7 @@ def request(input, opts:: HttpOptions = {})
 def buildMethod(call, method)
   (input, opts = {}) -> call(input, { ...opts, method })
 
-def makeInstance(defaults:: HttpOptions = {}):: HttpInstance
+def makeInstance(defaults: HttpOptions = {}): HttpInstance
   call = (input, opts = {}) -> request(input, mergeOptions(defaults, opts))
   Object.assign call,
     get:          buildMethod(call, 'GET')

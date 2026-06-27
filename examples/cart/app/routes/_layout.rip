@@ -1,7 +1,7 @@
 export Layout = component
   user <~ @app.data.user
   cart ~= @app.data.cart
-  gateError?:: string := undefined
+  gateError?: string := undefined
 
   mounted: -> @router.onNavigate(-> gateError = undefined)
 

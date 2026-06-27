@@ -1,8 +1,8 @@
 export APP_NAME = 'Rip'
 
-export def title(page:: string):: string
+export def title(page: string): string
   return "#{page} - #{APP_NAME}"
 
-export def formatPrice(cents:: number):: string
+export def formatPrice(cents: number): string
   usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
   return usd.format(cents / 100)
