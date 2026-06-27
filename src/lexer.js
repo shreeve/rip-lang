@@ -1545,6 +1545,25 @@ export class Lexer {
       }
       if (found < 0) return this.tagDoIife();
       closeIdx = found;
+    } else {
+      // The token before the arrow is `)`. Normally that's the param-list
+      // close — but it can also close a PARENTHESIZED return type:
+      // `(x):: (R) =>`. Disambiguate by finding this `)`'s matching `(`; if a
+      // `TYPE_ANNOTATION` (`::`) precedes that `(` and a `)` precedes the `::`,
+      // this group is the return type and the real param close is that earlier
+      // `)`. (A bare `(x) =>` has no `::` before its `(`, so it's unchanged.)
+      let d = 0, op = -1;
+      for (let k = closeIdx; k >= 0; k--) {
+        let tg = this.tokens[k][0];
+        if (tg === ')' || tg === 'CALL_END' || tg === 'PARAM_END') d++;
+        else if (tg === '(' || tg === 'CALL_START' || tg === 'PARAM_START') {
+          if (--d === 0) { op = k; break; }
+        }
+      }
+      if (op > 1 && this.tokens[op - 1][0] === 'TYPE_ANNOTATION' &&
+          this.tokens[op - 2]?.[0] === ')') {
+        closeIdx = op - 2;
+      }
     }
 
     let i = closeIdx;

@@ -12,6 +12,8 @@
 // compiler.js (CodeEmitter.prototype.emitEnum) — that's real codegen,
 // not type machinery.
 
+import { RipError } from './error.js';
+
 // ============================================================================
 // installTypeSupport — adds rewriteTypes() to Lexer.prototype
 // ============================================================================
@@ -88,7 +90,35 @@ export function installTypeSupport(Lexer) {
         let prevToken = tokens[i - 1];
         if (!prevToken) return 1;
 
-        let typeTokens = collectTypeExpression(tokens, i + 1);
+        // An arrow return type — `(params):: T -> body` / `(params):: T => body`
+        // — is uniquely flagged by a preceding `PARAM_END` (arrow param close).
+        // There the trailing `=>` is the arrow OPERATOR, not a TS function-type
+        // arrow, so the collector must stop at a depth-0 `=>` (it already stops
+        // at `->`). Without the flag it would eat the `=>` and the body as a
+        // function type, and the parser would never see the arrow.
+        let isArrowReturn = prevToken[0] === 'PARAM_END';
+        let typeTokens = collectTypeExpression(tokens, i + 1, { stopAtFatArrow: isArrowReturn });
+
+        // Foot-gun guard: a function-TYPE return must be parenthesized as a
+        // whole — `(x):: ((a: T) => R) => body`, not `(x):: (a: T) => R => body`.
+        // Unwrapped, the collector stops at the inner `=>` and the return type
+        // comes back as a bare parameter list `(a: T)` (a single `(…)` group
+        // with a top-level `:` , or empty `()`), which is never a valid type.
+        // Catch that exact shape and point at the fix rather than silently
+        // re-associating the body.
+        if (isArrowReturn && looksLikeBareFunctionType(typeTokens)) {
+          let loc = tokens[i + 1]?.loc;
+          throw new RipError('A function-type return on an arrow must be parenthesized', {
+            code: 'E_SYNTAX',
+            phase: 'lexer',
+            line: loc?.r ?? null,
+            column: loc?.c ?? null,
+            length: loc?.n ?? 1,
+            suggestion: 'wrap the whole function type in parens — ' +
+              '`(x):: ((a: T) => R) => body`, not `(x):: (a: T) => R => body`',
+          });
+        }
+
         let typeStr = buildTypeString(typeTokens);
 
         // Find the token that survives into the s-expression
@@ -312,8 +342,53 @@ export function installTypeSupport(Lexer) {
 // Type expression collection helpers
 // ============================================================================
 
+// Does a collected arrow-return type look like a bare (un-parenthesized)
+// function type — i.e. a single balanced `(…)` group spanning the whole type
+// whose top level is a parameter list (an empty `()`, or a depth-1 `:`)? Such
+// a "type" is only valid as the params of a function type, so seeing it in
+// return position means the user wrote `(x):: (a: T) => R => body` and forgot
+// to wrap the function type: `(x):: ((a: T) => R) => body`.
+function looksLikeBareFunctionType(typeTokens) {
+  const isOpen  = t => t === '(' || t === 'PARAM_START' || t === 'CALL_START';
+  const isClose = t => t === ')' || t === 'PARAM_END'   || t === 'CALL_END';
+  if (typeTokens.length < 2 || !isOpen(typeTokens[0][0])) return false;
+
+  // The opening paren must match the LAST token: one group spanning the type.
+  let depth = 0;
+  for (let k = 0; k < typeTokens.length; k++) {
+    const tag = typeTokens[k][0];
+    if (isOpen(tag)) depth++;
+    else if (isClose(tag)) {
+      if (--depth === 0 && k !== typeTokens.length - 1) return false;
+    }
+  }
+  if (depth !== 0) return false;
+
+  if (typeTokens.length === 2) return true; // empty `()`
+
+  // A `:` directly inside the outer parens (depth 1) ⇒ parameter-list shape.
+  // Brackets/braces nested inside don't count (e.g. `(string | number)` and the
+  // object literal `({ a: number })` have no depth-1 `:`). One more exclusion:
+  // a parenthesized CONDITIONAL type `(T extends U ? A : B)` has a depth-1 `:`,
+  // but it's the conditional's else-branch, always paired with a preceding `?`
+  // (TERNARY) at the same depth — a parameter `:` never is. Track that so a
+  // conditional return type isn't mistaken for a bare parameter list.
+  let d = 0, pendingTernary = false;
+  for (const t of typeTokens) {
+    const tag = t[0];
+    if (isOpen(tag) || tag === '[' || tag === '{' || tag === 'INDEX_START') d++;
+    else if (isClose(tag) || tag === ']' || tag === '}' || tag === 'INDEX_END') d--;
+    else if (d === 1 && tag === 'TERNARY') pendingTernary = true;
+    else if (d === 1 && tag === ':') {
+      if (pendingTernary) pendingTernary = false; // conditional else-branch
+      else return true;                           // parameter-list colon
+    }
+  }
+  return false;
+}
+
 // Collect type expression tokens starting at position j, respecting brackets
-function collectTypeExpression(tokens, j) {
+function collectTypeExpression(tokens, j, opts = {}) {
   let typeTokens = [];
   let depth = 0;
   let bracketStack = []; // tracks innermost open bracket: '{', '[', '(', '<'
@@ -365,6 +440,12 @@ function collectTypeExpression(tokens, j) {
 
     // Delimiters that end the type at depth 0
     if (depth === 0) {
+      // Arrow-return context: a depth-0 `=>` is the arrow OPERATOR, so it ends
+      // the return type (symmetric with `->` below). A function-type return
+      // must therefore be parenthesized as a whole — see the foot-gun guard in
+      // the TYPE_ANNOTATION handler. Everywhere else `=>` is a TS function-type
+      // arrow and is collected (e.g. `cb:: () => void`).
+      if (opts.stopAtFatArrow && tTag === '=>') break;
       // After =>, INDENT wraps the return type body — collect through OUTDENT
       if (tTag === 'INDENT' && typeTokens.length > 0 && typeTokens[typeTokens.length - 1][0] === '=>') {
         j++; // skip INDENT

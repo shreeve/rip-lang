@@ -310,3 +310,9 @@ console.log('arrowFat:', arrowFat(41))
 let badArrowThin: number = arrowThin(7)
 // @ts-expect-error — fat-arrow typed param enforced (number, not string)
 arrowFat('nope')
+
+const arrowFatRet = (n: number): string => `fat=${n}`
+console.log('arrowFatRet:', arrowFatRet(9))
+
+// @ts-expect-error — fat-arrow return type enforced (returns string, not number)
+let badArrowFatRet: number = arrowFatRet(9)

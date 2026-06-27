@@ -310,3 +310,12 @@ console.log 'arrowFat:', arrowFat(41)
 badArrowThin:: number = arrowThin(7)
 # @ts-expect-error — fat-arrow typed param enforced (number, not string)
 arrowFat('nope')
+
+# A fat arrow with an EXPLICIT return type — `(n:: number):: string => …`. The
+# `=>` is the arrow operator, not a function-type arrow; it emits inline as
+# `(n: number): string => …`. The return type is enforced.
+arrowFatRet = (n:: number):: string => "fat=#{n}"
+console.log 'arrowFatRet:', arrowFatRet(9)
+
+# @ts-expect-error — fat-arrow return type enforced (returns string, not number)
+badArrowFatRet:: number = arrowFatRet(9)
