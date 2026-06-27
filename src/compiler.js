@@ -1645,15 +1645,20 @@ export class CodeEmitter {
   // no longer travels through the `.d.ts` header and the overload-interleave
   // splice (typecheck.js). Off by default — runtime / `-c` output is unchanged.
   //
+  // `node` is the type-bearing s-expression head: the function NAME for `def`,
+  // or the `->`/`=>` arrow operator for arrow functions (the lexer adapter
+  // Object.assigns each token's `.data` — including `returnType` — onto its
+  // String-wrapper, so both carry the annotation).
+  //
   // Only an EXPLICIT user annotation (`def f():: T`) is emitted, verbatim via
   // `ripToTs`. `void` is deliberately NOT synthesized for `!` functions: on an
   // async function `: void` (or any non-Promise type) is itself a TS1064, so a
   // synthesized annotation would fire a spurious error on legitimate async
   // side-effect functions once 1064 is recovered. Those keep flowing through
   // the header until a later slice handles them.
-  inlineReturnType(name) {
+  inlineReturnType(node) {
     if (!this.options.inlineTypes) return '';
-    let rt = meta(name, 'returnType');
+    let rt = meta(node, 'returnType');
     return rt ? `: ${ripToTs(rt)}` : '';
   }
 
@@ -1665,7 +1670,8 @@ export class CodeEmitter {
     let bodyCode = this.emitFunctionBody(body, params, sideEffectOnly);
     let isAsync = this.containsAwait(body);
     let isGen = this.containsYield(body);
-    let fn = `${isAsync ? 'async ' : ''}function${isGen ? '*' : ''}(${paramList}) ${bodyCode}`;
+    let ret = this.inlineReturnType(sexpr?.[0]);
+    let fn = `${isAsync ? 'async ' : ''}function${isGen ? '*' : ''}(${paramList})${ret} ${bodyCode}`;
     return context === 'value' ? `(${fn})` : fn;
   }
 
@@ -1674,7 +1680,13 @@ export class CodeEmitter {
     if ((!params || (Array.isArray(params) && params.length === 0)) && this.containsIt(body)) params = ['it'];
     let sideEffectOnly = sexpr.isVoid || false;
     let paramList = this.emitParamList(params);
-    let isSingle = params.length === 1 && typeof params[0] === 'string' &&
+    // RFC 12 phase 2: an inline return type forces parenthesized params —
+    // `x: R => …` is invalid TS, only `(x): R => …`. Latent until fat-arrow
+    // return types are expressible (the `=>` annotation-vs-operator grammar
+    // ambiguity is a separate slice); `ret` is `''` today, so output is
+    // unchanged.
+    let ret = this.inlineReturnType(sexpr?.[0]);
+    let isSingle = !ret && params.length === 1 && typeof params[0] === 'string' &&
                    !paramList.includes('=') && !paramList.includes('...') &&
                    !paramList.includes('[') && !paramList.includes('{');
     let paramSyntax = isSingle ? paramList : `(${paramList})`;
@@ -1688,18 +1700,18 @@ export class CodeEmitter {
         if (exprHead !== 'return' && !STMT_ONLY.has(exprHead)) {
           let code = this.emit(expr, 'value');
           if (code[0] === '{') code = `(${code})`;
-          return `${prefix}${paramSyntax} => ${code}`;
+          return `${prefix}${paramSyntax}${ret} => ${code}`;
         }
       }
       if (!Array.isArray(body) || body[0] !== 'block') {
         let code = this.emit(body, 'value');
         if (code[0] === '{') code = `(${code})`;
-        return `${prefix}${paramSyntax} => ${code}`;
+        return `${prefix}${paramSyntax}${ret} => ${code}`;
       }
     }
 
     let bodyCode = this.emitFunctionBody(body, params, sideEffectOnly);
-    return `${prefix}${paramSyntax} => ${bodyCode}`;
+    return `${prefix}${paramSyntax}${ret} => ${bodyCode}`;
   }
 
   emitReturn(head, rest, context, sexpr) {

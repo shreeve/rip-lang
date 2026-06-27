@@ -88,6 +88,10 @@ const PASS = [
   // RFC 12 phase 2: function return types are emitted inline (`def f():: T`),
   // so the return-type token must remain map-resolvable on the check path.
   { name: 'def return type',            src: 'def parseId(raw:: string):: number\n  42\n',       line: 0, token: 'number' },
+  // RFC 12 phase 2: thin-arrow assignments also emit their return type inline
+  // (`f = function(n: number): string {…}`), so the return token resolves on
+  // the check path — proof the arrow impl is self-sufficient, not header-copied.
+  { name: 'thin-arrow return type',     src: 'f = (n:: number):: string -> "x"\n',               line: 0, token: 'string' },
 ];
 
 for (const c of PASS) {
