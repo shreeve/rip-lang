@@ -11,15 +11,26 @@ All `<script type="text/rip">` tags, inline or external, compile and run togethe
 
 ## Runtime Script Attributes
 
-| Attribute      | Purpose                                                   |
-| -------------- | --------------------------------------------------------- |
-| `data-src`     | whitespace-separated source URLs or bundle URLs           |
-| `data-mount`   | component to mount after compilation                      |
-| `data-target`  | CSS selector for mount target                             |
-| `data-state`   | JSON stash seed                                           |
-| `data-router`  | enables history mode or `"hash"` routing                  |
-| `data-persist` | persists stash in session storage or `"local"` storage    |
-| `data-reload`  | connects to `/watch`; CSS changes can refresh styles only |
+**Value attributes** — the value is the payload:
+
+| Attribute     | Values                          | Default | Purpose                          |
+| ------------- | ------------------------------- | ------- | -------------------------------- |
+| `data-src`    | URL list (`.rip`=file, else bundle) | empty   | explicit sources; non-empty skips `/app` |
+| `data-mount`  | component name                  | —       | component to mount               |
+| `data-target` | CSS selector                    | `body`  | mount target                     |
+| `data-state`  | JSON                            | `{}`    | stash seed                       |
+
+**Control attributes** — all parsed by one uniform rule (below):
+
+| Attribute         | Values                                 | Default | Purpose                          |
+| ----------------- | -------------------------------------- | ------- | -------------------------------- |
+| `data-standalone` | `true` `false`                         | `false` | page is self-contained; skips the `/app` fetch |
+| `data-router`     | `true` `false` `hash` `history` `auto` | `auto`  | routing; `auto` infers from bundle |
+| `data-reload`     | `true` `false` `auto`                  | `auto`  | SSE reload; `auto` infers from bundle |
+| `data-persist`    | `true` `false` `session` `local`       | `false` | stash persistence (`true`=`session`) |
+| `data-debug`      | `true` `false`                         | `true`  | source maps / diagnostics        |
+
+**Uniform rule** (`flag()` in `browser.js`): absent → default · bare/`true`/`on`/`yes`/`1` → true · `false`/`off`/`no`/`0` → false · a listed enum token → that token · else console error + default. Trimmed, case-insensitive.
 
 ## Component Mounting
 

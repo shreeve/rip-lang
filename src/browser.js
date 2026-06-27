@@ -156,21 +156,37 @@ if (typeof globalThis !== 'undefined') {
 //
 // data-src URLs ending in .rip are fetched as individual source files.
 // All other URLs are fetched as JSON bundles containing multiple files.
+
+// Uniform value parsing for every boolean/enum control attribute on the runtime
+// tag. Absent → `def`; bare / "" / true / on / yes / 1 → true; false / off /
+// no / 0 → false; a token in `enums` → that token; anything else → loud error +
+// `def`. Trimmed and case-insensitive, so any reasonable spelling "just works"
+// and a typo never silently passes as on.
+function flag(el, name, def, enums = []) {
+  const raw = el?.getAttribute(name);
+  if (raw == null) return def;
+  const v = raw.trim().toLowerCase();
+  if (v === '' || v === 'true' || v === 'on' || v === 'yes' || v === '1') return true;
+  if (v === 'false' || v === 'off' || v === 'no' || v === '0') return false;
+  if (enums.includes(v)) return v;
+  console.error(`Rip: invalid ${name}="${raw}" (expected ${['true', 'false', ...enums].join(' | ')}); using ${JSON.stringify(def)}`);
+  return def;
+}
+
 async function processRipScripts() {
   const sources = [];
   let lastBundle;
 
-  // Step 1: Collect data-src URLs from the runtime script tag
-  // When data-src is omitted, default to '/app' (auto-scanned bundle from
-  // serve middleware). The default is silent on failure — only explicit
-  // data-src URLs warn — so static / file:// pages aren't noisy.
+  // Step 1: Resolve where app code comes from. Explicit data-src URLs win;
+  // otherwise the serve middleware's '/app' bundle is auto-fetched on http(s) —
+  // unless the page declares data-standalone (it carries its own code inline /
+  // via data-src and isn't backed by a rip server). The fetch is optional
+  // (silent on failure), so static / file:// pages stay quiet.
   const runtimeTag = document.querySelector('script[src$="rip.min.js"], script[src$="rip.js"]');
-  const dataSrc = runtimeTag?.getAttribute('data-src');
-  if (dataSrc !== null && dataSrc !== undefined) {
-    for (const url of dataSrc.trim().split(/\s+/)) {
-      if (url) sources.push({ url });
-    }
-  } else if (runtimeTag && /^https?:$/.test(location.protocol)) {
+  const dataSrc = runtimeTag?.getAttribute('data-src')?.trim();
+  if (dataSrc) {
+    for (const url of dataSrc.split(/\s+/)) sources.push({ url });
+  } else if (runtimeTag && !flag(runtimeTag, 'data-standalone', false) && /^https?:$/.test(location.protocol)) {
     sources.push({ url: '/app', optional: true });
   }
 
@@ -212,21 +228,18 @@ async function processRipScripts() {
       else if (s.code) individual.push(s);
     }
 
-    const routerAttr = runtimeTag?.getAttribute('data-router');
     lastBundle = bundles[bundles.length - 1];
-    // data-router auto-infers from bundle.data.router (set by the server when
-    // the app has a routes/ directory). Explicit attribute always wins:
-    //   data-router            → enabled
-    //   data-router="hash"     → hash routing
-    //   data-router="false"    → explicitly disabled
-    //   (omitted)              → fall back to bundle.data.router
+    // data-router: "auto" (default) infers from bundle.data.router (set by the
+    // server when the app has a routes/ dir); true / "history" = history
+    // routing; "hash" = hash routing; "false" = disabled.
+    const router = flag(runtimeTag, 'data-router', 'auto', ['hash', 'history']);
     let hasRouter, hashRouter;
-    if (routerAttr != null) {
-      hasRouter = routerAttr !== 'false';
-      hashRouter = routerAttr === 'hash';
-    } else {
+    if (router === 'auto') {
       hasRouter = !!(lastBundle?.data?.router);
       hashRouter = false;
+    } else {
+      hasRouter = router !== false;
+      hashRouter = router === 'hash';
     }
 
     // Step 3b: If data-router is present and we have a bundle, use launch()
@@ -238,7 +251,7 @@ async function processRipScripts() {
       // its components get source maps too via `globalThis.__ripDebug`,
       // which `app.rip`'s component-compile path reads to apply the same
       // offset+sourceURL treatment we apply here.
-      const debug = runtimeTag?.getAttribute('data-debug') !== 'false';
+      const debug = flag(runtimeTag, 'data-debug', true);
       if (globalThis.__ripDebug) globalThis.__ripDebug.enabled = debug;
       const baseOpts = { skipRuntimes: true, skipExports: true, skipImports: true };
       let inlineCounter = 0;
@@ -257,9 +270,9 @@ async function processRipScripts() {
       // Launch with the last bundle (app bundle) — handles router, renderer, stash
       const app = importRip.modules?.['app.rip'];
       if (app?.launch) {
-        const persistAttr = runtimeTag.getAttribute('data-persist');
+        const persist = flag(runtimeTag, 'data-persist', false, ['session', 'local']);
         const launchOpts = { bundle: lastBundle, hash: hashRouter };
-        if (persistAttr != null) launchOpts.persist = persistAttr === 'local' ? 'local' : true;
+        if (persist) launchOpts.persist = persist === 'local' ? 'local' : true;
         await app.launch(launchOpts);
       }
     } else {
@@ -309,7 +322,7 @@ async function processRipScripts() {
       // reads the single merged map and shows each `.rip` file as a
       // navigable source — same UX as the data-router path, no
       // per-component IIFE split that would break lexical scope.
-      const debug = runtimeTag?.getAttribute('data-debug') !== 'false';
+      const debug = flag(runtimeTag, 'data-debug', true);
       if (globalThis.__ripDebug) globalThis.__ripDebug.enabled = debug;
       const baseOpts = { skipRuntimes: true, skipExports: true, skipImports: true };
       const compiled = [];
@@ -342,9 +355,9 @@ async function processRipScripts() {
           globalThis.__ripApp = app;
           if (typeof window !== 'undefined') window.app = app;
 
-          const persistAttr = runtimeTag.getAttribute('data-persist');
-          if (persistAttr != null && globalThis.persistStash) {
-            globalThis.persistStash(app, { local: persistAttr === 'local' });
+          const persist = flag(runtimeTag, 'data-persist', false, ['session', 'local']);
+          if (persist && globalThis.persistStash) {
+            globalThis.persistStash(app, { local: persist === 'local' });
           }
         }
       }
@@ -386,20 +399,15 @@ async function processRipScripts() {
     }
   }
 
-  // Step 6: data-reload enables SSE hot-reload from dev server
+  // Step 6: data-reload enables SSE hot-reload from the dev server.
   // Skip if launch() was called — it connects its own SSE watch.
-  // Auto-infers from bundle.data.watch (set by the server when --watch is on).
-  // Explicit attribute always wins:
-  //   data-reload          → enabled
-  //   data-reload="false"  → explicitly disabled
-  //   (omitted)            → fall back to bundle.data.watch
+  // "auto" (default) infers from bundle.data.watch (set by the server when
+  // --watch is on); true = forced on; "false" = off.
   // Uses exponential backoff: 1s → 2s → 4s → … → 30s (then 30s forever).
   // The retry delay only affects reconnection to a DOWN server — once connected,
   // the server pushes reload notifications instantly regardless of this value.
-  const reloadAttr = runtimeTag?.getAttribute('data-reload');
-  const shouldReload = reloadAttr != null
-    ? reloadAttr !== 'false'
-    : !!(lastBundle?.data?.watch);
+  const reload = flag(runtimeTag, 'data-reload', 'auto');
+  const shouldReload = reload === 'auto' ? !!(lastBundle?.data?.watch) : reload === true;
   if (shouldReload && !globalThis.__ripLaunched) {
     let ready = false;
     let retryDelay = 1000;

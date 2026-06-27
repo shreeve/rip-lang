@@ -120,7 +120,7 @@ static server (or open straight from disk):
 <body>
   <script defer
           src="https://shreeve.github.io/rip-lang/dist/rip.min.js"
-          data-src=""
+          data-standalone
           data-mount="App"></script>
   <script type="text/rip">
     App = component
@@ -144,10 +144,13 @@ What each attribute does:
 - `src=...` — the framework bundle (compiler + reactive runtime +
   Rip App). Use the GitHub Pages CDN URL above, or self-host a copy
   of `dist/rip.min.js`.
-- `data-src=""` — **explicitly empty**. Without this, the runtime
-  defaults to `GET /app` (the auto-bundle endpoint provided by
-  `@rip-lang/server`'s `serve` middleware). When you're not running
-  a Rip server, the empty string suppresses that fetch.
+- `data-standalone` — marks the page as self-contained, so the runtime
+  skips the `GET /app` auto-fetch. With no `data-src`, the runtime
+  otherwise defaults to fetching `/app` (the auto-bundle endpoint from
+  `@rip-lang/server`'s `serve` middleware) on http(s). An all-inline
+  page like this one isn't backed by a Rip server, so it declares
+  `data-standalone`. (Only needed when a Rip server would otherwise
+  serve a real `/app`; on a plain static host the probe is harmless.)
 - `data-mount="App"` — name of the top-level component to mount.
   Mounted onto `<body>` by default; pass `data-target="#app"` (or
   any selector) to mount somewhere else.

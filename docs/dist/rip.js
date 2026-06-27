@@ -16252,7 +16252,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.2";
-  var BUILD_DATE = "2026-06-25@11:13:41GMT";
+  var BUILD_DATE = "2026-06-27@01:40:25GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -16350,17 +16350,29 @@ ${tagged}
       sanitizeSourceURL
     };
   }
+  function flag(el, name, def, enums = []) {
+    const raw = el?.getAttribute(name);
+    if (raw == null)
+      return def;
+    const v = raw.trim().toLowerCase();
+    if (v === "" || v === "true" || v === "on" || v === "yes" || v === "1")
+      return true;
+    if (v === "false" || v === "off" || v === "no" || v === "0")
+      return false;
+    if (enums.includes(v))
+      return v;
+    console.error(`Rip: invalid ${name}="${raw}" (expected ${["true", "false", ...enums].join(" | ")}); using ${JSON.stringify(def)}`);
+    return def;
+  }
   async function processRipScripts() {
     const sources = [];
     let lastBundle;
     const runtimeTag = document.querySelector('script[src$="rip.min.js"], script[src$="rip.js"]');
-    const dataSrc = runtimeTag?.getAttribute("data-src");
-    if (dataSrc !== null && dataSrc !== undefined) {
-      for (const url of dataSrc.trim().split(/\s+/)) {
-        if (url)
-          sources.push({ url });
-      }
-    } else if (runtimeTag && /^https?:$/.test(location.protocol)) {
+    const dataSrc = runtimeTag?.getAttribute("data-src")?.trim();
+    if (dataSrc) {
+      for (const url of dataSrc.split(/\s+/))
+        sources.push({ url });
+    } else if (runtimeTag && !flag(runtimeTag, "data-standalone", false) && /^https?:$/.test(location.protocol)) {
       sources.push({ url: "/app", optional: true });
     }
     for (const script of document.querySelectorAll('script[type="text/rip"]')) {
@@ -16400,18 +16412,18 @@ ${tagged}
         else if (s.code)
           individual.push(s);
       }
-      const routerAttr = runtimeTag?.getAttribute("data-router");
       lastBundle = bundles[bundles.length - 1];
+      const router = flag(runtimeTag, "data-router", "auto", ["hash", "history"]);
       let hasRouter, hashRouter;
-      if (routerAttr != null) {
-        hasRouter = routerAttr !== "false";
-        hashRouter = routerAttr === "hash";
-      } else {
+      if (router === "auto") {
         hasRouter = !!lastBundle?.data?.router;
         hashRouter = false;
+      } else {
+        hasRouter = router !== false;
+        hashRouter = router === "hash";
       }
       if (hasRouter && bundles.length > 0) {
-        const debug = runtimeTag?.getAttribute("data-debug") !== "false";
+        const debug = flag(runtimeTag, "data-debug", true);
         if (globalThis.__ripDebug)
           globalThis.__ripDebug.enabled = debug;
         const baseOpts = { skipRuntimes: true, skipExports: true, skipImports: true };
@@ -16436,10 +16448,10 @@ ${js}
         }
         const app = importRip.modules?.["app.rip"];
         if (app?.launch) {
-          const persistAttr = runtimeTag.getAttribute("data-persist");
+          const persist = flag(runtimeTag, "data-persist", false, ["session", "local"]);
           const launchOpts = { bundle: lastBundle, hash: hashRouter };
-          if (persistAttr != null)
-            launchOpts.persist = persistAttr === "local" ? "local" : true;
+          if (persist)
+            launchOpts.persist = persist === "local" ? "local" : true;
           await app.launch(launchOpts);
         }
       } else {
@@ -16475,7 +16487,7 @@ ${js}
             window.__RIP__.components = sourceStore;
           }
         }
-        const debug = runtimeTag?.getAttribute("data-debug") !== "false";
+        const debug = flag(runtimeTag, "data-debug", true);
         if (globalThis.__ripDebug)
           globalThis.__ripDebug.enabled = debug;
         const baseOpts = { skipRuntimes: true, skipExports: true, skipImports: true };
@@ -16509,9 +16521,9 @@ ${js}
             globalThis.__ripApp = app;
             if (typeof window !== "undefined")
               window.app = app;
-            const persistAttr = runtimeTag.getAttribute("data-persist");
-            if (persistAttr != null && globalThis.persistStash) {
-              globalThis.persistStash(app, { local: persistAttr === "local" });
+            const persist = flag(runtimeTag, "data-persist", false, ["session", "local"]);
+            if (persist && globalThis.persistStash) {
+              globalThis.persistStash(app, { local: persist === "local" });
             }
           }
         }
@@ -16540,8 +16552,8 @@ ${wrapped}
         }
       }
     }
-    const reloadAttr = runtimeTag?.getAttribute("data-reload");
-    const shouldReload = reloadAttr != null ? reloadAttr !== "false" : !!lastBundle?.data?.watch;
+    const reload = flag(runtimeTag, "data-reload", "auto");
+    const shouldReload = reload === "auto" ? !!lastBundle?.data?.watch : reload === true;
     if (shouldReload && !globalThis.__ripLaunched) {
       let ready = false;
       let retryDelay = 1000;
