@@ -467,28 +467,102 @@ function reclassifyColonTypes(tokens) {
     return false;
   };
 
+  // Does the value after a class-member `:` look like a function (a method),
+  // i.e. does a `->`/`=>` arrow appear at depth 0 before the member ends? If so
+  // it's a method binding, not a typed field — leave it alone.
+  const valueIsMethod = (start) => {
+    let depth = 0;
+    for (let j = start; j < tokens.length; j++) {
+      const g = tokens[j][0];
+      if (isOpen(g)) depth++;
+      else if (isClose(g)) depth--;
+      else if (depth === 0) {
+        if (g === '->' || g === '=>') return true;
+        if (g === 'TERMINATOR' || g === 'INDENT' || g === 'OUTDENT') return false;
+      }
+    }
+    return false;
+  };
+
+  // Track class bodies via INDENT/OUTDENT so a bare `name: T` member is read as
+  // a typed field. `pendingClass` is armed by the `class` keyword and consumed
+  // by the next INDENT (the class body); methods inside it open their own
+  // (non-class) INDENT, so a member is in a class body only when the innermost
+  // indent frame is the class body.
+  let pendingClass = false;
+  const indentStack = [];
+  const inClassBody = () => indentStack.length > 0 && indentStack[indentStack.length - 1];
+
+  // A type expression (opened by any `::` / TYPE_ANNOTATION, or by a `:` we
+  // reclassify) must never have its interior touched: a function type like
+  // `{ cb: (r: R) => void }` carries single `:` colons that are TS member/param
+  // separators, not Rip annotations. `inType` suppresses reclassification until
+  // the type ends (a terminator at its start depth, or exiting that depth).
+  let inType = false, typeStartDepth = 0;
+  const enterType = () => { inType = true; typeStartDepth = stack.length; };
+
   const stack = [];
   for (let i = 0; i < tokens.length; i++) {
     const tag = tokens[i][0];
+
+    // Class-body tracking (INDENT/OUTDENT). `class` arms the next INDENT as a
+    // class body; nested method/blocks push non-class indents. INDENT/OUTDENT
+    // at the type's start depth also end a type expression.
+    if (tag === 'CLASS') { pendingClass = true; continue; }
+    if (tag === 'INDENT') { indentStack.push(pendingClass); pendingClass = false; if (inType && stack.length <= typeStartDepth) inType = false; continue; }
+    if (tag === 'OUTDENT') { indentStack.pop(); if (inType && stack.length <= typeStartDepth) inType = false; continue; }
+
+    // Brackets are always tracked (depth drives the type-context boundary).
+    // Inside a type, an opener is never a real parameter list (it's a
+    // function-type's params), so it pushes a plain frame.
+    if (isOpen(tag)) {
+      let kind = 'other';
+      if (!inType) {
+        if (tag === 'PARAM_START') kind = 'param';
+        else if ((tag === 'CALL_START' || tag === '(') && isDefParamStart(i)) kind = 'defparam';
+      }
+      stack.push({ kind, sawEq: false, sawType: false });
+      continue;
+    }
+    if (isClose(tag)) {
+      const f = stack.pop();
+      if (f?.kind === 'defparam') { (tokens[i].data ??= {}).isDefParamEnd = true; }
+      if (inType && stack.length < typeStartDepth) inType = false;
+      continue;
+    }
+
+    // A type annotation token (pre-existing `::`, or one created below) opens a
+    // type expression.
+    if (tag === 'TYPE_ANNOTATION') { if (!inType) enterType(); continue; }
+
+    // Inside a type: clear at the type's terminator (at its start depth);
+    // otherwise skip — never reclassify a colon that belongs to a type. `=>`
+    // does not terminate (it's a function-type arrow).
+    if (inType) {
+      if (stack.length <= typeStartDepth &&
+          (tag === '=' || tag === ',' || tag === 'TERMINATOR' || tag === '->' ||
+           BINDING_OPS.has(tag))) {
+        inType = false;   // fall through; a terminator is never a `:` to reclassify
+      } else {
+        continue;
+      }
+    }
 
     if (tag === ':') {
       const prev = tokens[i - 1];
       const prevTag = prev?.[0];
       // Return type: a `:` immediately after a closed param list. Arrow param
       // lists close as PARAM_END; def param lists close as `)` or CALL_END
-      // (and are flagged `isDefParamEnd` below).
+      // (flagged `isDefParamEnd`).
       if (prevTag === 'PARAM_END' ||
           ((prevTag === ')' || prevTag === 'CALL_END') && prev.data?.isDefParamEnd)) {
-        tokens[i][0] = 'TYPE_ANNOTATION';
-        continue;
+        tokens[i][0] = 'TYPE_ANNOTATION'; enterType(); continue;
       }
-      // Parameterless def return type: `def foo: T` (foo is tagged PROPERTY
-      // because a `:` follows; retag it back to IDENTIFIER).
+      // Parameterless def return type: `def foo: T`.
       if ((prevTag === 'IDENTIFIER' || prevTag === 'PROPERTY') &&
           tokens[i - 2]?.[0] === 'DEF') {
         if (prevTag === 'PROPERTY') prev[0] = 'IDENTIFIER';
-        tokens[i][0] = 'TYPE_ANNOTATION';
-        continue;
+        tokens[i][0] = 'TYPE_ANNOTATION'; enterType(); continue;
       }
       // Statement-level typed declaration (top level, name at statement start,
       // binding operator before any arrow).
@@ -497,24 +571,17 @@ function reclassifyColonTypes(tokens) {
           atStatementStart(tokens[i - 2]) &&
           declBindsBeforeArrow(i + 1)) {
         if (prevTag === 'PROPERTY') prev[0] = 'IDENTIFIER';
-        tokens[i][0] = 'TYPE_ANNOTATION';
-        continue;
+        tokens[i][0] = 'TYPE_ANNOTATION'; enterType(); continue;
       }
-    }
-
-    if (isOpen(tag)) {
-      let kind = 'other';
-      if (tag === 'PARAM_START') kind = 'param';
-      else if ((tag === 'CALL_START' || tag === '(') && isDefParamStart(i)) kind = 'defparam';
-      stack.push({ kind, open: tag, openIdx: i, sawEq: false, sawType: false });
-      continue;
-    }
-    if (isClose(tag)) {
-      const f = stack.pop();
-      // Mark a def param list's closing token so the return-type `:` after it
-      // (def params close as a plain `)`, not PARAM_END) is recognized above.
-      if (f?.kind === 'defparam') { (tokens[i].data ??= {}).isDefParamEnd = true; }
-      continue;
+      // Class-body typed field: a bare `name: T` member (no initializer) is a
+      // typed field unless its value is a method (`name: (…) -> …`).
+      if (inClassBody() && stack.length === 0 &&
+          (prevTag === 'PROPERTY' || prevTag === 'IDENTIFIER') &&
+          atStatementStart(tokens[i - 2]) &&
+          !valueIsMethod(i + 1)) {
+        if (prevTag === 'PROPERTY') prev[0] = 'IDENTIFIER';
+        tokens[i][0] = 'TYPE_ANNOTATION'; enterType(); continue;
+      }
     }
 
     const f = stack[stack.length - 1];
@@ -528,6 +595,7 @@ function reclassifyColonTypes(tokens) {
           if (prevTag === 'PROPERTY') prev[0] = 'IDENTIFIER';
           tokens[i][0] = 'TYPE_ANNOTATION';
           f.sawType = true;
+          enterType();
         }
       }
     }
