@@ -202,7 +202,7 @@ export validators:: Record<string, Validator> =
     try
       nums = []
       for part in cleaned.split(' ')
-        return null unless part[/^([1-9]\d{0,19})$/]
+        return null unless part[/^([1-9]\d{0,14})$/]
         nums.push parseInt(_[1])
       Array.from(new Set(nums)).sort((a, b) -> a - b)
     catch then null

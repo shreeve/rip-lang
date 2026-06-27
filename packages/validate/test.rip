@@ -48,6 +48,8 @@ eq 'uuid hyphenates',   validators.uuid('00112233445566778899AABBCCDDEEFF'), '00
 eq 'json parses',       validators.json('{"a":1}'),        {a: 1}
 eq 'array passthrough', validators.array([1, 2]),          [1, 2]
 eq 'ids dedupes+sorts', validators.ids('3, 1 1,2'),        [1, 2, 3]
+eq 'ids 15-digit ok',   validators.ids('999999999999999'), [999999999999999]
+eq 'ids 16-digit null', validators.ids('1234567890123456'), null
 eq 'slug lowercases',   validators.slug('My-Page'),        'my-page'
 
 # ------------------------------------------------------------------------------
