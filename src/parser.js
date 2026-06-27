@@ -254,7 +254,7 @@ const parserInstance = {
     }
   },
   parse(input) {
-    let EOF, TERROR, action, errStr, expected, len, lex, lexer, loc, locs, newState, p, parseTable, preErrorSymbol, r, recovering, rv, sharedState, state, stk, symbol, tokenLen, tokenLine, tokenLoc, tokenText, vals;
+    let EOF, TERROR, action, errStr, expected, last, len, lex, lexer, loc, locs, n, newState, p, parseTable, preErrorSymbol, r, recovering, rv, sharedState, state, stk, symbol, tokenLen, tokenLine, tokenLoc, tokenText, vals;
     [stk, vals, locs] = [[0], [null], []];
     [parseTable, tokenText, tokenLine, tokenLen, recovering] = [this.parseTable, "", 0, 0, 0];
     [TERROR, EOF] = [2, 1];
@@ -327,7 +327,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         len = this.ruleTable[-action * 2 + 1];
         rv.$ = vals[vals.length - len];
         loc = locs[locs.length - (len || 1)];
-        rv._$ = { r: loc.r, c: loc.c };
+        last = len ? locs[locs.length - 1] : loc;
+        n = last != null && last.r === loc.r && loc.c != null && last.c != null ? last.c + (last.n || 0) - loc.c : loc.n || 0;
+        rv._$ = { r: loc.r, c: loc.c, n };
         r = this.ruleActions.call(rv, -action, vals, locs, sharedState.ctx);
         if (r != null)
           rv.$ = r;

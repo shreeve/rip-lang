@@ -740,7 +740,18 @@ class Generator
         len = @ruleTable[(-action) * 2 + 1]
         rv.$ = vals[vals.length - len]
         loc = locs[locs.length - (len or 1)]
-        rv._$ = { r: loc.r, c: loc.c }
+        # Span the whole reduction: start at the first RHS symbol, extend the
+        # length `n` to the end of the last symbol when both are on one line
+        # (so error carets and source-map marks cover the real construct, not a
+        # single column). Fall back to the first symbol's own length across
+        # lines. `n` was previously dropped, which is why codegen-error carets
+        # were always one character wide. See RFC 12 (Unified emitter).
+        last = if len then locs[locs.length - 1] else loc
+        n = if last? and last.r is loc.r and loc.c? and last.c?
+          (last.c + (last.n or 0)) - loc.c
+        else
+          loc.n or 0
+        rv._$ = { r: loc.r, c: loc.c, n }
 
         r = @ruleActions.call rv, -action, vals, locs, sharedState.ctx
         rv.$ = r if r?
