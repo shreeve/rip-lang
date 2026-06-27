@@ -96,23 +96,33 @@ t "float junk"              , 'abc' , null   -> read 'v', 'float'
 # money
 # ==============================================================================
 
-t "money basic"             , '1.23'        , 1.23     -> read 'v', 'money'
-t "money rounds up"         , '1.245'       , 1.25     -> read 'v', 'money'
-t "money neg half"          , '-0.005'      , -0.01    -> read 'v', 'money'
-t "money strips $,"         , '$7,221.245'  , 7221.25  -> read 'v', 'money'
-t "money spaced"            , '- $ 9,999.12', -9999.12 -> read 'v', 'money'
-t "money_even basic"        , '1.23'        , 1.23     -> read 'v', 'money_even'
-t "money_even rounds even"  , '1.245'       , 1.24     -> read 'v', 'money_even'
+t "money basic"             , '1.23'        , 123      -> read 'v', 'money'
+t "money rounds up"         , '1.245'       , 125      -> read 'v', 'money'
+t "money neg half"          , '-0.005'      , -1       -> read 'v', 'money'
+t "money whole dollars"     , '1292'        , 129200   -> read 'v', 'money'
+t "money bare int=dollars"  , '129222'      , 12922200 -> read 'v', 'money'
+t "money strips $,"         , '$7,221.245'  , 722125   -> read 'v', 'money'
+t "money spaced"            , '- $ 9,999.12', -999912  -> read 'v', 'money'
+t "money_even basic"        , '1.23'        , 123      -> read 'v', 'money_even'
+t "money_even rounds even"  , '1.245'       , 124      -> read 'v', 'money_even'
 t "money_even neg half"     , '-0.005'      , 0        -> read 'v', 'money_even'
-t "cents basic"             , '1.23'        , 123      -> read 'v', 'cents'
-t "cents rounds up"         , '1.245'       , 125      -> read 'v', 'cents'
-t "cents neg half"          , '-0.005'      , -1       -> read 'v', 'cents'
-t "cents past half"         , '1.2351'      , 124      -> read 'v', 'cents'
-t "cents strips $,"         , '$7,221.245'  , 722125   -> read 'v', 'cents'
-t "cents_even basic"        , '1.23'        , 123      -> read 'v', 'cents_even'
-t "cents_even rounds even"  , '1.245'       , 124      -> read 'v', 'cents_even'
-t "cents_even past half"    , '1.2351'      , 124      -> read 'v', 'cents_even'
-t "cents_even neg half"     , '-0.005'      , 0        -> read 'v', 'cents_even'
+t "cents raw int"           , '129222'      , 129222   -> read 'v', 'cents'
+t "cents negative"          , '-500'        , -500     -> read 'v', 'cents'
+t "cents leading zeros"     , '001'         , 1        -> read 'v', 'cents'
+t "cents neg zero"          , '-0'          , 0        -> read 'v', 'cents'
+t "cents rejects fraction"  , '12.99'       , null     -> read 'v', 'cents'
+t "cents rejects money"     , '$1,292.22'   , null     -> read 'v', 'cents'
+
+# ==============================================================================
+# decimal
+# ==============================================================================
+
+t "decimal preserves scale" , '8.235'   , '8.235'  -> read 'v', 'decimal'
+t "decimal canon zeros"     , '001.20'  , '1.20'   -> read 'v', 'decimal'
+t "decimal integer"         , '129222'  , '129222' -> read 'v', 'decimal'
+t "decimal neg zero"        , '-0.00'   , '0.00'   -> read 'v', 'decimal'
+t "decimal rejects money"   , '$1.00'   , null     -> read 'v', 'decimal'
+t "decimal rejects comma"   , '1,000.0' , null     -> read 'v', 'decimal'
 
 # ==============================================================================
 # formatting

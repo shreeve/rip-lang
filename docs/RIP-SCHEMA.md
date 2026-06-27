@@ -663,7 +663,7 @@ Patient = schema :model
   phone?  ~:phone            # "8016542000" → "(801) 654-2000"
   state?  ~:state            # "ut" → "UT"
   dob?    ~:date             # normalized "YYYY-MM-DD" string
-  amount? ~:money            # "$1,234.50" → 1234.5
+  amount? ~:money            # "$1,234.50" → 123450 (dollars in → integer cents)
   kids?   ~:ids              # "3, 1, 2, 2" → [1, 2, 3]
 ```
 
@@ -680,7 +680,7 @@ Patient = schema :model
   coercer that isn't registered at parse time is a **config error**
   (fail loud), not a validation failure.
 - Output types: the shipped names carry static output types for shadow
-  TS and DDL (`~:id` → `number`/INTEGER, `~:money` → `number`,
+  TS and DDL (`~:id` → `number`/INTEGER, `~:money` → `number`/INTEGER (cents),
   `~:ids` → `number[]`, `~:ssn` → `string`, …). Custom-registered
   names type as `any` — use an explicit transform when you need a
   precise static type.
@@ -2602,7 +2602,7 @@ Patient = schema :model
   phone?  ~:phone            # "8016542000" → "(801) 654-2000"
   state?  ~:state            # "ut" → "UT"
   dob?    ~:date             # normalized "YYYY-MM-DD"
-  amount? ~:money            # "$1,234.50" → 1234.5
+  amount? ~:money            # "$1,234.50" → 123450 (dollars in → integer cents)
 ```
 
 Custom validators registered with `registerValidator` (from

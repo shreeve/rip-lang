@@ -692,8 +692,8 @@ export bail = ->
 # as a named schema coercer. Re-exported below for back-compat: these have
 # always been part of @rip-lang/server's public surface.
 
-import { isBlank, toName, toPhone, validators, registerValidator, getValidator, check } from '@rip-lang/validate'
-export { isBlank, toName, toPhone, validators, registerValidator, getValidator, check }
+import { isBlank, toName, toPhone, formatMoney, validators, registerValidator, getValidator, check } from '@rip-lang/validate'
+export { isBlank, toName, toPhone, formatMoney, validators, registerValidator, getValidator, check }
 
 # ==============================================================================
 # read() — Sinatra-style Parameter Reading

@@ -8,7 +8,7 @@
 # works standalone — the import graph here is exactly what a browser
 # bundle sees.
 
-import { validators, registerValidator, getValidator, check, isBlank, toName, toPhone } from './validate.rip'
+import { validators, registerValidator, getValidator, check, isBlank, toName, toPhone, formatMoney } from './validate.rip'
 
 _passed = 0
 _failed = 0
@@ -30,8 +30,11 @@ eq = (name, got, want) ->
 eq 'id accepts',        validators.id('42'),               42
 eq 'id rejects zero',   validators.id('0'),                null
 eq 'int signed',        validators.int('-7'),              -7
-eq 'money normalizes',  validators.money('$1,234.50'),     1234.5
-eq 'cents integerizes', validators.cents('$1.23'),         123
+eq 'money->cents',      validators.money('$1,234.50'),     123450
+eq 'money bare=dollars',validators.money('129222'),        12922200
+eq 'cents raw int',     validators.cents('129222'),        129222
+eq 'cents rejects frac',validators.cents('1.23'),          null
+eq 'decimal preserves', validators.decimal('8.235'),       '8.235'
 eq 'string squeezes',   validators.string("a\t\tb  c"),    'a b c'
 eq 'date compact',      validators.date('20240115'),       '20240115'
 eq 'date dashed',       validators.date('2024-01-15'),     '2024-01-15'
@@ -56,6 +59,9 @@ eq 'isBlank object',    isBlank({}),                       true
 eq 'isBlank value',     isBlank('x'),                      false
 eq 'toName cases',      toName('STEVE SHREEVE', 'name'),   'Steve Shreeve'
 eq 'toPhone ext',       toPhone('801-654-2000 x99'),       '(801) 654-2000, ext. 99'
+eq 'formatMoney basic', formatMoney(129222),               '$1,292.22'
+eq 'formatMoney neg',   formatMoney(-129222),              '-$1,292.22'
+eq 'formatMoney zero',  formatMoney(0),                    '$0.00'
 
 # ------------------------------------------------------------------------------
 # check() — same contract as read(), for values you already have

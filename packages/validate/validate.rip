@@ -21,7 +21,7 @@
 # which also registers the schema-coercer form.
 #
 # Exports: validators, registerValidator, getValidator, check,
-#          isBlank, toName, toPhone
+#          isBlank, toName, toPhone, formatMoney
 
 # ==============================================================================
 # Utility Functions
@@ -50,7 +50,8 @@ toMoney = (value, half = false, cents = false) ->
   rest = raw.length > 3 and /[1-9]/.test(raw.slice(3))
   up = d > 5 or (d is 5 and rest) or (d is 5 and not rest and (if half then c % 2 isnt 0 else true))
   c += 1 if up
-  c = if neg then -c else c
+  return null unless Number.isSafeInteger(c)
+  c = -c if neg and c isnt 0
   if cents then c else c / 100
 
 export toName = (str:: unknown, ...type:: string[]):: string ->
@@ -97,6 +98,19 @@ export toPhone = (str:: unknown):: string | null ->
     num = null
   num
 
+# Format integer cents for display: 129222 -> "$1,292.22". Expects integer
+# cents; rounds defensively so a stray float still renders.
+export formatMoney = (cents:: number, opts:: { symbol?: string, commas?: boolean } = {}):: string ->
+  symbol  = opts.symbol ?? '$'
+  commas  = opts.commas ?? true
+  c       = Math.round(cents)
+  neg     = c < 0
+  c       = Math.abs(c)
+  dollars = String(Math.floor(c / 100))
+  dollars = dollars.replace(/\B(?=(\d{3})+(?!\d))/g, ',') if commas
+  frac    = String(c % 100).padStart(2, '0')
+  "#{if neg then '-' else ''}#{symbol}#{dollars}.#{frac}"
+
 # ==============================================================================
 # Validators
 # ==============================================================================
@@ -108,15 +122,34 @@ export toPhone = (str:: unknown):: string | null ->
 export type Validator = (v: any) => unknown
 
 export validators:: Record<string, Validator> =
-  # Numbers & money
-  id:         (v) -> v[/^([1-9]\d{0,14})$/]                          and parseInt(_[1])
-  int:        (v) -> v[/^([-+]?(?:0|[1-9]\d{0,14}))$/]               and parseInt(_[1])
-  whole:      (v) -> v[/^(0|[1-9]\d{0,14})$/]                        and parseInt(_[1])
-  float:      (v) -> v[/^([-+]?\d+(?:\.\d*)?|\.\d+)$/]               and parseFloat(_[1])
-  money:      (v) -> v[/^([-+]? ?\$? ?(?:[\d,]+(?:\.\d*)?|\.\d+))$/] and toMoney(_[1])
-  money_even: (v) -> v[/^([-+]? ?\$? ?(?:[\d,]+(?:\.\d*)?|\.\d+))$/] and toMoney(_[1], true)
-  cents:      (v) -> v[/^([-+]? ?\$? ?(?:[\d,]+(?:\.\d*)?|\.\d+))$/] and toMoney(_[1], false, true)
-  cents_even: (v) -> v[/^([-+]? ?\$? ?(?:[\d,]+(?:\.\d*)?|\.\d+))$/] and toMoney(_[1], true,  true)
+  # Numbers
+  id:         (v) -> v[/^([1-9]\d{0,14})$/]            and parseInt(_[1])
+  int:        (v) -> v[/^([-+]?(?:0|[1-9]\d{0,14}))$/] and parseInt(_[1])
+  whole:      (v) -> v[/^(0|[1-9]\d{0,14})$/]          and parseInt(_[1])
+  float:      (v) -> v[/^([-+]?\d+(?:\.\d*)?|\.\d+)$/] and parseFloat(_[1])
+
+  # Money — input is DOLLARS, output is INTEGER CENTS. `money` rounds
+  # half-up; `money_even` rounds half-to-even (banker's). `cents` takes a
+  # value ALREADY in cents (a whole number) and returns it unchanged.
+  money:      (v) -> v[/^([-+]? ?\$? ?(?:[\d,]+(?:\.\d*)?|\.\d+))$/] and toMoney(_[1], false, true)
+  money_even: (v) -> v[/^([-+]? ?\$? ?(?:[\d,]+(?:\.\d*)?|\.\d+))$/] and toMoney(_[1], true,  true)
+  cents:      (v) ->
+    m = v[/^([-+]?\d+)$/]
+    return null unless m
+    n = parseInt(m, 10)
+    return null unless Number.isSafeInteger(n)
+    if n is 0 then 0 else n
+
+  # Lossless arbitrary-scale decimal as a STRING — no $/commas, no rounding;
+  # preserves fractional scale, canonicalizes sign and leading integer zeros.
+  decimal:    (v) ->
+    m = v[/^([-+]?)(\d+)(?:\.(\d+))?$/]
+    return null unless m
+    sign = if _[1] is '-' then '-' else ''
+    int  = _[2].replace(/^0+(?=\d)/, '')
+    body = if _[3]? then "#{int}.#{_[3]}" else int
+    sign = '' if /^0(?:\.0+)?$/.test(body)
+    "#{sign}#{body}"
 
   # Strings & formatting
   string:     (v) -> v.replace(/(?:\t+|\s{2,})/g, ' ')

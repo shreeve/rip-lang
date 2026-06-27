@@ -7,7 +7,7 @@ coercion in Rip Schema fields, on the server and in the browser.**
 ```coffee
 import { check } from '@rip-lang/validate'
 
-check '$1,234.50', 'money'      # 1234.5
+check '$1,234.50', 'money'      # 123450  (dollars in → integer cents)
 check '123-45-6789', 'ssn'      # "123456789"
 check '8016542000', 'phone'     # "(801) 654-2000"
 check 'not-a-date', 'date'      # null — miss contract is always null
@@ -59,7 +59,7 @@ Without the import, a schema using `~:name` throws a loud config error
 
 | Family      | Names                                                        |
 | ----------- | ------------------------------------------------------------ |
-| Numbers     | `id`, `int`, `whole`, `float`, `money`, `money_even`, `cents`, `cents_even` |
+| Numbers     | `id`, `int`, `whole`, `float`, `money`, `money_even`, `cents`, `decimal` |
 | Strings     | `string`, `text`, `name`, `address`, `slug`                  |
 | Date & time | `date`, `time`, `time12`                                     |
 | Booleans    | `truthy`, `falsy`, `bool`                                    |
@@ -69,6 +69,14 @@ Without the import, a schema using `~:name` throws a loud config error
 
 Contract: input is stringified (except the raw set `array`/`hash`/`json`),
 the validator returns the normalized value, or `null` on miss.
+
+**Money:** `money`/`money_even` read a **dollar** amount (`$`, commas, decimals
+welcome) and return **integer cents** (`money` rounds half-up, `money_even`
+banker's). `cents` takes a value **already in cents** and returns it. So:
+dollars in → `money`; cents in → `cents`; both out as integer cents. (A bare
+integer is dollars to `money` — `"129222" → 12922200` — and cents to `cents` —
+`"129222" → 129222`; pick the coercer for the unit you have.) `decimal` is a
+lossless arbitrary-scale **string** for non-money decimals.
 
 ## Custom validators
 
@@ -90,6 +98,15 @@ One call extends both vocabularies: `read 'npi', 'npi'` in handlers and
 - **`isBlank(obj)`** — true for `null`/`false`/whitespace strings/empty arrays/empty objects
 - **`toName(str, ...type)`** — US-English name/address title-casing engine
 - **`toPhone(str)`** — US phone normalizer with extension handling
+- **`formatMoney(cents, opts?)`** — render integer cents for display: `129222 → "$1,292.22"`
+
+### `to*` vs `format*`
+
+`to*` helpers (`toName`, `toPhone`) **normalize messy input to the canonical
+value you store** — they're validation-side and may return `null`. `format*`
+helpers (`formatMoney`) **render an already-canonical value for display** —
+presentation-side, total, and you don't store their output. (Same reason
+`money` returns integer *cents* but `formatMoney` returns a *string*.)
 
 ## License
 

@@ -73,8 +73,8 @@ const SCHEMA_COERCIBLE_TYPES = new Set(['integer', 'number', 'boolean', 'date', 
 // explicit transform when you need strictness.
 const SCHEMA_NAMED_COERCER_TYPES = {
   id: 'integer', int: 'integer', whole: 'integer',
-  float: 'number', money: 'number', money_even: 'number',
-  cents: 'integer', cents_even: 'integer',
+  float: 'number', money: 'integer', money_even: 'integer',
+  cents: 'integer', decimal: 'string',
   bool: 'boolean', truthy: 'boolean', falsy: 'boolean',
   json: 'json', hash: 'json', array: 'json',
   ids: { type: 'integer', array: true },
