@@ -1534,7 +1534,10 @@ export class Lexer {
                    (tg === 'COMPARE' && tk[1] === '<')) {
           depth--;
         } else if (depth === 0) {
-          if (tg === 'TYPE_ANNOTATION') {
+          // A return-type annotation sits between the param `)` and the arrow.
+          // Accept both `::` (TYPE_ANNOTATION) and a single `:` (Rip 3.17) as
+          // the marker, but only when it directly follows the param-list `)`.
+          if (tg === 'TYPE_ANNOTATION' || tg === ':') {
             if (j > 0 && this.tokens[j - 1][0] === ')') found = j - 1;
             break;
           }

@@ -37,6 +37,14 @@ export function installTypeSupport(Lexer) {
   proto.rewriteTypes = function() {
     let tokens = this.tokens;
     let typeRefNames = this.typeRefNames = new Set();
+
+    // Rip 3.17 — single-colon type annotations. A `:` in a type-annotation
+    // slot (function params, return types, statement-level typed declarations)
+    // is reclassified to TYPE_ANNOTATION so it flows through the same machinery
+    // as the explicit `::`. Object properties, ternary branches, and nested
+    // colons are deliberately left untouched. Runs before the main type scan.
+    reclassifyColonTypes(tokens);
+
     let gen = (tag, val, origin) => {
       let t = [tag, val];
       t.pre = 0;
@@ -385,6 +393,100 @@ function looksLikeBareFunctionType(typeTokens) {
     }
   }
   return false;
+}
+
+// Rip 3.17 — reclassify single-colon `:` into TYPE_ANNOTATION in the contexts
+// where it means a type, so `:` and `::` share one code path. Scoped tightly:
+//
+//   - function parameters:  `(x: T)`, `(x: T = d)`  (arrow PARAM_START + def)
+//   - return types:         `(…): T ->`, `def f(…): T`
+//   - statement decls:      `x: T = v`  (binding name at statement start)
+//
+// Everything else keeps `:` as-is: object properties (`{x: 1}`, `foo a: 1`),
+// implicit-object call args (`foo(a: 1)`), ternary (`a ? b : c`), and any colon
+// nested inside `{}`/`[]`/`<>` (object-type interiors, generic args). The
+// preceding object-key `PROPERTY` token is retagged back to `IDENTIFIER` so the
+// downstream `::` handler treats it as a binder, not a property.
+//
+// Frame state is per parameter segment: a `:` is a param type only before any
+// top-level `=` (so a ternary in a default `(x = a ? b : c)` is untouched) and
+// only the first colon in the segment.
+function reclassifyColonTypes(tokens) {
+  const isOpen  = t => t === '(' || t === 'CALL_START' || t === 'PARAM_START' ||
+                       t === '{' || t === '[' || t === 'INDEX_START';
+  const isClose = t => t === ')' || t === 'CALL_END' || t === 'PARAM_END' ||
+                       t === '}' || t === ']' || t === 'INDEX_END';
+
+  // Is this CALL_START the param list of a `def`? Matches `DEF IDENT (` and
+  // `DEF IDENT <generics> (`. Deliberately narrow so an ordinary call
+  // `foo(a: 1)` (no preceding DEF) is never mistaken for a def param list.
+  const isDefParamStart = (i) => {
+    let j = i - 1;
+    // Skip a balanced generic list `<…>` between the def name and `(`.
+    const g0 = tokens[j]?.[0], v0 = tokens[j]?.[1];
+    if ((g0 === 'COMPARE' && v0 === '>') || (g0 === 'SHIFT' && v0 === '>>')) {
+      let depth = g0 === 'SHIFT' ? 2 : 1;
+      j--;
+      while (j >= 0 && depth > 0) {
+        const g = tokens[j][0], v = tokens[j][1];
+        if (g === 'COMPARE' && v === '>') depth++;
+        else if (g === 'SHIFT' && v === '>>') depth += 2;
+        else if (g === 'COMPARE' && v === '<') depth--;
+        else if (g === 'SHIFT' && v === '<<') depth -= 2;
+        j--;
+      }
+    }
+    if (tokens[j]?.[0] !== 'IDENTIFIER' && tokens[j]?.[0] !== 'PROPERTY') return false;
+    return tokens[j - 1]?.[0] === 'DEF';
+  };
+
+  const stack = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const tag = tokens[i][0];
+
+    // Return type: a `:` immediately after a closed param list. Arrow param
+    // lists close as PARAM_END; def param lists close as `)` or CALL_END
+    // (and are flagged `isDefParamEnd` below).
+    if (tag === ':') {
+      const prev = tokens[i - 1];
+      const prevTag = prev?.[0];
+      if (prevTag === 'PARAM_END' ||
+          ((prevTag === ')' || prevTag === 'CALL_END') && prev.data?.isDefParamEnd)) {
+        tokens[i][0] = 'TYPE_ANNOTATION';
+        continue;
+      }
+    }
+
+    if (isOpen(tag)) {
+      let kind = 'other';
+      if (tag === 'PARAM_START') kind = 'param';
+      else if ((tag === 'CALL_START' || tag === '(') && isDefParamStart(i)) kind = 'defparam';
+      stack.push({ kind, open: tag, openIdx: i, sawEq: false, sawType: false });
+      continue;
+    }
+    if (isClose(tag)) {
+      const f = stack.pop();
+      // Mark a def param list's closing token so the return-type `:` after it
+      // (def params close as a plain `)`, not PARAM_END) is recognized above.
+      if (f?.kind === 'defparam') { (tokens[i].data ??= {}).isDefParamEnd = true; }
+      continue;
+    }
+
+    const f = stack[stack.length - 1];
+    if (f && (f.kind === 'param' || f.kind === 'defparam')) {
+      if (tag === ',') { f.sawEq = false; f.sawType = false; continue; }
+      if (tag === '=') { f.sawEq = true; continue; }
+      if (tag === ':' && !f.sawEq && !f.sawType) {
+        const prev = tokens[i - 1];
+        const prevTag = prev?.[0];
+        if (prevTag === 'PROPERTY' || prevTag === 'IDENTIFIER') {
+          if (prevTag === 'PROPERTY') prev[0] = 'IDENTIFIER';
+          tokens[i][0] = 'TYPE_ANNOTATION';
+          f.sawType = true;
+        }
+      }
+    }
+  }
 }
 
 // Collect type expression tokens starting at position j, respecting brackets
