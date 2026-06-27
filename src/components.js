@@ -1220,11 +1220,10 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         if (Array.isArray(func) && (func[0] === '->' || func[0] === '=>')) {
           let [, params, methodBody] = func;
           if ((!params || (Array.isArray(params) && params.length === 0)) && this.containsIt(methodBody)) params = ['it'];
-          let paramStr = Array.isArray(params) ? params.map(p => {
-            let base = this.formatParam(p);
-            if (p?.type) base += `: ${p.type}`;
-            return base;
-          }).join(', ') : '';
+          // `formatParam` already emits the inline type (`p: T`) on the check
+          // path; appending `: ${p.type}` here too produced `p: T: T` (TS1005).
+          // Match the lifecycle-hook and runtime branches — let formatParam own it.
+          let paramStr = Array.isArray(params) ? params.map(p => this.formatParam(p)).join(', ') : '';
           // Inject event type on untyped first param when method is bound to an event
           const boundEvent = eventMethodTypes.get(name);
           if (boundEvent && Array.isArray(params) && params.length > 0) {

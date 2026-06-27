@@ -358,3 +358,32 @@ export DefaultedMethodParamsTests = component
     @ref.setFour(true)
 
   render null
+
+# ── Equals-form method assignments with typed params ──
+#
+# `name = (p:: T) ->` (assignment form, vs the `name: (p:: T) ->` colon form
+# above) also emits a class method on the check path. A stale manual type
+# append in the component emitter used to double the annotation
+# (`p: T: T` → TS1005) now that `formatParam` emits the inline type itself;
+# this guards that the equals form type-checks and enforces its param types.
+
+export EqualsFormMethods = component
+  greet = (n:: number) -> n + 1
+  label = (s:: string) -> s.toUpperCase()
+
+  callSites: ->
+    @greet(5)
+    @label('x')
+
+  render null
+
+export EqualsFormMethodTests = component
+  ref ~= new EqualsFormMethods({})
+
+  bad: ->
+    # @ts-expect-error — greet's param must be number, not string
+    @ref.greet('nope')
+    # @ts-expect-error — label's param must be string, not number
+    @ref.label(42)
+
+  render null
