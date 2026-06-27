@@ -10,7 +10,7 @@
 // generated occurrence); markers carry identity through concatenation, so they
 // don't. No emitter wiring here — that's the next slice.
 
-import { MarkerRecorder, stripMarkers } from '../src/markers.js';
+import { MarkerRecorder, stripMarkers } from '../src/sourcemaps.js';
 import { compileToJS } from '../src/compiler.js';
 import { readdirSync, readFileSync } from 'fs';
 import { resolve, dirname } from 'path';

@@ -17,10 +17,9 @@ import { installComponentSupport } from './components.js';
 let _typesEmitter = null;
 export function setTypesEmitter(fn) { _typesEmitter = fn; }
 import { installSchemaSupport, foldDerivedSchemas } from './schema/schema.js';
-import { SourceMapGenerator } from './sourcemaps.js';
+import { SourceMapGenerator, MarkerRecorder, stripMarkers } from './sourcemaps.js';
 import { stringify, getStdlibCode } from './stdlib.js';
 import { emitTsParam } from './params.js';
-import { MarkerRecorder, stripMarkers } from './markers.js';
 import { RipError, toRipError } from './error.js';
 
 // =============================================================================
@@ -323,7 +322,7 @@ export class CodeEmitter {
 
     let code;
     if (this.options.exactMarks) {
-      // Exact-position marks via the marker bridge (src/markers.js). Converted
+      // Exact-position marks via the marker bridge (src/sourcemaps.js). Converted
       // handlers wrap emitted identifier text in zero-width sentinels through
       // `this.markRecorder`; the normal string emit carries them through; we
       // strip them here to recover exact GENERATED spans, paired with the
