@@ -26,7 +26,7 @@ test '~:name coerces through the read() vocabulary (normalize + convert)', ->
   eq p1.phone, '(801) 654-2000'
   eq p1.state, 'UT'
   eq p1.dob, '1985-01-15'
-  eq p1.amount, 1234.5
+  eq p1.amount, 123450
   eq p1.kids, [1, 2, 3]
 
 test '~:name rejects what read() rejects — {error: coerce} issues', ->

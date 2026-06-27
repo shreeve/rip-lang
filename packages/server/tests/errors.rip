@@ -1,0 +1,41 @@
+# errors.rip — errorEnvelope() serializes every thrown error into one JSON
+# envelope: notice/issues are always user-facing; a plain error! message shows
+# only for 4xx; 5xx and raw throws are masked so internals never leak.
+
+import { test, eq } from './runner.rip'
+import { errorEnvelope } from '../api.rip'
+
+withStatus = (message, extra) -> Object.assign(new Error(message), extra)
+
+test 'error! 4xx exposes the author message', ->
+  eq errorEnvelope(withStatus('Admin only', { status: 403 })),
+    { status: 403, error: { message: 'Admin only' } }
+
+test '5xx masks the message (no leak)', ->
+  eq errorEnvelope(withStatus('db: postgres://secret', { status: 500 })),
+    { status: 500, error: { message: 'Internal Server Error' } }
+
+test 'raw throw (no status) masks as 500', ->
+  eq errorEnvelope(new Error('boom internals')),
+    { status: 500, error: { message: 'Internal Server Error' } }
+
+test 'notice is always exposed', ->
+  eq errorEnvelope(withStatus('x', { status: 400, notice: 'Please try again' })),
+    { status: 400, error: { notice: 'Please try again' } }
+
+test 'issues carry field-level detail', ->
+  issues = [{ field: 'email', error: 'format', message: 'Enter a valid email' }]
+  eq errorEnvelope(withStatus('Validation failed', { status: 400, issues })),
+    { status: 400, error: { message: 'Validation failed', issues } }
+
+test 'bail-style 401 keeps its message', ->
+  eq errorEnvelope(withStatus('Unauthorized', { status: 401 })),
+    { status: 401, error: { message: 'Unauthorized' } }
+
+test 'invalid/non-error status clamps to 500 (and masks)', ->
+  eq errorEnvelope(withStatus('x', { status: 204 })),
+    { status: 500, error: { message: 'Internal Server Error' } }
+
+test 'missing message on 4xx falls back to status text', ->
+  eq errorEnvelope(withStatus('', { status: 404 })),
+    { status: 404, error: { message: 'Not Found' } }

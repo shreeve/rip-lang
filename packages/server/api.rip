@@ -318,6 +318,40 @@ compose = (middlewares, beforeFilters, afterFilters, handler) ->
 # Smart Response Wrapper
 # ==============================================================================
 
+STATUS_TEXT:: Record<number, string> =
+  400: 'Bad Request'
+  401: 'Unauthorized'
+  403: 'Forbidden'
+  404: 'Not Found'
+  409: 'Conflict'
+  422: 'Unprocessable Entity'
+  429: 'Too Many Requests'
+  500: 'Internal Server Error'
+  502: 'Bad Gateway'
+  503: 'Service Unavailable'
+
+export type ApiError = { message?: string, notice?: string, issues?: unknown[] }
+
+# One JSON error envelope for every thrown error. `notice` (notice!) and
+# `issues` (read/schema validation) are explicitly user-facing, so they're
+# always shown. A plain `error!` message is shown only for 4xx; 5xx and raw
+# throws (no/invalid status) are masked to a generic status message so internal
+# details never leak. Exported so a custom `onError` can reuse the same shape.
+# (`err` is an arbitrary thrown value — untyped by nature, like a catch binding.)
+export errorEnvelope = (err:: any):: { status: number, error: ApiError } ->
+  raw = err?.status
+  status = if Number.isInteger(raw) and 400 <= raw <= 599 then raw else 500
+  error =
+    if err?.issues
+      { message: err.message or 'Validation failed', issues: err.issues }
+    else if err?.notice
+      { notice: err.notice }
+    else if status < 500
+      { message: err.message or STATUS_TEXT[status] or 'Error' }
+    else
+      { message: STATUS_TEXT[status] or 'Internal Server Error' }
+  { status, error }
+
 smart = (fn) ->
   (c, next) ->
     try
@@ -332,19 +366,9 @@ smart = (fn) ->
         return new Response(null, { status: 204 })
       result
     catch err
-      status = err?.status or 500
+      { status, error } = errorEnvelope(err)
       warn 'Handler error:', err if status >= 500
-      if err?.issues
-        # Schema validation failure (route `input:` option) — structured
-        # {field, error, message} issues, same shape SchemaError carries.
-        body = JSON.stringify { error: { message: err.message or 'Validation failed', issues: err.issues } }
-        new Response body, { status, headers: { 'Content-Type': 'application/json' } }
-      else if err?.notice
-        body = JSON.stringify { error: { notice: err.notice } }
-        new Response body, { status, headers: { 'Content-Type': 'application/json' } }
-      else
-        message = err?.message or 'Internal Server Error'
-        new Response message, { status, headers: { 'Content-Type': 'text/plain' } }
+      new Response JSON.stringify({ error }), { status, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
 
 # ==============================================================================
 # DSL: Route Registration
