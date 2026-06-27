@@ -15,7 +15,7 @@ All `<script type="text/rip">` tags, inline or external, compile and run togethe
 
 | Attribute     | Values                          | Default | Purpose                          |
 | ------------- | ------------------------------- | ------- | -------------------------------- |
-| `data-src`    | URL list (`.rip`=file, else bundle) | empty   | explicit sources; non-empty skips `/app` |
+| `data-src`    | URL list (`.rip`=file, else bundle); any/cross-origin URL | empty → inline | sources to fetch; absent = inline-only; `data-src="/app"` = server app bundle |
 | `data-mount`  | component name                  | —       | component to mount               |
 | `data-target` | CSS selector                    | `body`  | mount target                     |
 | `data-state`  | JSON                            | `{}`    | stash seed                       |
@@ -24,7 +24,6 @@ All `<script type="text/rip">` tags, inline or external, compile and run togethe
 
 | Attribute         | Values                                 | Default | Purpose                          |
 | ----------------- | -------------------------------------- | ------- | -------------------------------- |
-| `data-standalone` | `true` `false`                         | `false` | page is self-contained; skips the `/app` fetch |
 | `data-router`     | `true` `false` `hash` `history` `auto` | `auto`  | routing; `auto` infers from bundle |
 | `data-reload`     | `true` `false` `auto`                  | `auto`  | SSE reload; `auto` infers from bundle |
 | `data-persist`    | `true` `false` `session` `local`       | `false` | stash persistence (`true`=`session`) |

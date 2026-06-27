@@ -16252,7 +16252,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.2";
-  var BUILD_DATE = "2026-06-27@01:40:25GMT";
+  var BUILD_DATE = "2026-06-27@02:04:57GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -16372,8 +16372,6 @@ ${tagged}
     if (dataSrc) {
       for (const url of dataSrc.split(/\s+/))
         sources.push({ url });
-    } else if (runtimeTag && !flag(runtimeTag, "data-standalone", false) && /^https?:$/.test(location.protocol)) {
-      sources.push({ url: "/app", optional: true });
     }
     for (const script of document.querySelectorAll('script[type="text/rip"]')) {
       if (script.src) {

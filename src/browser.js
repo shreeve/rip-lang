@@ -177,17 +177,17 @@ async function processRipScripts() {
   const sources = [];
   let lastBundle;
 
-  // Step 1: Resolve where app code comes from. Explicit data-src URLs win;
-  // otherwise the serve middleware's '/app' bundle is auto-fetched on http(s) —
-  // unless the page declares data-standalone (it carries its own code inline /
-  // via data-src and isn't backed by a rip server). The fetch is optional
-  // (silent on failure), so static / file:// pages stay quiet.
+  // Step 1: Collect external sources from data-src — the single, general
+  // "where's my code from" pointer: a whitespace-separated URL list (a '.rip'
+  // token is a source file, anything else a JSON bundle), fetched via plain
+  // fetch() so relative, absolute, or cross-origin URLs all work. Absent means
+  // the page is inline-only: the <script type="text/rip"> blocks ARE the source
+  // and nothing is fetched. A server-backed app opts in explicitly with
+  // data-src="/app" (or any URL).
   const runtimeTag = document.querySelector('script[src$="rip.min.js"], script[src$="rip.js"]');
   const dataSrc = runtimeTag?.getAttribute('data-src')?.trim();
   if (dataSrc) {
     for (const url of dataSrc.split(/\s+/)) sources.push({ url });
-  } else if (runtimeTag && !flag(runtimeTag, 'data-standalone', false) && /^https?:$/.test(location.protocol)) {
-    sources.push({ url: '/app', optional: true });
   }
 
   // Step 2: Collect all <script type="text/rip"> tags (inline and external)

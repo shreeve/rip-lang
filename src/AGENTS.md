@@ -575,7 +575,7 @@ The browser bundle is an IIFE loaded with `<script defer>`, not `type="module"`,
 
 `processRipScripts()` runs on `DOMContentLoaded` and:
 
-1. resolves app sources: explicit `data-src` URLs win; otherwise auto-fetches `/app` on http(s) unless the page sets `data-standalone`
+1. collects external sources from `data-src` (whitespace-separated URLs; absent = inline-only — a server app opts in with `data-src="/app"`)
 2. collects all `<script type="text/rip">` tags
 3. fetches `.rip` sources and JSON bundles
 4. expands bundles and merges bundle data into `data-state`
