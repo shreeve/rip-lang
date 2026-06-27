@@ -300,13 +300,13 @@ console.log("wrapped:", wrapped)
 let badWrap: Promise<number[]> = wrap("hi")
 
 // ── Arrow-assignment self-sufficiency (RFC 12 phase 2) ──
-const labelThin = (n: number): string => `n=${n}`
-const incFat = (n: number) => n + 1
+const arrowThin = (n: number): string => `n=${n}`
+const arrowFat = (n: number) => n + 1
 
-console.log('labelThin:', labelThin(7))
-console.log('incFat:', incFat(41))
+console.log('arrowThin:', arrowThin(7))
+console.log('arrowFat:', arrowFat(41))
 
 // @ts-expect-error — thin-arrow return type enforced (returns string, not number)
-let badLabel: number = labelThin(7)
+let badArrowThin: number = arrowThin(7)
 // @ts-expect-error — fat-arrow typed param enforced (number, not string)
-incFat('nope')
+arrowFat('nope')
