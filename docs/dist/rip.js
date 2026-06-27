@@ -14455,8 +14455,12 @@ export default ${expr[1]}`;
       if (typeof param === "string")
         return param;
       if (param instanceof String) {
-        if (this.options.inlineTypes && param.type) {
-          return `${param.valueOf()}: ${param.type.replace(/::/g, ":")}`;
+        if (this.options.inlineTypes) {
+          let opt = meta(param, "optional") ? "?" : "";
+          if (param.type)
+            return `${param.valueOf()}${opt}: ${param.type.replace(/::/g, ":")}`;
+          if (opt)
+            return `${param.valueOf()}?: any`;
         }
         return param.valueOf();
       }
@@ -16252,7 +16256,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.16.2";
-  var BUILD_DATE = "2026-06-27@03:50:14GMT";
+  var BUILD_DATE = "2026-06-27@05:18:39GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

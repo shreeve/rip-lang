@@ -3289,8 +3289,14 @@ export class CodeEmitter {
       // facing `-c` output stays untouched because this flag is off by
       // default. `.type` carries the raw Rip type string (with `::`),
       // which converts to TS form by swapping `::` → `:`.
-      if (this.options.inlineTypes && param.type) {
-        return `${param.valueOf()}: ${param.type.replace(/::/g, ':')}`;
+      // Preserve the optional `?` marker (the lexer flags it via metadata) so
+      // shadow TS sees `name?: T` — including the untyped case `name?` →
+      // `name?: any`. Without this the `?` was dropped for params, making them
+      // required and breaking single-arg calls on `(a, b?) ->`.
+      if (this.options.inlineTypes) {
+        let opt = meta(param, 'optional') ? '?' : '';
+        if (param.type) return `${param.valueOf()}${opt}: ${param.type.replace(/::/g, ':')}`;
+        if (opt) return `${param.valueOf()}?: any`;
       }
       return param.valueOf();
     }

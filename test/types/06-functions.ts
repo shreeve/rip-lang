@@ -51,6 +51,11 @@ export function greetOpt(name: string, title?: string): string {
   return title ? `${title} ${name}` : name
 }
 
+// Optional param without a type annotation (untyped `?` → `title?: any`)
+export function greetUntyped(name: string, title?: any): string {
+  return title ? `${title} ${name}` : name
+}
+
 // Inferred return type (no annotation — TS infers from body)
 export function double(n: number) {
   return n * 2
@@ -70,9 +75,11 @@ let result9 = formal('Smith', 'Dr')
 logMsg('hello')
 let result10 = greetOpt('Smith')
 let result11 = greetOpt('Smith', 'Dr')
+let result10b = greetUntyped('Smith')
+let result11b = greetUntyped('Smith', 'Dr')
 let result12 = double(21)
 
-console.log(result1, result2, result3, result4, result5, result6, result7, result8, result9, result10, result11, result12)
+console.log(result1, result2, result3, result4, result5, result6, result7, result8, result9, result10, result11, result10b, result11b, result12)
 
 // ── Negative: wrong param types ──
 

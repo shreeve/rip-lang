@@ -387,6 +387,11 @@ export function emitTypes(tokens, sexpr = null, source = '', schemaBehavior = nu
         let isOptional = hasDefault || tok.data?.optional;
         if (paramType) {
           params.push(`${paramName}${isOptional ? '?' : ''}: ${tsType(paramType)}`);
+        } else if (isOptional) {
+          // Optional (`name?`) or defaulted param with no type annotation: still
+          // mark it optional in the DTS (was dropped, which forced callers to
+          // pass it). Type falls back to `any`.
+          params.push(`${paramName}?: any`);
         } else {
           params.push(paramName);
         }
