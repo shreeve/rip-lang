@@ -60,7 +60,7 @@ rip schema migrate [models.rip]
 ### Critical Rules
 
 - **Never guess what code does — verify it.** Before claiming something is unnecessary, redundant, or works a certain way, read the source. This applies to Rip internals, packages, and external dependencies alike. If you can't verify, say so.
-- **Never edit `src/parser.js`** — it is generated
+- **Never edit `src/parser.js`** — it is generated (`bun run test:parser-fresh`, part of `test:all`, regenerates it and fails on any hand-edit or staleness)
 - **Never edit `src/grammar/solar.rip`** — it is given
 - **Never commit without running tests** — `bun run test` must pass
 - **Never add dependencies** — zero dependencies is a core principle
