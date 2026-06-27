@@ -47,6 +47,14 @@ export def greetOpt(name:: string, title?:: string):: string
 export def greetUntyped(name:: string, title?):: string
   if title then "#{title} #{name}" else name
 
+# Arrow-assignment form of the same regression. `name = (a, b?) ->` reaches the
+# .d.ts through the `=` → `declare function` path, distinct from `def`'s
+# overload-token path, so the untyped-optional `?` is rendered by a different
+# branch and needs its own guard. `ageOf(dob)` must type-check with the second
+# (untyped optional) param omitted. Both surfaces now share the emitTsParam
+# policy (RFC 12 phase 0), so this and greetUntyped can't drift apart.
+ageOf = (dob:: string, asOf?) -> dob
+
 # Inferred return type (no :: annotation — TS infers from body)
 export def double(n:: number)
   n * 2
@@ -68,8 +76,10 @@ result11 = greetOpt('Smith', 'Dr')
 result10b = greetUntyped('Smith')         # single arg — optional untyped param must type-check
 result11b = greetUntyped('Smith', 'Dr')
 result12 = double(21)
+result10c = ageOf('2000-01-01')           # arrow form, untyped optional param omitted
+result11c = ageOf('2000-01-01', 'now')
 
-console.log result1, result2, result3, result4, result5, result6, result7, result8, result9, result10, result11, result10b, result11b, result12
+console.log result1, result2, result3, result4, result5, result6, result7, result8, result9, result10, result11, result10b, result11b, result12, result10c, result11c
 
 # ── Negative: wrong param types ──
 

@@ -1,5 +1,6 @@
 import { SCHEMA_INTRINSIC_DECLS, emitSchemaTypes } from "./schema/dts.js";
 import { setTypesEmitter } from "./compiler.js";
+import { emitTsParam, ripToTs } from "./params.js";
 
 // Type System — .d.ts emission for Rip (CLI / typecheck only).
 //
@@ -384,17 +385,19 @@ export function emitTypes(tokens, sexpr = null, source = '', schemaBehavior = nu
           hasDefault = true;
         }
 
-        let isOptional = hasDefault || tok.data?.optional;
-        if (paramType) {
-          params.push(`${paramName}${isOptional ? '?' : ''}: ${tsType(paramType)}`);
-        } else if (isOptional) {
-          // Optional (`name?`) or defaulted param with no type annotation: still
-          // mark it optional in the DTS (was dropped, which forced callers to
-          // pass it). Type falls back to `any`.
-          params.push(`${paramName}?: any`);
-        } else {
-          params.push(paramName);
-        }
+        // Optionality + `::` conversion + untyped `?: any` fallback all live in
+        // the shared `emitTsParam` policy (src/params.js). In `'declaration'`
+        // mode a defaulted param is rendered optional (`name?: T`), which is
+        // why `hasDefault` is passed through — the declaration carries no
+        // initializer to imply optionality. Keeping this rule here (rather than
+        // in formatParam too) is what let the `?` drift; the shared policy
+        // prevents that. See RFC 12 (Unified emitter), phase 0.
+        params.push(emitTsParam({
+          name: paramName,
+          ripType: paramType,
+          optional: !!tok.data?.optional,
+          hasDefault,
+        }, 'declaration'));
         j++;
 
         // Skip past default value expression. Stops at the next top-level
@@ -935,9 +938,10 @@ export function emitTypes(tokens, sexpr = null, source = '', schemaBehavior = nu
 // dedicated function so every call site routes through one place if the
 // conversion ever needs to grow.
 
+// The `::` → `:` conversion lives in the shared params policy (src/params.js)
+// so the .d.ts surface and the check path agree on type-string rendering.
 function tsType(typeStr) {
-  if (!typeStr) return typeStr;
-  return typeStr.replace(/::/g, ':');
+  return ripToTs(typeStr);
 }
 
 // ============================================================================
