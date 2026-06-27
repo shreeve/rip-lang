@@ -182,6 +182,21 @@ passes values through without auto-decoding:
 - **BLOB** — base64.
 - **LIST / ARRAY / STRUCT / MAP / UNION / ENUM** — nested per SPEC §5.4.
 
+> **Known gotcha / TODO — timestamps are timezone-naive strings.** A `TIMESTAMP`
+> comes back as a bare wall-clock string with no `Z`/offset (e.g.
+> `2024-03-15 10:30:00`). JS `new Date(...)` parses such a string as **local**
+> time, so on a non-UTC host the value silently shifts by the host's offset
+> (east of UTC it lands in the past). Until the client decodes timestamps to a
+> real `Date` (or an ISO string with `Z`) at the boundary — the `duckdbType` /
+> `type` column metadata already says which columns to convert, so a client-side
+> fix would cover raw `query!`/`findAll!` too — callers must reinterpret the
+> string as UTC themselves. The schema ORM's `_hydrate`
+> (`src/schema/runtime-validate.js`) has the same gap on `datetime` fields, and
+> the `datetime` write path is inconsistent (a raw `Date` is sent as-is while
+> `@timestamps` go through `.toISOString()`). Surfaced by the medlabs app's
+> `auth/signin` "Code expired" bug; a fix must ship with a `TZ`-set regression
+> test (the bug is invisible on a UTC CI box).
+
 ## License
 
 MIT

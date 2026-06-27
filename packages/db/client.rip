@@ -66,6 +66,13 @@
 #
 # v1 does NOT auto-decode any of these (no Date parsing, no BLOB
 # base64 decode). One-shot JSON pass-through for now.
+#
+# TODO (timestamps): naive TIMESTAMP strings have no `Z`/offset, so
+# `new Date(value)` parses them as LOCAL time and reads shift by the host's
+# UTC offset. `duckdbType` identifies the columns to convert — decode
+# TIMESTAMP/TIMESTAMPTZ to a real Date (or ISO-with-`Z`) here to fix all
+# reads (raw + ORM); needs a TZ-set regression test. See README "Known
+# gotcha / TODO" and the schema `_hydrate` gap in src/schema/runtime-validate.js.
 
 # ==============================================================================
 # Connection
