@@ -19,7 +19,7 @@ export function setTypesEmitter(fn) { _typesEmitter = fn; }
 import { installSchemaSupport, foldDerivedSchemas } from './schema/schema.js';
 import { SourceMapGenerator, MarkerRecorder, stripMarkers } from './sourcemaps.js';
 import { stringify, getStdlibCode } from './stdlib.js';
-import { emitTsParam } from './params.js';
+import { emitTsParam, ripToTs } from './params.js';
 import { RipError, toRipError } from './error.js';
 
 // =============================================================================
@@ -1636,7 +1636,25 @@ export class CodeEmitter {
     let bodyCode = this.emitFunctionBody(body, params, sideEffectOnly);
     let isAsync = this.containsAwait(body);
     let isGen = this.containsYield(body);
-    return `${isAsync ? 'async ' : ''}function${isGen ? '*' : ''} ${cleanName}(${paramList}) ${bodyCode}`;
+    let ret = this.inlineReturnType(name);
+    return `${isAsync ? 'async ' : ''}function${isGen ? '*' : ''} ${cleanName}(${paramList})${ret} ${bodyCode}`;
+  }
+
+  // Inline return-type annotation for the check path (`inlineTypes` mode).
+  // RFC 12 phase 2: emit `function f(...): T {` in position so the return type
+  // no longer travels through the `.d.ts` header and the overload-interleave
+  // splice (typecheck.js). Off by default — runtime / `-c` output is unchanged.
+  //
+  // Only an EXPLICIT user annotation (`def f():: T`) is emitted, verbatim via
+  // `ripToTs`. `void` is deliberately NOT synthesized for `!` functions: on an
+  // async function `: void` (or any non-Promise type) is itself a TS1064, so a
+  // synthesized annotation would fire a spurious error on legitimate async
+  // side-effect functions once 1064 is recovered. Those keep flowing through
+  // the header until a later slice handles them.
+  inlineReturnType(name) {
+    if (!this.options.inlineTypes) return '';
+    let rt = meta(name, 'returnType');
+    return rt ? `: ${ripToTs(rt)}` : '';
   }
 
   emitThinArrow(head, rest, context, sexpr) {

@@ -747,7 +747,12 @@ export const SKIP_CODES = new Set([
   2394, // Overload signature not compatible with implementation (untyped compiled params)
   2567, // Enum declarations can only merge with namespace or other enum (DTS + compiled body)
   2842, // Unused renaming of destructured property (DTS overload has renamed param unused in declaration)
-  1064, // Return type of async function must be Promise
+  // RFC 12 phase 2 — 1064 recovered. The async return type is now emitted
+  // inline on the implementation (`async function f(): T`, src/compiler.js),
+  // so TS1064 ("return type of async function must be Promise") fires on the
+  // user's own annotation, position-mapped to source. It is no longer a global
+  // mute: a genuinely mis-annotated async return (e.g. `:: string` instead of
+  // `:: Promise<string>`) now surfaces, while a correct `:: Promise<T>` passes.
 ]);
 
 // Dedup diagnostics by (start line/col, code).
@@ -1628,12 +1633,49 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
           return rest.startsWith(':') ? rest : null;
         }
 
+        // RFC 12 phase 2 — retire the interleave for self-sufficient impls.
+        // A single-signature `def` whose implementation already carries an
+        // inline return type (emitted by the compiler, `inlineReturnType`) is
+        // fully annotated in position: typed params come from the inline param
+        // emitter and the return type sits on the impl. Such a function needs
+        // neither the param/return copy nor an adjacent injected signature —
+        // only the header `declare function` removed (already handled by
+        // `moved`). This deletes the dual-artifact reconciliation for the
+        // common case. Excluded, and thus kept on the full interleave:
+        //   - true overloads (>1 signature for the name), whose adjacent
+        //     signatures are load-bearing for call resolution;
+        //   - generic functions (the impl does not emit `<T>` inline yet);
+        //   - impls without an inline return type (e.g. arrow-assigned
+        //     functions, which still ride the header).
+        const sigCountByName = new Map();
+        for (const inj of injections) {
+          const nm = inj.sig.match(/function\s+(\w+)/)?.[1];
+          if (nm) sigCountByName.set(nm, (sigCountByName.get(nm) || 0) + 1);
+        }
+        function isSelfSufficient(inj) {
+          const nm = inj.sig.match(/function\s+(\w+)/)?.[1];
+          if (!nm || sigCountByName.get(nm) !== 1) return false;
+          if (extractTypeParams(inj.sig)) return false;
+          const impl = cl[inj.codeLine];
+          const braceIdx = impl.lastIndexOf('{');
+          if (braceIdx < 0) return false;
+          const head = impl.slice(0, braceIdx);
+          const afterParen = head.slice(head.lastIndexOf(')') + 1).trim();
+          return afterParen.startsWith(':');
+        }
+
         // First pass: copy typed params AND return types from signatures to
         // implementations. Typed params give TS type info inside function bodies;
         // return types let TS verify the body matches the declared return.
         // When multiple sigs target the same codeLine (overloads), only apply
         // from the last one — that's the implementation signature whose types
         // should annotate the function body.
+        // The param/return copy runs for ALL impls — it is a no-op when the
+        // inline param emitter already produced identical params, but it still
+        // repairs constructs the inline emitter renders incorrectly (notably
+        // destructured-rename params, `{name: userName}: {...}`). Only the
+        // redundant adjacent SIGNATURE injection is retired for self-sufficient
+        // functions (below); the copy stays so those impls keep correct params.
         const lastByLine = new Map();
         for (const inj of injections) lastByLine.set(inj.codeLine, inj);
         for (const inj of lastByLine.values()) {
@@ -1652,11 +1694,26 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
           if (typeParams) {
             cl[inj.codeLine] = injectTypeParams(cl[inj.codeLine], typeParams);
           }
+          // RFC 12 phase 2: the implementation's return type is now emitted
+          // inline by the compiler (`inlineReturnType`, src/compiler.js) when
+          // the user wrote `def f():: T`, so the old brace-line splice that
+          // re-derived `): T {` here is redundant for `def`. It is kept only
+          // for impls that do NOT already carry an inline annotation (e.g.
+          // arrow-assigned functions, whose return type still rides the
+          // header) — guarded so it never double-annotates a `def`.
           const retType = extractReturnType(sig);
           if (retType) {
             const braceIdx = cl[inj.codeLine].lastIndexOf('{');
             if (braceIdx > 0) {
-              cl[inj.codeLine] = cl[inj.codeLine].slice(0, braceIdx).trimEnd() + retType + ' {';
+              const head = cl[inj.codeLine].slice(0, braceIdx).trimEnd();
+              // Skip when the impl signature already ends in a return type —
+              // the inline emitter (`def f():: T`) already annotated it. Check
+              // the text after the params-closing `)` so a typed param inside
+              // the list can't be mistaken for a return annotation.
+              const afterParen = head.slice(head.lastIndexOf(')') + 1).trim();
+              if (!afterParen.startsWith(':')) {
+                cl[inj.codeLine] = head + retType + ' {';
+              }
             }
           }
         }
@@ -1667,7 +1724,7 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
         // would force it to `any`. Functions with any untyped param would fire
         // TS7006 twice (once on the injected sig, once on the impl) at the same
         // source position — skip the injection so the user sees a single error.
-        const overloads = injections.filter(inj => hasExplicitReturn(inj.sig) && !hasUntypedParam(inj.sig));
+        const overloads = injections.filter(inj => !isSelfSufficient(inj) && hasExplicitReturn(inj.sig) && !hasUntypedParam(inj.sig));
 
         // Adjust reverseMap: each overload injection shifts subsequent code lines down by 1.
         // Compare against the original genLine (not genLine + offset) because bottom-up
@@ -3897,7 +3954,16 @@ export async function runCheck(targetDir, opts = {}) {
     const srcLines = entry.source.split('\n');
     for (const d of diags) {
       if (d.start === undefined) continue;
-      if (SKIP_CODES.has(d.code)) continue;
+      if (SKIP_CODES.has(d.code)) {
+        // RFC 12 phase 2 — diagnostic-equivalence gate hook. Records every
+        // diagnostic dropped by the *global* mute (not the conditional/position
+        // suppressions below), so the gate can snapshot which structural codes
+        // a type-clean corpus still relies on and fail when that set grows
+        // (a newly-masked error) or shrinks (a recovery to record). Inert
+        // unless a caller opts in.
+        opts.onGlobalSkip?.({ filePath: fp, code: d.code, start: d.start, entry });
+        continue;
+      }
 
       // Conditional suppression — narrowed instead of blanket
       if (CONDITIONAL_CODES.has(d.code)) {

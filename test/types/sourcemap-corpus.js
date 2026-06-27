@@ -85,6 +85,9 @@ const PASS = [
   { name: 'call callee',                 src: 'add = (a:: number, b:: number) -> a + b\nadd(1, 2)\n',  line: 1, token: 'add' },
   { name: 'repeated ident — signature',  src: 'age = (dob:: string, asOf:: string) -> asOf\nasOf = "x"\n', line: 0, token: 'asOf' },
   { name: 'repeated ident — statement',  src: 'age = (dob:: string, asOf:: string) -> asOf\nasOf = "x"\n', line: 1, token: 'asOf' },
+  // RFC 12 phase 2: function return types are emitted inline (`def f():: T`),
+  // so the return-type token must remain map-resolvable on the check path.
+  { name: 'def return type',            src: 'def parseId(raw:: string):: number\n  42\n',       line: 0, token: 'number' },
 ];
 
 for (const c of PASS) {
