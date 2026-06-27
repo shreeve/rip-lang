@@ -676,7 +676,10 @@ export bail = ->
   if store?.env?.session?
     for key of store.env.session
       delete store.env.session[key]
-  throw Object.assign(new Error('Forbidden'), { status: 403 })
+  # 401, not 403: bail is the no/invalid-session case (missing credentials),
+  # which is "(re)authenticate" — and it just cleared the session. 403
+  # (authenticated-but-refused) stays with `error! '…', 403`.
+  throw Object.assign(new Error('Unauthorized'), { status: 401 })
 
 # ==============================================================================
 # Utility Functions
