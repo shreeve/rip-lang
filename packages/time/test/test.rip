@@ -2,7 +2,7 @@
 # @rip-lang/time tests — black-box parity against upstream time
 # ==============================================================================
 
-import time, { Duration } from '../time.rip'
+import time, { Duration, age } from '../time.rip'
 import ref   from 'dayjs'
 
 pass = 0
@@ -801,6 +801,25 @@ test "real-world: specimen age", ->
   age       = time.duration(analyzed.diff(collected))
   eq age.asMinutes(), 407
   eq age.humanize(),  '7 hours'   # bucketed to nearest relative time
+
+# ==[ age() ]==
+
+console.log "\nage()"
+
+test "age: after birthday this year", ->
+  eq age('2000-01-01', '2026-06-26'), 26
+test "age: before birthday this year", ->
+  eq age('2000-12-31', '2026-06-26'), 25
+test "age: on the birthday", ->
+  eq age('2000-06-26', '2026-06-26'), 26
+test "age: day before birthday", ->
+  eq age('2000-06-27', '2026-06-26'), 25
+test "age: default asOf is now", ->
+  eq age(time().subtract(30, :year).format('YYYY-MM-DD')), 30
+test "age: blank/invalid → null", ->
+  eq age(null),         null
+  eq age(''),           null
+  eq age('not-a-date'), null
 
 # ==[ Summary ]==
 

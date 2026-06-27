@@ -1055,5 +1055,18 @@ time.max = (...args) ->
 time.version = '1.0.0'
 time.Time   = Time
 
+# age(dob, asOf = now) — completed years from dob to asOf, birthday-aware
+# (subtract a year if asOf falls before this year's birthday). Accepts anything
+# time() accepts (ISO string, Date, Time); returns null for a blank/invalid dob
+# or asOf. Compares wall-clock calendar dates in the instances' zone.
+export age = (dob, asOf) ->
+  return null unless dob?
+  born = time(dob)
+  ref  = if asOf? then time(asOf) else time()
+  return null unless born.isValid() and ref.isValid()
+  years = ref.year() - born.year()
+  years -= 1 if ref.month() < born.month() or (ref.month() is born.month() and ref.date() < born.date())
+  years
+
 export default time
 export { Time, Duration, isTime, isDuration }

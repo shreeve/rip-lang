@@ -47,6 +47,7 @@ d = time.parse('Apr 19, 2026', 'MMM D, YYYY')
 - `time.parse(input, format)` — explicit format parsing built in
 - `time.min(...)` / `time.max(...)`
 - `time.duration(input, unit?)` — first-class `Duration` with ISO-8601 parse/format, `as*()` / `humanize()` / `format()`; usable directly in `.add()` / `.subtract()`
+- `age(dob, asOf?)` — completed years from a date of birth to `asOf` (default: now), birthday-aware; `null` for blank/invalid input
 
 ## Usage
 
