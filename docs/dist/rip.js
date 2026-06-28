@@ -16938,8 +16938,8 @@ if (typeof globalThis !== 'undefined') {
     return new CodeEmitter({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.17.1";
-  var BUILD_DATE = "2026-06-28@03:16:00GMT";
+  var VERSION = "3.17.2";
+  var BUILD_DATE = "2026-06-28@03:29:47GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
