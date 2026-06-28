@@ -673,8 +673,8 @@ String::shout = -> @toUpperCase() + "!"
 "hello".shout()            # "HELLO!"
 
 # Type annotations (space after ::) — unaffected
-name:: string = "Alice"
-def greet(name:: string):: string
+name: string = "Alice"
+def greet(name: string): string
   "Hello, #{name}!"
 ```
 
@@ -1096,8 +1096,8 @@ Reads return the delayed value; writes update the source immediately. A drop-in 
 Reactive operators work with Rip's optional type system:
 
 ```coffee
-count:: number := 0               # Typed state
-doubled:: number ~= count * 2     # Typed computed
+count: number := 0               # Typed state
+doubled: number ~= count * 2     # Typed computed
 ```
 
 Type annotations are erased from `.js` output. In `.d.ts` output, reactive state emits `Signal<T>` and computed values emit `Computed<T>`:
@@ -1989,8 +1989,8 @@ Rip supports an optional, compile-time-only type system. Types are erased from
 
 ```coffee
 # Type annotations (::)
-count:: number = 0
-def greet(name:: string):: string
+count: number = 0
+def greet(name: string): string
   "Hello, #{name}!"
 
 # Type aliases (type keyword)

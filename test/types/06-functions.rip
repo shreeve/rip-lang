@@ -55,11 +55,11 @@ export def greetUntyped(name: string, title?): string
 # policy (RFC 12 phase 0), so this and greetUntyped can't drift apart.
 ageOf = (dob: string, asOf?) -> dob
 
-# Inferred return type (no :: annotation — TS infers from body)
+# Inferred return type (no : annotation — TS infers from body)
 export def double(n: number)
   n * 2
 
-# ── Use: inferred results (no :: annotations) ──
+# ── Use: inferred results (no : annotations) ──
 
 result1  = add(3, 4)
 result2  = greet('World')
@@ -245,7 +245,7 @@ def delay(ms: number): Promise<string>
 r1 = delay! 50
 console.log "r1: #{r1}"
 
-# If we wrote `r2:: number = delay! 50`, rip check catches:
+# If we wrote `r2: number = delay! 50`, rip check catches:
 #   "Type 'string' is not assignable to type 'number'" ✓
 # (@ts-expect-error doesn't work here — shadow file line misalignment)
 
@@ -311,7 +311,7 @@ badArrowThin: number = arrowThin(7)
 # @ts-expect-error — fat-arrow typed param enforced (number, not string)
 arrowFat('nope')
 
-# A fat arrow with an EXPLICIT return type — `(n:: number):: string => …`. The
+# A fat arrow with an EXPLICIT return type — `(n: number): string => …`. The
 # `=>` is the arrow operator, not a function-type arrow; it emits inline as
 # `(n: number): string => …`. The return type is enforced.
 arrowFatRet = (n: number): string => "fat=#{n}"

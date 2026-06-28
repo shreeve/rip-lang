@@ -72,8 +72,8 @@ rip schema migrate [models.rip]
 - Run `bun run build:schema-runtime` after editing any `src/schema/runtime-*.js` fragment (CI's `test:schema-fresh` fails on staleness)
 - **Every fenced `coffee` block in `docs/RIP-SCHEMA.md` must compile** — `bun run test:docs` enforces it (part of `test:all`). Annotate intentional exceptions with `<!-- doctest: skip -->` (fragments/templates) or `<!-- doctest: fail -->` (documented compile errors) on the line above the fence. When editing that doc, run `bun run test:docs` before committing.
 - Run `bun run bump` for the standard release flow
-- **In a typed Rip codebase, always run `rip check` after edits.** A project is typed if its `package.json` has `rip.strict: true` or `rip.checkAll: true`, or any `.rip` files use `::` annotations. `rip check` catches both type errors and shadow-TypeScript emitter bugs that the runtime won't surface.
-- **If a `@rip-lang/*` package advertises a typed public API, keep it honest with `rip check --audit`.** A package "claims to be typed" if its entry file has `::` annotations on exported symbols, or if downstream typed code imports it. For those, run `rip check --audit` before publishing or merging API changes — it runs the normal type check and walks the public surface for `any` leaks. A clean exit (0) means the source type-checks and every export is fully typed for consumers. Untyped packages with no typed consumers can stick with plain `rip check`.
+- **In a typed Rip codebase, always run `rip check` after edits.** A project is typed if its `package.json` has `rip.strict: true` or `rip.checkAll: true`, or any `.rip` files use `:` type annotations. `rip check` catches both type errors and shadow-TypeScript emitter bugs that the runtime won't surface.
+- **If a `@rip-lang/*` package advertises a typed public API, keep it honest with `rip check --audit`.** A package "claims to be typed" if its entry file has `:` type annotations on exported symbols, or if downstream typed code imports it. For those, run `rip check --audit` before publishing or merging API changes — it runs the normal type check and walks the public surface for `any` leaks. A clean exit (0) means the source type-checks and every export is fully typed for consumers. Untyped packages with no typed consumers can stick with plain `rip check`.
 - **When working on the compiler, lexer, or source-map machinery, use `rip check --sourcemap`** to verify that every identifier round-trips through the generated source map (i.e. hover and go-to-def work in editors). This is a compiler-development diagnostic, not a package-quality check — gaps usually mean the audit's skip list is incomplete or that codegen lost a binding, both of which are compiler-side concerns.
 
 ## Compilation Pipeline
@@ -141,7 +141,7 @@ A few existing packages still ship `export default` (`@rip-lang/time`, `packages
 **Annotate the public surface at minimum.** Ideally every binding in a package is typed, but realistically that bar is hard to enforce. The practical contract: every `export` must reach consumers with a fully-typed signature (what `rip check --audit` measures). Always annotate:
 
 - exported `def`/`class`/`type`/`interface` declarations and their parameters/return types
-- the return type of any exported function whose body assembles a shape that needs to match a public contract (e.g. `makeInstance():: HttpInstance` in [packages/http/http.rip](packages/http/http.rip))
+- the return type of any exported function whose body assembles a shape that needs to match a public contract (e.g. `makeInstance(): HttpInstance` in [packages/http/http.rip](packages/http/http.rip))
 - fields of exported types/interfaces
 
 Internal helpers, locals, and private types may rely on inference — but annotate them too when it helps readability or pins down a tricky shape.
@@ -360,14 +360,22 @@ rip -cm example.rip
 > calls (`div outline` — text child) and imperative calls outside
 > `render` (`Btn(outline)` — positional arg) are unaffected.
 
-> **CRITICAL — `::` binds a name to a type; `:` separates fields inside a type literal `{ ... }`:**
+> **CRITICAL — `:` is the type-annotation separator everywhere; `::` is prototype access only (e.g. `String::trim`), never a type operator:**
 >
-> - `def foo(opts:: { host?: string, port?: number })` — CORRECT
-> - `def foo(opts:: { host?:: string })` — ERROR (`::` rejected inside type literal)
-> - `def foo({name:: string, age:: number})` — CORRECT (destructuring pattern, not a type literal)
+> - `x: number = 0` — CORRECT (typed declaration)
+> - `def foo(opts: { host?: string, port?: number })` — CORRECT
+> - `def greet(name: string): string` — CORRECT (param + return type)
+> - `x:: number` — ERROR (`::` is not a type annotation; use a single `:`)
 >
-> Rule of thumb: in a param list `({...})` is destructuring (each binding uses `::`);
-> after `::` you're in a type expression (fields use `:`, TS-style).
+> Typed destructuring uses an *external* type, TS-style — annotate the whole
+> pattern, not each binding:
+>
+> - `def foo({name, age}: { name: string, age: number })` — CORRECT
+> - `def foo({name: string})` — WRONG (that's a rename to a binding called `string`)
+>
+> Rule of thumb: a single `:` after a name/param/`)`/pattern is a type; fields
+> inside a `{ ... }` type literal also use `:` (TS-style). `::` only ever means
+> `.prototype`.
 
 ### Removed (from CoffeeScript / Rip 2.x)
 
@@ -378,7 +386,7 @@ rip -cm example.rip
 | **binary existential (`x ? y`)**   | **`x ?? y` (NEVER use `x ? y`, it is not valid Rip)** |
 | `is not` contraction               | `isnt`                                                |
 | `for x from iterable`              | `for x as iterable`                                   |
-| type-suffix `T?` / `T??` / `T!`    | write `T \| undefined`, `T \| null \| undefined`, `NonNullable<T>` (use `?::` for prop/param/field optionality) |
+| type-suffix `T?` / `T??` / `T!`    | write `T \| undefined`, `T \| null \| undefined`, `NonNullable<T>` (use `?:` for prop/param/field optionality) |
 
 ### Added
 
@@ -394,7 +402,7 @@ rip -cm example.rip
 | dotted keys           | `{a.b: 1}`       | flat string key in object literals         |
 | map literal           | `*{a: 1}`        | real `Map` with any key type               |
 | symbol literal        | `:redo`          | interned symbol via `Symbol.for('redo')`   |
-| optional prop / param | `name?:: T`      | `?` before `::` marks the name optional (params, type fields). Inside a type literal `{ ... }`, use `name?: T` (TS-style) |
+| optional prop / param | `name?: T`      | `?` before `:` marks the name optional (params, type fields, props) |
 | boolean prop shorthand | `Btn outline, link` | JSX-style `{outline: true, link: true}` for child components in `render` |
 
 ### Kept
@@ -550,7 +558,7 @@ This is unambiguous with all other colon uses in Rip:
 | --- | --- |
 | `:redo` | Symbol literal |
 | `:=` | Reactive assign |
-| `::` | Prototype access / type annotation |
+| `::` | Prototype access (`String::trim`) |
 | `name:` | Property key |
 | `? a : b` | Ternary branch (space after `:`) |
 

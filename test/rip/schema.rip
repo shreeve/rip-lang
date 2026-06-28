@@ -2086,7 +2086,7 @@ type "cross-file relation target degrades to unknown", '''
 
 # A derived schema (`Name = Base.pick(...)`) has no `schema` body, so nothing
 # declares a bare `Name` type — yet projections are exactly where one is needed
-# (annotate `u:: UserView`, re-export under a clean name). Emit a bare type that
+# (annotate `u: UserView`, re-export under a clean name). Emit a bare type that
 # reads the algebra's result back off the value's own `parse`, reusing the
 # Schema<Out, In> interface inference instead of re-deriving Pick/Omit here.
 type "derived schema emits a bare projection type", '''
@@ -4276,7 +4276,7 @@ test "methods accept parameters (typed and untyped) at runtime", '''
   Money = schema :shape
     amount!   integer
     currency! string, 3..3
-    add: (other:: Money) ->
+    add: (other: Money) ->
       Money.parse {amount: @amount + other.amount, currency: @currency}
     scaled: (factor, label) ->
       label + (@amount * factor)

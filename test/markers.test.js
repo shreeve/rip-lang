@@ -111,8 +111,8 @@ const loc = (r, c, n) => ({ r, c, n });
   const typeDir = resolve(here, 'types');
   const opts = { sourceMap: true, types: 'emit', skipPreamble: true, stubComponents: true, inlineTypes: true };
   let sources = [
-    'age = (dob:: string, asOf:: string) -> asOf\nasOf = "x"\n',
-    'f = (x:: number) -> x + 1\n',
+    'age = (dob: string, asOf: string) -> asOf\nasOf = "x"\n',
+    'f = (x: number) -> x + 1\n',
   ];
   try {
     for (const fn of readdirSync(typeDir).filter(f => f.endsWith('.rip'))) {

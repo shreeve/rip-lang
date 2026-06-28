@@ -63,20 +63,20 @@ const PROBES = [
   {
     code: 1064,
     title: 'Async return mis-annotated',
-    why: 'An async `def` annotated `:: string` instead of `:: Promise<string>`. The bogus `: string` types every call site wrong with no error anywhere.',
-    src: 'def delay(ms:: number):: Promise<string>\n  sleep! ms\n  "done"\n\ndef getName():: string\n  delay! 10\n',
+    why: 'An async `def` annotated `: string` instead of `: Promise<string>`. The bogus `: string` types every call site wrong with no error anywhere.',
+    src: 'def delay(ms: number): Promise<string>\n  sleep! ms\n  "done"\n\ndef getName(): string\n  delay! 10\n',
   },
   {
     code: 2393,
     title: 'Duplicate function implementation',
     why: 'The same function defined twice in one file — a classic merge/refactor slip.',
-    src: 'def foo(a:: number):: number\n  a + 1\n\ndef foo(a:: number):: number\n  a + 2\n',
+    src: 'def foo(a: number): number\n  a + 1\n\ndef foo(a: number): number\n  a + 2\n',
   },
   {
     code: 2394,
     title: 'Incompatible overload signature',
-    why: 'A bodiless overload `def f(x:: string)` whose implementation only accepts `number`.',
-    src: 'def f(x:: string):: number\ndef f(x:: number):: number\n  x\n',
+    why: 'A bodiless overload `def f(x: string)` whose implementation only accepts `number`.',
+    src: 'def f(x: string): number\ndef f(x: number): number\n  x\n',
   },
 ];
 

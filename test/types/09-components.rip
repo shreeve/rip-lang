@@ -1,6 +1,6 @@
 # 09-components.rip — Typed component props
 #
-# Rip components define typed props with @prop:: type := default.
+# Rip components define typed props with @prop: type := default.
 # The component definitions emit typed DTS declarations.
 # Prop values are type-checked at construction sites via `rip check`.
 
@@ -167,7 +167,7 @@ export RenderCondTest = component
 # A variable first assigned inside a conditional and captured by a
 # callback (e.g. .filter()) is correctly inferred. The patcher
 # recurses into class methods and computed arrow bodies, so no
-# explicit `:: string` annotation is needed on `term`.
+# explicit `: string` annotation is needed on `term`.
 
 export FilterGapTest = component
   items: string[] := ['a', 'b', 'c']
@@ -361,7 +361,7 @@ export DefaultedMethodParamsTests = component
 
 # ── Equals-form method assignments with typed params ──
 #
-# `name = (p:: T) ->` (assignment form, vs the `name: (p:: T) ->` colon form
+# `name = (p: T) ->` (assignment form, vs the `name: (p: T) ->` colon form
 # above) also emits a class method on the check path. A stale manual type
 # append in the component emitter used to double the annotation
 # (`p: T: T` → TS1005) now that `formatParam` emits the inline type itself;
