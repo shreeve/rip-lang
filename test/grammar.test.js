@@ -256,10 +256,10 @@ return foo
 `));
 
 check('type annotation, primitives, union, alias', () => runFixture(`
-x:: string
-# "::" keyword.operator.type-annotation.rip
+x: string
+# ":" keyword.operator.type-annotation.rip
 # "string" support.type.primitive.rip
-y:: number | null
+y: number | null
 # "number" support.type.primitive.rip
 # "|" keyword.operator.type.union.rip
 export type Mode = "a"
