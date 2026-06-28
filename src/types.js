@@ -405,12 +405,23 @@ function looksLikeBareFunctionType(typeTokens) {
 // left alone and any side effects survive.
 function isCompleteTypeExpr(tokens, a, b) {
   if (b <= a) return false;
-  const SEP = new Set(['|', '&', ',', ':', '?', '.', '...', '=>']);
+  const SEP = new Set(['|', '&', ',', ':', '?', '.', '...']);
   let par = 0, brk = 0, brc = 0, gen = 0, atomEnd = false;
+  const parInfo = [];          // per-paren-depth: { colon, open }
+  let lastClosedParen = null;  // { colon, empty } of the most recently closed group
   for (let j = a; j < b; j++) {
     const t = tokens[j][0], v = tokens[j][1];
-    if (t === '(' || t === 'PARAM_START')      { par++; atomEnd = false; continue; }
-    if (t === ')' || t === 'PARAM_END')        { if (--par < 0) return false; atomEnd = true; continue; }
+    // Function-type arrow: valid only after a closed param group that is empty
+    // `()` or typed `(x: T)`. An untyped `(e) =>` (or leading `=>`) is a value
+    // arrow, so context B won't misread `@input: (e) => x = y` as a typed decl.
+    if (t === '=>') {
+      const p = j > a ? tokens[j - 1][0] : null;
+      if ((p === ')' || p === 'PARAM_END') && lastClosedParen &&
+          (lastClosedParen.colon || lastClosedParen.empty)) { atomEnd = false; continue; }
+      return false;
+    }
+    if (t === '(' || t === 'PARAM_START')      { parInfo.push({ colon: false, open: j }); par++; atomEnd = false; continue; }
+    if (t === ')' || t === 'PARAM_END')        { if (--par < 0) return false; const pi = parInfo.pop(); lastClosedParen = pi ? { colon: pi.colon, empty: j === pi.open + 1 } : null; atomEnd = true; continue; }
     if (t === '[' || t === 'INDEX_START')      { brk++; atomEnd = false; continue; }
     if (t === ']' || t === 'INDEX_END')        { if (--brk < 0) return false; atomEnd = true; continue; }
     if (t === '{')                             { brc++; atomEnd = false; continue; }
@@ -425,7 +436,7 @@ function isCompleteTypeExpr(tokens, a, b) {
       return false;
     }
     if (t === '=') { if (gen > 0) { atomEnd = false; continue; } return false; } // generic default only
-    if (SEP.has(t)) { atomEnd = false; continue; }
+    if (SEP.has(t)) { if (t === ':' && parInfo.length) parInfo[parInfo.length - 1].colon = true; atomEnd = false; continue; }
     if (t === 'IDENTIFIER' || t === 'PROPERTY' || t === 'NUMBER' ||
         t === 'STRING' || t === 'NULL' || t === 'UNDEFINED' || t === 'BOOL') {
       if (atomEnd) return false;               // two atoms, no separator → not a type

@@ -1729,6 +1729,32 @@ code "event handler with method reference", '''
   }
   ''', opts
 
+# Regression: an inline arrow `@event:` handler on an *indented* child line must
+# bind an event listener, not be misread as a typed function-valued declaration
+# (`@input: (e) => msg = …` parsed as `@input : (e)=>msg = …`) and emitted as a
+# reactive text node with a free `e`. See isCompleteTypeExpr in src/types.js.
+code "indented inline @event handler binds a listener", '''
+  export A = component
+    msg := ""
+    render
+      input value: msg
+        @input: (e) => msg = e.target.value
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+      this.msg = __state("");
+    }
+    _create() {
+      this._el0 = document.createElement('input');
+      this._el0.addEventListener('input', (e) => __batch(() => (e => (this.msg.value = e.target.value))(e)));
+      return this._el0;
+    }
+    _setup() {
+      __effect(() => { this._el0.value = this.msg.value; });
+    }
+  }
+  ''', opts
+
 # ==============================================================================
 # Auto-wired Event Handlers (on* convention)
 # ==============================================================================

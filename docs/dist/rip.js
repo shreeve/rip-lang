@@ -5359,11 +5359,22 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
   function isCompleteTypeExpr(tokens, a, b) {
     if (b <= a)
       return false;
-    const SEP = new Set(["|", "&", ",", ":", "?", ".", "...", "=>"]);
+    const SEP = new Set(["|", "&", ",", ":", "?", ".", "..."]);
     let par = 0, brk = 0, brc = 0, gen = 0, atomEnd = false;
+    const parInfo = [];
+    let lastClosedParen = null;
     for (let j = a;j < b; j++) {
       const t = tokens[j][0], v = tokens[j][1];
+      if (t === "=>") {
+        const p = j > a ? tokens[j - 1][0] : null;
+        if ((p === ")" || p === "PARAM_END") && lastClosedParen && (lastClosedParen.colon || lastClosedParen.empty)) {
+          atomEnd = false;
+          continue;
+        }
+        return false;
+      }
       if (t === "(" || t === "PARAM_START") {
+        parInfo.push({ colon: false, open: j });
         par++;
         atomEnd = false;
         continue;
@@ -5371,6 +5382,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       if (t === ")" || t === "PARAM_END") {
         if (--par < 0)
           return false;
+        const pi = parInfo.pop();
+        lastClosedParen = pi ? { colon: pi.colon, empty: j === pi.open + 1 } : null;
         atomEnd = true;
         continue;
       }
@@ -5429,6 +5442,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         return false;
       }
       if (SEP.has(t)) {
+        if (t === ":" && parInfo.length)
+          parInfo[parInfo.length - 1].colon = true;
         atomEnd = false;
         continue;
       }
@@ -16924,7 +16939,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.17.1";
-  var BUILD_DATE = "2026-06-28@00:08:17GMT";
+  var BUILD_DATE = "2026-06-28@03:16:00GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

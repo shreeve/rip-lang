@@ -27,6 +27,30 @@ const MIME_TYPES = {
   '.rip': 'text/plain; charset=utf-8'
 };
 
+// ETag (size+mtime, plus encoding so brotli/plain get distinct tags) +
+// no-cache for cheap 304 revalidation, and Vary so caches don't mix encodings.
+// Returns null if unreadable, letting the caller fall back.
+function serveFile(req, diskPath, contentType, encoding) {
+  let stat;
+  try { stat = statSync(diskPath); } catch { return null; }
+  const etag = `"${stat.size.toString(16)}-${Math.round(stat.mtimeMs).toString(16)}${encoding ? '-' + encoding : ''}"`;
+  const headers = {
+    'Content-Type': contentType,
+    'ETag': etag,
+    'Cache-Control': 'no-cache',
+    'Vary': 'Accept-Encoding'
+  };
+  if (encoding) headers['Content-Encoding'] = encoding;
+  if (req.headers.get('if-none-match') === etag) {
+    return new Response(null, { status: 304, headers });
+  }
+  try {
+    return new Response(readFileSync(diskPath), { headers });
+  } catch {
+    return null;
+  }
+}
+
 // Request handler for serving files
 function handleRequest(req) {
   const url = new URL(req.url);
@@ -50,34 +74,19 @@ function handleRequest(req) {
   const filePath = join(ROOT, pathname);
   const ext = extname(pathname);
   const acceptEncoding = req.headers.get('accept-encoding') || '';
+  const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
-  // Check for brotli compressed version (.br)
+  // Prefer the pre-compressed Brotli sidecar when the client accepts it.
   if (acceptEncoding.includes('br') && existsSync(filePath + '.br')) {
-    try {
-      const compressed = readFileSync(filePath + '.br');
-      return new Response(compressed, {
-        headers: {
-          'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
-          'Content-Encoding': 'br',
-          'Cache-Control': 'no-cache'
-        }
-      });
-    } catch (e) {
-      // Fall through to regular file
-    }
+    const res = serveFile(req, filePath + '.br', contentType, 'br');
+    if (res) return res;
   }
 
-  // Serve regular file
-  try {
-    const file = readFileSync(filePath);
-    return new Response(file, {
-      headers: {
-        'Content-Type': MIME_TYPES[ext] || 'application/octet-stream'
-      }
-    });
-  } catch (e) {
-    return new Response('404 Not Found', { status: 404 });
-  }
+  // Plain file — also the failover when no .br sidecar exists.
+  const res = serveFile(req, filePath, contentType, null);
+  if (res) return res;
+
+  return new Response('404 Not Found', { status: 404 });
 }
 
 // Try to start server on preferred port, fallback to OS-assigned port
