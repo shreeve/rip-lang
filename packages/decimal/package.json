@@ -1,0 +1,42 @@
+{
+  "name": "@rip-lang/decimal",
+  "version": "0.1.0",
+  "description": "Rip Decimal — zero-dependency, BigInt-backed arbitrary-precision exact decimals with explicit rounding and resource limits",
+  "type": "module",
+  "main": "decimal.rip",
+  "exports": {
+    ".": "./decimal.rip"
+  },
+  "rip": {
+    "browser": true
+  },
+  "scripts": {
+    "test": "rip test/test.rip"
+  },
+  "keywords": [
+    "decimal",
+    "bigdecimal",
+    "money",
+    "fixed-point",
+    "arbitrary-precision",
+    "bigint",
+    "rounding",
+    "bun",
+    "rip"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/decimal"
+  },
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/decimal#readme",
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "files": [
+    "decimal.rip",
+    "README.md"
+  ]
+}

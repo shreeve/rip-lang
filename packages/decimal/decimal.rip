@@ -1,0 +1,479 @@
+# ==============================================================================
+# @rip-lang/decimal — zero-dependency, BigInt-backed arbitrary-precision decimal
+#
+# Author: Steve Shreeve (steve.shreeve@gmail.com)
+#
+# A value is `coef * 10^exp` with a signed BigInt coefficient and an integer
+# exponent. Exact for + - * ; division and scale changes require an EXPLICIT
+# rounding mode (no hidden rounding). There are NO IEEE specials (NaN/Infinity)
+# — undefined operations THROW. "Arbitrary precision" is bounded by configurable
+# resource limits so a pathological exponent gap (e.g. `1e1000000000 + 1`) is
+# rejected at preflight instead of allocating a multi-gigabyte BigInt.
+#
+# Design hardened in collaboration with GPT-5.5. See README.md for the rationale.
+# ==============================================================================
+
+# ==[ Resource limits ]=========================================================
+#
+# Browser-safe defaults. `maxDigits` is the real cap on result size (DuckDB
+# DECIMAL caps precision at 38, and summing N max-width values grows only
+# logarithmically, so 1000 is far beyond real finance). `maxAbsExponent` bounds
+# the stored exponent; `maxOutputLength` bounds rendered strings.
+
+LIMITS =
+  maxInputLength:  4096
+  maxDigits:       1000
+  maxAbsExponent:  100000
+  maxOutputLength: 100000
+
+LIMIT_KEYS =! new Set(["maxInputLength", "maxDigits", "maxAbsExponent", "maxOutputLength"])
+
+# ==[ Types ]===================================================================
+
+export type RoundingMode =
+  "UP" | "DOWN" | "CEILING" | "FLOOR" |
+  "HALF_UP" | "HALF_DOWN" | "HALF_EVEN" | "UNNECESSARY"
+
+export type DecimalLike = Decimal | string | bigint | number
+
+# ==[ Error taxonomy ]==========================================================
+
+export class DecimalError extends Error
+  constructor: (message: string) ->
+    super message
+    @name = @constructor.name
+
+# Subclasses inherit the base constructor (which names them via @constructor.name),
+# so a one-line class expression is enough — no per-class constructor needed.
+export DecimalParseError            = class extends DecimalError
+export DecimalDivisionByZeroError   = class extends DecimalError
+export DecimalNonTerminatingError   = class extends DecimalError
+export DecimalInvalidOperationError = class extends DecimalError
+export DecimalRangeError            = class extends DecimalError
+export DecimalResourceLimitError    = class extends DecimalError
+export DecimalInexactError          = class extends DecimalError
+export DecimalUnsafeConversionError = class extends DecimalError
+
+# ==[ Internal helpers (pure, not exported) ]===================================
+
+buildPow10 = ->
+  arr = [1n]
+  for i in [1...64]
+    arr.push arr[i - 1] * 10n
+  arr
+
+POW10 =! buildPow10()
+
+# Capturing parse grammar: sign, int(.frac) | .frac, optional exponent.
+PARSE_RE =! /^([+-]?)(?:(\d+)(?:\.(\d*))?|\.(\d+))(?:[eE]([+-]?\d+))?$/
+
+# 10^n for a non-negative integer n. Callers preflight n; this never builds a
+# limit-busting power on the hot paths.
+pow10 = (n: number): bigint ->
+  return POW10[n] if n >= 0 and n < POW10.length
+  10n ** BigInt(n)
+
+absBig = (n: bigint): bigint -> if n < 0n then -n else n
+
+# Scale a coefficient by 10^shift, but never allocate a power for zero.
+scaleCoef = (coef: bigint, shift: number): bigint -> if coef is 0n then 0n else coef * pow10(shift)
+
+# Estimated digit count of `coef` scaled up by `shift` (zero stays 1 digit).
+scaledDigits = (coef: bigint, shift: number): number -> if coef is 0n then 1 else digitCount(coef) + shift
+
+LOG10_2 =! Math.log10(2)
+LOG10_5 =! Math.log10(5)
+
+VALID_MODES =! new Set(["UP", "DOWN", "CEILING", "FLOOR", "HALF_UP", "HALF_DOWN", "HALF_EVEN", "UNNECESSARY"])
+
+assertMode = (mode: RoundingMode): void ->
+  throw new DecimalInvalidOperationError "unknown rounding mode: #{String(mode)}" unless VALID_MODES.has(mode)
+  return
+
+# Parse a signed exponent with an early out-of-range bailout, so a pathological
+# exponent string never reaches parseInt (honors the preflight principle even if
+# maxInputLength is raised).
+parseBoundedExp = (s: string): number ->
+  sign = 1
+  i    = 0
+  if s[0] is '+' then i = 1
+  else if s[0] is '-' then sign = -1; i = 1
+  throw new DecimalParseError "invalid exponent" if i >= s.length
+  limit = LIMITS.maxAbsExponent + LIMITS.maxInputLength + 1
+  n = 0
+  while i < s.length
+    n = n * 10 + (s.charCodeAt(i) - 48)
+    throw new DecimalRangeError "exponent out of range" if n > limit
+    i += 1
+  sign * n
+
+gcdBig = (a: bigint, b: bigint): bigint ->
+  x = absBig a
+  y = absBig b
+  while y isnt 0n
+    [x, y] = [y, x % y]
+  x
+
+# Base-10 digit count of a coefficient (0n counts as 1).
+digitCount = (coef: bigint): number -> absBig(coef).toString().length
+
+# Strip insignificant trailing zeros — value-canonical (coef, exp) pair.
+reduceParts = (coef: bigint, exp: number): [bigint, number] ->
+  return [0n, 0] if coef is 0n
+  c = coef
+  e = exp
+  while c % 10n is 0n
+    c = c / 10n
+    e += 1
+  [c, e]
+
+# Should the magnitude of a truncated quotient be incremented by one? All of
+# `rem`, `den`, `q` are NON-NEGATIVE; `sign` is +1 or -1 (sign of the result);
+# rounding is decided on the ABSOLUTE remainder so negatives round correctly.
+shouldRoundUp = (rem: bigint, den: bigint, q: bigint, sign: number, mode: RoundingMode): boolean ->
+  return false if rem is 0n          # exact — never round (UNNECESSARY included)
+  twice = rem * 2n
+  return switch mode
+    when "UP"        then true
+    when "DOWN"      then false
+    when "CEILING"   then sign > 0
+    when "FLOOR"     then sign < 0
+    when "HALF_UP"   then twice >= den
+    when "HALF_DOWN" then twice > den
+    when "HALF_EVEN" then twice > den or (twice is den and (q % 2n) is 1n)
+    when "UNNECESSARY"
+      throw new DecimalInexactError "exact result required but rounding would discard a non-zero remainder"
+    else
+      throw new DecimalInvalidOperationError "unknown rounding mode: #{String(mode)}"
+
+# ==[ Decimal ]=================================================================
+
+export class Decimal
+  # value = coef * 10^exp. Construct via parse / from / fromParts /
+  # fromScaledInteger — the constructor itself is internal and assumes its
+  # arguments were already validated/preflighted.
+  constructor: (@coef: bigint, @exp: number) ->
+
+  # ── Construction ───────────────────────────────────────────────────────────
+
+  @isDecimal: (v: unknown): boolean -> v instanceof Decimal
+
+  @config: (opts: { maxInputLength?: number, maxDigits?: number, maxAbsExponent?: number, maxOutputLength?: number }): void ->
+    for own k, val of opts
+      throw new DecimalInvalidOperationError "unknown config key: #{k}" unless LIMIT_KEYS.has(k)
+      throw new DecimalInvalidOperationError "config #{k} must be a positive integer" unless Number.isInteger(val) and val > 0
+      LIMITS[k] = val
+    return
+
+  @parse: (input: string): Decimal ->
+    throw new DecimalParseError "Decimal.parse expects a string, got #{kind(input)}" unless typeof input is 'string'
+    throw new DecimalResourceLimitError "input exceeds maxInputLength (#{LIMITS.maxInputLength})" if input.length > LIMITS.maxInputLength
+    m = input.match(PARSE_RE)
+    throw new DecimalParseError "invalid decimal syntax: #{JSON.stringify(input)}" unless m
+    neg      = m[1] is '-'
+    intPart  = m[2] ?? ''
+    fracPart = if m[2]? then (m[3] ?? '') else (m[4] ?? '')
+    expStr   = m[5]
+
+    # Bounded exponent parse (no parseInt on an unbounded digit run).
+    parsedExp = if expStr? then parseBoundedExp(expStr) else 0
+    finalExp  = parsedExp - fracPart.length
+    throw new DecimalRangeError "exponent out of range" unless Number.isSafeInteger(finalExp) and Math.abs(finalExp) <= LIMITS.maxAbsExponent
+
+    # Check significant-digit count before materializing the BigInt.
+    sig = ((intPart + fracPart).replace(/^0+/, '')) or '0'
+    throw new DecimalResourceLimitError "coefficient exceeds maxDigits (#{LIMITS.maxDigits})" if sig.length > LIMITS.maxDigits
+    coef = BigInt(sig)
+    coef = -coef if neg and coef isnt 0n
+    new Decimal coef, finalExp
+
+  @from: (v: DecimalLike): Decimal ->
+    return v if v instanceof Decimal
+    return Decimal.fromParts(v, 0) if typeof v is 'bigint'
+    if typeof v is 'number'
+      throw new DecimalUnsafeConversionError "Decimal.from(number) requires a safe integer (got #{v}); pass a string for fractional values" unless Number.isSafeInteger(v)
+      return new Decimal(BigInt(v), 0)
+    return Decimal.parse(v) if typeof v is 'string'
+    throw new DecimalInvalidOperationError "cannot construct Decimal from #{kind(v)}"
+
+  @fromParts: (coef: bigint, exp: number): Decimal ->
+    throw new DecimalInvalidOperationError "fromParts coef must be a bigint" unless typeof coef is 'bigint'
+    throw new DecimalRangeError "fromParts exp out of range" unless Number.isSafeInteger(exp) and Math.abs(exp) <= LIMITS.maxAbsExponent
+    throw new DecimalResourceLimitError "coefficient exceeds maxDigits (#{LIMITS.maxDigits})" if digitCount(coef) > LIMITS.maxDigits
+    new Decimal coef, exp
+
+  # units * 10^-scale, e.g. fromScaledInteger(12345, 2) -> 123.45 (cents -> dollars).
+  @fromScaledInteger: (units: bigint | number, scale: number): Decimal ->
+    u = switch typeof units
+      when 'bigint' then units
+      when 'number'
+        throw new DecimalUnsafeConversionError "fromScaledInteger units must be a safe integer" unless Number.isSafeInteger(units)
+        BigInt(units)
+      else throw new DecimalInvalidOperationError "fromScaledInteger units must be a bigint or safe integer"
+    throw new DecimalRangeError "scale out of range" unless Number.isInteger(scale) and Math.abs(scale) <= LIMITS.maxAbsExponent
+    Decimal.fromParts u, -scale
+
+  # ── Sign helpers ────────────────────────────────────────────────────────────
+
+  signum: (): number -> if @coef < 0n then -1 else if @coef > 0n then 1 else 0
+  isZero: (): boolean -> @coef is 0n
+  neg: (): Decimal -> new Decimal(-@coef, @exp)
+  abs: (): Decimal -> new Decimal(absBig(@coef), @exp)
+
+  # ── Exact arithmetic (+ - *) ────────────────────────────────────────────────
+
+  add: (other: DecimalLike): Decimal ->
+    b = Decimal.from(other)
+    targetExp = Math.min(@exp, b.exp)
+    estA = scaledDigits(@coef, @exp - targetExp)
+    estB = scaledDigits(b.coef, b.exp - targetExp)
+    throw new DecimalResourceLimitError "addition result would exceed maxDigits (#{LIMITS.maxDigits})" if Math.max(estA, estB) + 1 > LIMITS.maxDigits
+    ac = scaleCoef(@coef, @exp - targetExp)
+    bc = scaleCoef(b.coef, b.exp - targetExp)
+    new Decimal ac + bc, targetExp
+
+  sub: (other: DecimalLike): Decimal -> @add Decimal.from(other).neg()
+
+  mul: (other: DecimalLike): Decimal ->
+    b = Decimal.from(other)
+    re = @exp + b.exp
+    throw new DecimalRangeError "product exponent out of range" unless Number.isSafeInteger(re) and Math.abs(re) <= LIMITS.maxAbsExponent
+    return new Decimal(0n, re) if @coef is 0n or b.coef is 0n
+    throw new DecimalResourceLimitError "multiplication result would exceed maxDigits (#{LIMITS.maxDigits})" if digitCount(@coef) + digitCount(b.coef) > LIMITS.maxDigits
+    new Decimal @coef * b.coef, re
+
+  # ── Division ────────────────────────────────────────────────────────────────
+  #
+  # No defaulted scale, ever. `divToScale` rounds to an explicit scale + mode;
+  # `divExact` returns the exact quotient or throws if it does not terminate.
+
+  divToScale: (other: DecimalLike, scale: number, mode: RoundingMode): Decimal ->
+    assertMode mode
+    b = Decimal.from(other)
+    throw new DecimalDivisionByZeroError "division by zero" if b.coef is 0n
+    throw new DecimalRangeError "scale out of range" unless Number.isInteger(scale) and Math.abs(scale) <= LIMITS.maxAbsExponent
+    return new Decimal(0n, -scale) if @coef is 0n
+
+    # quotient * 10^-scale ≈ a/b ; shift so integer division yields the digits.
+    shift = @exp - b.exp + scale
+    sign  = (if (@coef < 0n) isnt (b.coef < 0n) then -1 else 1)
+
+    # |a / (b·10^-shift)| < 0.5 once the denominator has 2+ more digits than the
+    # numerator — the quotient is 0, so skip building the huge power entirely.
+    if shift < 0 and digitCount(b.coef) + (-shift) > digitCount(@coef) + 1
+      q0 = if shouldRoundUp(1n, 3n, 0n, sign, mode) then 1n else 0n
+      return new Decimal (if sign < 0 then -q0 else q0), -scale
+
+    throw new DecimalResourceLimitError "division would exceed maxDigits (#{LIMITS.maxDigits})" if digitCount(@coef) + Math.max(shift, 0) > LIMITS.maxDigits
+    [num, den] =
+      if shift >= 0
+        [@coef * pow10(shift), b.coef]
+      else
+        [@coef, b.coef * pow10(-shift)]
+
+    aNum = absBig num
+    aDen = absBig den
+    q    = aNum / aDen
+    rem  = aNum % aDen
+    q   += 1n if shouldRoundUp(rem, aDen, q, sign, mode)
+    new Decimal (if sign < 0 then -q else q), -scale
+
+  # Exact division — terminates iff the reduced denominator has only 2/5 factors.
+  divExact: (other: DecimalLike): Decimal ->
+    b = Decimal.from(other)
+    throw new DecimalDivisionByZeroError "division by zero" if b.coef is 0n
+    if @coef is 0n
+      ze = @exp - b.exp
+      throw new DecimalRangeError "exact division exponent out of range" unless Number.isSafeInteger(ze) and Math.abs(ze) <= LIMITS.maxAbsExponent
+      return new Decimal(0n, ze)
+    g    = gcdBig(absBig(@coef), absBig(b.coef))
+    nc   = @coef / g
+    dc   = b.coef / g
+    sign = (if (nc < 0n) isnt (dc < 0n) then -1 else 1)
+    den  = absBig dc
+    twos = 0
+    fives = 0
+    while den % 2n is 0n
+      den = den / 2n
+      twos += 1
+    while den % 5n is 0n
+      den = den / 5n
+      fives += 1
+    throw new DecimalNonTerminatingError "exact division does not terminate; use divToScale(divisor, scale, mode)" unless den is 1n
+    # Scale numerator and denominator so the denominator becomes 10^p, then the
+    # quotient is exact: nc / (2^twos·5^fives) = nc·2^(p-twos)·5^(p-fives) / 10^p.
+    p    = Math.max(twos, fives)
+    mul2 = p - twos
+    mul5 = p - fives
+    # Preflight (digits via log10, exponent) BEFORE building the 2^/5^ powers.
+    estDigits = digitCount(nc) + Math.ceil(mul2 * LOG10_2) + Math.ceil(mul5 * LOG10_5)
+    throw new DecimalResourceLimitError "exact division result exceeds maxDigits (#{LIMITS.maxDigits})" if estDigits > LIMITS.maxDigits
+    exp = (@exp - b.exp) - p
+    throw new DecimalRangeError "exact division exponent out of range" unless Number.isSafeInteger(exp) and Math.abs(exp) <= LIMITS.maxAbsExponent
+    numerator = absBig(nc) * (2n ** BigInt(mul2)) * (5n ** BigInt(mul5))
+    coef      = if sign < 0 then -numerator else numerator
+    new Decimal coef, exp
+
+  # ── Rounding / scale ─────────────────────────────────────────────────────────
+
+  # Round to a fixed number of fractional digits (target exponent -scale).
+  quantizeToScale: (scale: number, mode: RoundingMode): Decimal ->
+    assertMode mode
+    throw new DecimalRangeError "scale out of range" unless Number.isInteger(scale) and Math.abs(scale) <= LIMITS.maxAbsExponent
+    targetExp = -scale
+    return new Decimal(0n, targetExp) if @coef is 0n
+    if targetExp <= @exp
+      # Expand: append zeros, no rounding.
+      shift = @exp - targetExp
+      throw new DecimalResourceLimitError "quantize would exceed maxDigits (#{LIMITS.maxDigits})" if digitCount(@coef) + shift > LIMITS.maxDigits
+      return new Decimal(@coef * pow10(shift), targetExp)
+    # Round off (targetExp - @exp) low digits.
+    drop = targetExp - @exp
+    sign = if @coef < 0n then -1 else 1
+    a    = absBig @coef
+    if a is 0n
+      new Decimal 0n, targetExp
+    else if drop >= digitCount(a) + 1
+      # Value is strictly less than half a ulp at the target scale: q is 0,
+      # remainder is non-zero. Decide with a tiny surrogate (1 of 100).
+      q = if shouldRoundUp(1n, 100n, 0n, sign, mode) then 1n else 0n
+      new Decimal (if sign < 0 then -q else q), targetExp
+    else
+      divisor = pow10(drop)
+      q   = a / divisor
+      rem = a % divisor
+      q  += 1n if shouldRoundUp(rem, divisor, q, sign, mode)
+      new Decimal (if sign < 0 then -q else q), targetExp
+
+  # ── Comparison (value-based; never allocates on a huge exponent gap) ──────────
+
+  cmp: (other: DecimalLike): number ->
+    b  = Decimal.from(other)
+    sa = @signum()
+    sb = b.signum()
+    return (if sa < sb then -1 else 1) if sa isnt sb
+    return 0 if sa is 0
+    # Same non-zero sign — compare order of magnitude via adjusted exponents.
+    adjA = @exp + digitCount(@coef) - 1
+    adjB = b.exp + digitCount(b.coef) - 1
+    if adjA isnt adjB
+      mag = if adjA < adjB then -1 else 1
+      return if sa > 0 then mag else -mag
+    # Same magnitude — exponents differ by at most the digit counts, so align
+    # to the min exponent (bounded by maxDigits) and compare coefficients.
+    te = Math.min(@exp, b.exp)
+    ca = @coef * pow10(@exp - te)
+    cb = b.coef * pow10(b.exp - te)
+    if ca < cb then -1 else if ca > cb then 1 else 0
+
+  eq:  (other: DecimalLike): boolean -> @cmp(other) is 0
+  lt:  (other: DecimalLike): boolean -> @cmp(other) < 0
+  lte: (other: DecimalLike): boolean -> @cmp(other) <= 0
+  gt:  (other: DecimalLike): boolean -> @cmp(other) > 0
+  gte: (other: DecimalLike): boolean -> @cmp(other) >= 0
+
+  # ── DuckDB DECIMAL(p, s) fit check ────────────────────────────────────────────
+
+  # True iff the value is exactly representable as DECIMAL(precision, scale):
+  # it quantizes to `scale` without loss AND uses at most `precision` digits.
+  fitsDecimal: (precision: number, scale: number): boolean ->
+    throw new DecimalInvalidOperationError "precision must be a positive integer" unless Number.isInteger(precision) and precision > 0
+    throw new DecimalInvalidOperationError "scale must be an integer between 0 and precision" unless Number.isInteger(scale) and scale >= 0 and scale <= precision
+    try
+      q = @quantizeToScale(scale, "UNNECESSARY")
+    catch e
+      return false if e instanceof DecimalInexactError
+      throw e
+    digitCount(q.coef) <= precision
+
+  # ── Formatting / conversion ───────────────────────────────────────────────────
+
+  # Plain decimal string, preserving scale (trailing zeros). NOT value-canonical
+  # (use toCanonicalString for that).
+  toString: (): string ->
+    if @coef is 0n
+      return "0" if @exp >= 0
+      throw new DecimalResourceLimitError "rendered string would exceed maxOutputLength (#{LIMITS.maxOutputLength})" if 2 + (-@exp) > LIMITS.maxOutputLength
+      return "0." + "0".repeat(-@exp)
+    neg     = @coef < 0n
+    signLen = if neg then 1 else 0
+    digits  = absBig(@coef).toString()
+    body =
+      if @exp >= 0
+        throw new DecimalResourceLimitError "rendered string would exceed maxOutputLength (#{LIMITS.maxOutputLength})" if signLen + digits.length + @exp > LIMITS.maxOutputLength
+        digits + "0".repeat(@exp)
+      else
+        scale = -@exp
+        len   = if digits.length <= scale then signLen + 2 + scale else signLen + digits.length + 1
+        throw new DecimalResourceLimitError "rendered string would exceed maxOutputLength (#{LIMITS.maxOutputLength})" if len > LIMITS.maxOutputLength
+        if digits.length <= scale
+          "0." + digits.padStart(scale, "0")
+        else
+          digits.slice(0, digits.length - scale) + "." + digits.slice(digits.length - scale)
+    if neg then "-" + body else body
+
+  # Value-canonical string (insignificant trailing zeros stripped).
+  toCanonicalString: (): string ->
+    [c, e] = reduceParts(@coef, @exp)
+    new Decimal(c, e).toString()
+
+  # Stable value-equality key for Map/Set use (1.0 and 1.00 share a key).
+  canonicalKey: (): string ->
+    [c, e] = reduceParts(@coef, @exp)
+    "#{c.toString()}e#{e}"
+
+  toJSON: (): string -> @toString()
+
+  # Fixed number of fractional digits, with explicit rounding.
+  toFixed: (scale: number, mode: RoundingMode): string -> @quantizeToScale(scale, mode).toString()
+
+  # Lossy, explicit. Throws rather than silently returning Infinity.
+  toNumber: (): number ->
+    n = Number(@toString())
+    throw new DecimalUnsafeConversionError "value is not finite as a JS number" unless Number.isFinite(n)
+    n
+
+  # The unscaled BigInt at `scale` (e.g. 1.23 at scale 2 -> 123n).
+  toScaledInteger: (scale: number, mode: RoundingMode): bigint ->
+    rounded = @quantizeToScale(scale, mode)
+    rounded.coef
+
+  # Integer cents as a JS number (matches @rip-lang/validate's cents convention).
+  # Throws if the result is outside the JS safe-integer range.
+  toCentsNumber: (mode: RoundingMode): number ->
+    cents = @toScaledInteger(2, mode)
+    throw new DecimalUnsafeConversionError "cents value #{cents} exceeds the JS safe-integer range; use toScaledInteger(2, mode) for a bigint" if cents > 9007199254740991n or cents < -9007199254740991n
+    Number(cents)
+
+  # Block accidental implicit number coercion (`+d`, `d < 3`, `d == 1`).
+  valueOf: (): never ->
+    throw new DecimalInvalidOperationError "Decimal cannot be implicitly converted to a number; use .toNumber(), .toString(), or .cmp()"
+
+# ==[ D"19.99" — literal-only tagged constructor ]==============================
+#
+# `D"19.99"` parses a literal. Interpolation is rejected — dynamic input must go
+# through Decimal.parse so the failure is explicit, not silently stringified.
+
+export D = (strings: TemplateStringsArray, ...values: unknown[]): Decimal ->
+  throw new DecimalParseError 'D"..." takes a single string literal (no interpolation); use Decimal.parse for dynamic values' if values.length > 0 or strings.length isnt 1
+  Decimal.parse strings[0]
+
+# ==[ Schema coercer bridge (~:Decimal) ]=======================================
+#
+# Registers a `~:Decimal` coercer that hydrates a wire string/number into a
+# Decimal. This is additive — the lowercase `~:decimal` from @rip-lang/validate
+# (which returns a lossless STRING) is untouched. No-op when the schema runtime
+# isn't loaded. Apps can also register it under any name via registerDecimalCoercer.
+
+export registerDecimalCoercer = (name: string = "Decimal"): void ->
+  reg = globalThis.__ripSchema?.__schemaRegisterCoercer
+  return unless reg
+  coerce = (v) ->
+    try
+      Decimal.from v
+    catch
+      null
+  reg name, coerce
+  return
+
+registerDecimalCoercer()
