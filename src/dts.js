@@ -157,9 +157,11 @@ export function emitTypes(tokens, sexpr = null, source = '', schemaBehavior = nu
     let dd = 0;
     while (j < tokens.length) {
       let dt = tokens[j];
-      if (dt[0] === '(' || dt[0] === '[' || dt[0] === '{') dd++;
-      if (dt[0] === ')' || dt[0] === ']' || dt[0] === '}') {
-        if (dd === 0) break; // closing bracket of enclosing structure
+      if (dt[0] === '(' || dt[0] === '[' || dt[0] === '{' ||
+          dt[0] === 'CALL_START' || dt[0] === 'PARAM_START' || dt[0] === 'INDEX_START') dd++;
+      if (dt[0] === ')' || dt[0] === ']' || dt[0] === '}' ||
+          dt[0] === 'CALL_END' || dt[0] === 'PARAM_END' || dt[0] === 'INDEX_END') {
+        if (dd === 0) break; // closing bracket of the enclosing param list / pattern
         dd--;
       }
       if (dd === 0 && dt[1] === ',') break;
@@ -348,29 +350,34 @@ export function emitTypes(tokens, sexpr = null, source = '', schemaBehavior = nu
         continue;
       }
 
-      // Destructured object parameter: { a, b }
+      // Destructured object parameter: { a, b }. An EXTERNAL type annotation
+      // `({a, b}: {a: T, b: U})` lands on the closing `}` token's data.type and
+      // takes precedence over a type reconstructed from in-pattern annotations.
       if (tok[0] === '{') {
         depth--; // undo the depth++ from nesting tracker above
         let result = collectDestructuredObj(tokens, j);
         j = result.endJ;
-        if (result.hasAnyType) {
-          params.push(`${result.patternStr}: ${result.typeStr}`);
-        } else {
-          params.push(result.patternStr);
-        }
+        let ext = tokens[j - 1]?.data?.type;
+        let patternStr = result.patternStr;
+        // A whole-pattern default (`{…}: T = {}`) makes the param optional.
+        if (tokens[j]?.[0] === '=') { patternStr += '?'; j = skipDefault(tokens, j); }
+        if (ext) params.push(`${patternStr}: ${tsType(ext)}`);
+        else if (result.hasAnyType) params.push(`${patternStr}: ${result.typeStr}`);
+        else params.push(patternStr);
         continue;
       }
 
-      // Destructured array parameter: [ a, b ]
+      // Destructured array parameter: [ a, b ] (external type lands on `]`).
       if (tok[0] === '[') {
         depth--; // undo the depth++ from nesting tracker above
         let result = collectDestructuredArr(tokens, j);
         j = result.endJ;
-        if (result.hasAnyType) {
-          params.push(`${result.patternStr}: ${result.typeStr}`);
-        } else {
-          params.push(result.patternStr);
-        }
+        let ext = tokens[j - 1]?.data?.type;
+        let patternStr = result.patternStr;
+        if (tokens[j]?.[0] === '=') { patternStr += '?'; j = skipDefault(tokens, j); }
+        if (ext) params.push(`${patternStr}: ${tsType(ext)}`);
+        else if (result.hasAnyType) params.push(`${patternStr}: ${result.typeStr}`);
+        else params.push(patternStr);
         continue;
       }
 

@@ -11,6 +11,7 @@
 //   type errors mapped back to Rip source positions.
 
 import { Compiler, getStdlibCode } from './compiler.js';
+import { Lexer } from './lexer.js';
 import { STDLIB_TYPE_DECLS } from './stdlib.js';
 import { INTRINSIC_TYPE_DECLS, INTRINSIC_FN_DECL, ARIA_TYPE_DECLS, SIGNAL_INTERFACE, SIGNAL_FN, COMPUTED_INTERFACE, COMPUTED_FN, EFFECT_FN, ripDestructuredNames } from './dts.js';
 import './schema/loader-server.js';   // registers full schema runtime provider
@@ -367,18 +368,31 @@ export function walkRoutesDir(routesDir) {
 // Detect type annotations (:: followed by space or =) ignoring comments,
 // string literals, and prototype syntax (Class::method).
 export function hasTypeAnnotations(source) {
+  // Type aliases / interfaces don't lower to TYPE_ANNOTATION tokens, so detect
+  // them by name from the source first (cheap, and robust mid-edit).
   let inHeredoc = false;
-  return source.split('\n').some(line => {
-    // Track heredoc boundaries (''' or """)
+  const hasTypeDecl = source.split('\n').some(line => {
     const ticks = (line.match(/'''|"""/g) || []);
     for (const t of ticks) inHeredoc = !inHeredoc;
     if (inHeredoc) return false;
-    // Strip comment
-    line = line.replace(/#.*$/, '');
-    // Strip string literals (single and double quoted)
-    line = line.replace(/"(?:[^"\\]|\\.)*"/g, '""').replace(/'(?:[^'\\]|\\.)*'/g, "''");
-    return /::[ \t=]/.test(line) || /(?:^|export\s+)type\s+[A-Z]/.test(line.trimStart());
+    line = line.replace(/#.*$/, '').trimStart();
+    return /^(?:export\s+)?(?:type\s+[A-Z]|interface\s)/.test(line);
   });
+  if (hasTypeDecl) return true;
+  // Type ANNOTATIONS — single-colon (Rip 3.17) or `::` — both lower to a
+  // TYPE_ANNOTATION token after the rewriter runs. Tokenizing is the accurate
+  // test (a string scan can't tell `x: T = v` from the object `{x: T}`); fall
+  // back to the literal `::` heuristic if tokenization fails on a partial buffer.
+  try {
+    // The rewriter consumes type annotations into `.data.type` /
+    // `.data.returnType` on the annotated token (they don't survive as
+    // TYPE_ANNOTATION tokens), so detect that metadata.
+    for (const t of new Lexer().tokenize(source, { rewrite: true }))
+      if (t.data && (t.data.type || t.data.returnType)) return true;
+    return false;
+  } catch {
+    return /::[ \t=]/.test(source.replace(/#.*$/gm, ''));
+  }
 }
 
 export function countLines(str) {
@@ -1616,11 +1630,34 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
           const nm = inj.sig.match(/function\s+(\w+)/)?.[1];
           if (nm) sigCountByName.set(nm, (sigCountByName.get(nm) || 0) + 1);
         }
+        // A `{…}`/`[…]` destructuring parameter can't be reliably typed inline:
+        // an EXTERNAL type (`({a}: {a: T})`) is attached to the closing-bracket
+        // token and lost to the AST-based inline emitter, while an in-pattern
+        // type reconstructs fine. Rather than split those cases, force the param
+        // copy from the `.d.ts` signature (which carries the correct type for
+        // both forms via dts.js) whenever the param list opens a pattern.
+        function paramListHasPattern(line) {
+          const open = line.indexOf('(');
+          if (open < 0) return false;
+          let depth = 0, atParamStart = false;
+          for (let k = open; k < line.length; k++) {
+            const c = line[k];
+            if (c === '(') { depth++; if (depth === 1) atParamStart = true; continue; }
+            if (c === ')') { if (--depth === 0) return false; continue; }
+            if (depth !== 1) continue;
+            if (c === ',') { atParamStart = true; continue; }
+            if (c === ' ' || c === '\t') continue;
+            if (atParamStart && (c === '{' || c === '[')) return true;
+            atParamStart = false;
+          }
+          return false;
+        }
         function isSelfSufficient(inj) {
           const nm = inj.sig.match(/function\s+(\w+)/)?.[1];
           if (!nm || sigCountByName.get(nm) !== 1) return false;
           if (extractTypeParams(inj.sig)) return false;
           const impl = cl[inj.codeLine];
+          if (paramListHasPattern(impl)) return false;
           // Arrow detection is authoritative and runs first: it's a precise
           // structural scan, so a fat-arrow line can't be misread by the
           // function-form brace heuristic below (which would otherwise pick a
@@ -1710,7 +1747,11 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
         // would force it to `any`. Functions with any untyped param would fire
         // TS7006 twice (once on the injected sig, once on the impl) at the same
         // source position — skip the injection so the user sees a single error.
-        const overloads = injections.filter(inj => !isSelfSufficient(inj) && hasExplicitReturn(inj.sig) && !hasUntypedParam(inj.sig));
+        // Destructuring-param functions get their full typed signature copied
+        // onto the implementation (above); an extra overload signature is
+        // redundant and, for a rename pattern (`{name: userName}`), its
+        // body-less form makes `userName` an "unused renaming" (TS2842). Skip it.
+        const overloads = injections.filter(inj => !isSelfSufficient(inj) && hasExplicitReturn(inj.sig) && !hasUntypedParam(inj.sig) && !paramListHasPattern(cl[inj.codeLine]));
 
         // Adjust reverseMap: each overload injection shifts subsequent code lines down by 1.
         // Compare against the original genLine (not genLine + offset) because bottom-up

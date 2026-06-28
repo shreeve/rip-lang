@@ -750,6 +750,17 @@ function reclassifyColonTypes(tokens) {
           tokens[i][0] = 'TYPE_ANNOTATION';
           f.sawType = true;
           enterType();
+        } else if (prevTag === '}' || prevTag === ']' || prevTag === 'INDEX_END') {
+          // Context A — external destructuring param type, TS-style:
+          // `({pat}: Type)` / `([pat]: Type)`. The `:` follows the ROOT pattern
+          // close (the stack top is this param frame, so the pattern's own
+          // brackets have already been popped — a nested pattern's `:` is seen
+          // while an inner frame is on top and stays a rename). In-pattern `:`
+          // therefore keeps its destructuring-rename meaning; the type lives
+          // outside the pattern, after `}`/`]`.
+          tokens[i][0] = 'TYPE_ANNOTATION';
+          f.sawType = true;
+          enterType();
         }
       }
     }
