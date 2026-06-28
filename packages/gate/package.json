@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/gate",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "Tiny forward-auth service for vanilla Caddy. Random-token file-backed sessions with server-side revocation, password login, no plugin required.",
   "type": "module",
   "main": "index.rip",
