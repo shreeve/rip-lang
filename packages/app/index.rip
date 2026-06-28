@@ -690,7 +690,7 @@ _restoreSaved = (target, saved) ->
 #
 # Returns a disposer that unsubscribes the autosave effect, removes the
 # beforeunload handler, and writes one final snapshot before unwiring.
-export def persistStash(app: Stash, opts?: { local?: boolean, key?: string } = {}): Disposer
+export def persistStash(app: Stash, opts: { local?: boolean, key?: string } = {}): Disposer
   assertBrowser 'persistStash'
   target = unwrapStash(app) or app
   # Double-call guard returns a no-op disposer. Parenthesized on purpose:
@@ -745,7 +745,7 @@ export def persistStash(app: Stash, opts?: { local?: boolean, key?: string } = {
 # Call .refetch() to reload.
 # ==============================================================================
 
-export def createResource<T>(fn: (signal?: AbortSignal) => Promise<T>, opts?: { initial?: T | null, lazy?: boolean } = {}): Resource<T>
+export def createResource<T>(fn: (signal?: AbortSignal) => Promise<T>, opts: { initial?: T | null, lazy?: boolean } = {}): Resource<T>
   # `?? null` instead of `or null` so falsy initials like 0, '', false
   # survive (the previous `or` collapsed them to null).
   _data       = __state(opts.initial ?? null)
@@ -1075,7 +1075,7 @@ export def source<T extends NonNullSourceValue, A extends unknown[]>(opts: Sourc
 # to capture the component lexically.
 # ==============================================================================
 
-export def createMutation<R>(fn: (...args: any[]) => Promise<R> | R, opts?: { onSuccess?: (r: R) => void, onError?: (e: unknown) => void } = {}): Mutation<R>
+export def createMutation<R>(fn: (...args: any[]) => Promise<R> | R, opts: { onSuccess?: (r: R) => void, onError?: (e: unknown) => void } = {}): Mutation<R>
   _pending   = __state(false)
   _succeeded = __state(false)
   _error     = __state(null)
@@ -1404,7 +1404,7 @@ getLayoutChain = (routeFile, root, layouts) ->
     chain.push layouts.get(dir) if layouts.has(dir)
   chain
 
-export def createRouter(components: ComponentsStore, opts?: RouterOpts = {}): Router
+export def createRouter(components: ComponentsStore, opts: RouterOpts = {}): Router
   assertBrowser 'createRouter'
   root = opts.root or '_route'
   base = opts.base or ''
@@ -2724,7 +2724,7 @@ connectWatch = (url) ->
 # connects SSE hot-reload.
 # ==============================================================================
 
-export def launch(opts?: LaunchOpts = {}): Promise<LaunchResult>
+export def launch(opts: LaunchOpts = {}): Promise<LaunchResult>
   assertBrowser 'launch'
   appBase = (opts.base or '').replace(/\/+$/, '')   # strip trailing slashes
   target = opts.target or '#app'
@@ -3267,7 +3267,7 @@ _ariaResetPositionStyles = (el) ->
   for prop in _ARIA_POSITION_OWNED
     el.style[prop] = ''
 
-_ariaPosition = (trigger, floating, opts?: { placement?: string, offset?: number, matchWidth?: boolean } = {}) ->
+_ariaPosition = (trigger, floating, opts: { placement?: string, offset?: number, matchWidth?: boolean } = {}) ->
   return unless trigger and floating
   placement = opts.placement ?? 'bottom start'
   offset = opts.offset ?? 4

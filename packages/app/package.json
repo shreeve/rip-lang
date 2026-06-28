@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/app",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "type": "module",
   "description": "Rip App framework — stash, resource, timing, components store, file-based router, renderer, launch, and shared ARIA helpers. Bundled into rip.min.js.",
   "main": "index.rip",
