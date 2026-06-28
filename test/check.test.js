@@ -95,7 +95,7 @@ bad = b.bogus
 
 // ── 2. A typed local must not leak its annotation onto same-named locals ──
 //
-// `items:: OrderItem[]` in one function used to stamp `: OrderItem[]` onto
+// `items: OrderItem[]` in one function used to stamp `: OrderItem[]` onto
 // every same-named hoist in the file: dts emitted a header `let` line for
 // the function-local, and typecheck.js's inline-let merge applies header
 // types to body hoists by NAME. Fixed: function-locals no longer emit the
@@ -108,7 +108,7 @@ check('sibling functions with one typed local check independently', () => {
   items.length
 
 g = ->
-  items:: string[] = []
+  items: string[] = []
   items.push('x')
   items.length
 `,
@@ -124,7 +124,7 @@ check("the untyped sibling keeps its own inferred type, not the annotation", () 
   items.length
 
 g = ->
-  items:: string[] = []
+  items: string[] = []
   items.length
 `,
   });
@@ -144,7 +144,7 @@ check('reads in the guarded render branch narrow to non-null', () => {
     'dash.rip': `type Order = { id: number, total: number }
 
 export Dash = component
-  order:: Order | null := null
+  order: Order | null := null
 
   render
     if order
@@ -162,7 +162,7 @@ check('reads in the else branch still see the null', () => {
     'dash.rip': `type Order = { id: number, total: number }
 
 export Dash = component
-  order:: Order | null := null
+  order: Order | null := null
 
   render
     if order
@@ -187,7 +187,7 @@ const SOURCE_STASH = `import { source } from '@rip-lang/app'
 export stash =
   cart: { items: [] }
   user: source { fetch: -> Promise.resolve({ firstName: 'Ada', lastName: 'Lovelace' }) }
-  order: source { fetch: (id:: string) -> Promise.resolve({ id: id, total: 42 }) }
+  order: source { fetch: (id: string) -> Promise.resolve({ id: id, total: 42 }) }
 `;
 
 check('gated binding is non-null at every read site', () => {
@@ -273,7 +273,7 @@ check('gating a plain key errors at check time (module-binding indirection)', ()
     'index.rip': `export ok = true\n`,
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
-orders:: number[] = []
+orders: number[] = []
 
 export stash =
   orders: orders
@@ -526,12 +526,12 @@ check('a required prop bound with <=> checks clean (binding satisfies it)', () =
   const r = checkProject({
     'index.rip': `export ok = true\n`,
     'c.rip': `export Parent = component
-  mode:: 'a' | 'b' := 'a'
+  mode: 'a' | 'b' := 'a'
   render
     Child mode <=> mode
 
 Child = component
-  @mode:: 'a' | 'b'
+  @mode: 'a' | 'b'
   render
     p "#{mode}"
 `,
@@ -547,7 +547,7 @@ check('a required prop passed by direct value still checks clean', () => {
     Child mode: 'a'
 
 Child = component
-  @mode:: 'a' | 'b'
+  @mode: 'a' | 'b'
   render
     p "#{mode}"
 `,
@@ -563,8 +563,8 @@ check('omitting a required prop entirely still errors', () => {
     Child config: 'x'
 
 Child = component
-  @config:: string
-  @mode:: 'a' | 'b'
+  @config: string
+  @mode: 'a' | 'b'
   render
     p "#{mode}"
 `,
@@ -598,7 +598,7 @@ Picker = component
     p "#{term}"
 
 Sibling = component
-  @label:: string
+  @label: string
   render
     p "#{label}"
 `,
@@ -620,7 +620,7 @@ Picker = component
     p "#{term}"
 
 Sibling = component
-  @label:: string
+  @label: string
   render
     p "#{label}"
 `,
@@ -745,7 +745,7 @@ export stash =
 check('untyped onError param checks clean and is typed, not any', () => {
   const r = checkProject({
     'comp.rip': `export Layout = component
-  msg:: string | null := null
+  msg: string | null := null
   onError: (err) -> msg = err.message ?? 'unknown'
   render null
 `,
@@ -754,7 +754,7 @@ check('untyped onError param checks clean and is typed, not any', () => {
 
   const misuse = checkProject({
     'comp.rip': `export Layout = component
-  msg:: string | null := null
+  msg: string | null := null
   onError: (err) -> msg = err.bogus
   render null
 `,
@@ -765,16 +765,16 @@ check('untyped onError param checks clean and is typed, not any', () => {
 
 // ── 8. `?` widens a member with an explicit `:= undefined` initializer ──
 //
-// `x?:: string := undefined` used to declare Signal<string> but initialize
+// `x?: string := undefined` used to declare Signal<string> but initialize
 // it with undefined — an immediate TS2322. The `?` marker now widens the
 // payload to `| undefined` when the initializer is the undefined literal,
-// matching the no-initializer prop case (`@label?:: T`). A `?` with a real
+// matching the no-initializer prop case (`@label?: T`). A `?` with a real
 // default stays unwidened (the default fills the gap).
 
-check("x?:: T := undefined declares Signal<T | undefined>; use still narrows", () => {
+check("x?: T := undefined declares Signal<T | undefined>; use still narrows", () => {
   const r = checkProject({
     'comp.rip': `export C = component
-  gateError?:: string := undefined
+  gateError?: string := undefined
   msg ~= gateError ?? 'ok'
   render null
 `,
@@ -783,7 +783,7 @@ check("x?:: T := undefined declares Signal<T | undefined>; use still narrows", (
 
   const unguarded = checkProject({
     'comp.rip': `export C = component
-  gateError?:: string := undefined
+  gateError?: string := undefined
   bad ~= gateError.length
   render null
 `,
@@ -836,7 +836,7 @@ const routeProject = (homeBody) => ({
   'index.rip': `x = 1\n`,
   'app/stash.rip': `stash =\n  count: 0\n`,
   'app/components/link.rip': `export NavLink = component extends a
-  @outline?:: boolean
+  @outline?: boolean
 
   render
     a
@@ -889,9 +889,9 @@ check('router.replace: a valid route passes; a path typo errors', () => {
 });
 
 check('router.replace / push: a dynamic (non-literal) string passes', () => {
-  let r = checkProject(routerBodyProject(`  url:: string := '/whatever'\n  mounted: -> @router.replace(url)`));
+  let r = checkProject(routerBodyProject(`  url: string := '/whatever'\n  mounted: -> @router.replace(url)`));
   assert(r.ok, 'dynamic string replace should pass:\n' + r.out);
-  r = checkProject(routerBodyProject(`  url:: string := '/whatever'\n  mounted: -> @router.push(url)`));
+  r = checkProject(routerBodyProject(`  url: string := '/whatever'\n  mounted: -> @router.push(url)`));
   assert(r.ok, 'dynamic string push should pass:\n' + r.out);
 });
 
@@ -917,25 +917,25 @@ const routePathProject = (body) => ({
 });
 
 check('RoutePath: a valid route literal passes', () => {
-  const r = checkProject(routePathProject(`home:: RoutePath = '/orders'`));
+  const r = checkProject(routePathProject(`home: RoutePath = '/orders'`));
   assert(r.ok, 'expected clean check, got:\n' + r.out);
 });
 
 check('RoutePath: a bogus route literal errors', () => {
-  const r = checkProject(routePathProject(`home:: RoutePath = '/nope'`));
+  const r = checkProject(routePathProject(`home: RoutePath = '/nope'`));
   assert(!r.ok, 'expected a route error on RoutePath = "/nope"');
   assert(/not assignable/.test(r.out), 'unexpected output:\n' + r.out);
 });
 
 check('RoutePath: a file-local declaration wins (no duplicate-identifier clash)', () => {
-  const r = checkProject(routePathProject(`type RoutePath = 'custom'\n\nval:: RoutePath = 'custom'`));
+  const r = checkProject(routePathProject(`type RoutePath = 'custom'\n\nval: RoutePath = 'custom'`));
   assert(r.ok, 'a user-defined RoutePath should win cleanly:\n' + r.out);
 });
 
 // ── Single-quoted string literals are valid prop defaults ──
 //
 // validatePropDefault only recognized double-quoted literals (/^"[^"]*"$/),
-// so a single-quoted default like `@value?:: string := ''` was reported as
+// so a single-quoted default like `@value?: string := ''` was reported as
 // `Type '''' is not assignable to type 'string'` — a false positive, since
 // '' and "" are the same empty string in Rip. String-literal unions escaped
 // it only by accident (their single-quoted members also failed the regex, so
@@ -945,8 +945,8 @@ check('RoutePath: a file-local declaration wins (no duplicate-identifier clash)'
 check('single-quoted string prop defaults pass', () => {
   const r = checkProject({
     'c.rip': `export Input = component extends input
-  @value?:: string := ''
-  @label?:: string := 'hi'
+  @value?: string := ''
+  @label?: string := 'hi'
   render
     input
 `,
@@ -957,7 +957,7 @@ check('single-quoted string prop defaults pass', () => {
 check('single-quoted defaults in a string-literal union pass; a non-member errors', () => {
   let r = checkProject({
     'c.rip': `export Button = component extends button
-  @variant?:: 'primary' | 'secondary' := 'primary'
+  @variant?: 'primary' | 'secondary' := 'primary'
   render
     button
 `,
@@ -965,7 +965,7 @@ check('single-quoted defaults in a string-literal union pass; a non-member error
   assert(r.ok, 'single-quoted union default should pass:\n' + r.out);
   r = checkProject({
     'c.rip': `export Button = component extends button
-  @variant?:: 'primary' | 'secondary' := 'tertiary'
+  @variant?: 'primary' | 'secondary' := 'tertiary'
   render
     button
 `,
@@ -977,7 +977,7 @@ check('single-quoted defaults in a string-literal union pass; a non-member error
 check('a genuinely mismatched default still errors (string default on number)', () => {
   const r = checkProject({
     'c.rip': `export Box = component extends div
-  @count?:: number := 'oops'
+  @count?: number := 'oops'
   render
     div
 `,
@@ -997,8 +997,8 @@ check('a genuinely mismatched default still errors (string default on number)', 
 check('exclude patterns with route-dir brackets/parens are honored', () => {
   const files = {
     'app/routes/index.rip': `export Home = component\n  render\n    div\n`,
-    'app/routes/[id]/x.rip': `bad:: number := 'oops'\n`,
-    'app/routes/(app)/y.rip': `bad:: number := 'oops'\n`,
+    'app/routes/[id]/x.rip': `bad: number := 'oops'\n`,
+    'app/routes/(app)/y.rip': `bad: number := 'oops'\n`,
   };
   // Sanity: without the exclude, the bracketed files' errors surface.
   let r = checkProject(files);

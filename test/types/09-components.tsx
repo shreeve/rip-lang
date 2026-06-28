@@ -1,7 +1,7 @@
 // 09-components.tsx — Typed component props
 //
 // React equivalent of the Rip component file. Direct comparison:
-// Rip's @prop:: type := default → React's destructured props + useState
+// Rip's @prop: type := default → React's destructured props + useState
 // Rip's ~= computed             → derived variable (React Compiler handles memoization)
 // Rip's method: -> ...          → function in component body
 // Rip's render block            → React's JSX return

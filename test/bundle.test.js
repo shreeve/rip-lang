@@ -158,8 +158,8 @@ check('compileToJS handles components', () => {
 });
 
 check('compileToJS strips type annotations from runtime output', () => {
-  const out = globalThis.compileToJS('count:: number = 42; count');
-  if (out.includes(':: number')) throw new Error('types leaked: ' + out);
+  const out = globalThis.compileToJS('count: number = 42; count');
+  if (out.includes(': number')) throw new Error('types leaked: ' + out);
   if (!out.includes('42')) throw new Error('value missing: ' + out);
 });
 

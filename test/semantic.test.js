@@ -195,7 +195,7 @@ check('component member child → property', () => expectType(tokens, SRC, 'name
 // The render block is the subtle part, but the LSP classifies ordinary code
 // too; pin the common shapes so a remap change can't silently regress them.
 
-const TYPES_SRC = ['type Mode = "a" | "b"', 'kind:: Mode := "a"'].join('\n');
+const TYPES_SRC = ['type Mode = "a" | "b"', 'kind: Mode := "a"'].join('\n');
 const typeT = await server.tokens('types.rip', TYPES_SRC);
 check('type alias declaration and reference → type', () => {
   expectType(typeT, TYPES_SRC, 'Mode', 'type', 1);

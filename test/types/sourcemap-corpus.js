@@ -75,23 +75,23 @@ const flip = (name)        => { gapsResolved++; lines.push(`  ${green('✓')} ${
 // ── pass bucket — must round-trip exactly ────────────────────────────────────
 
 const PASS = [
-  { name: 'typed local declaration',     src: 'x:: number = 42\nx + 1\n',                              line: 0, token: 'x' },
-  { name: 'typed local reference',       src: 'count:: number = 0\ncount + 1\n',                       line: 1, token: 'count' },
-  { name: 'arrow param (typed)',         src: 'age = (dob:: string, asOf:: string) -> dob\n',          line: 0, token: 'asOf' },
-  { name: 'arrow optional param `?`',    src: 'f = (x:: number, y?:: number) -> x\nf(1)\n',            line: 0, token: 'y' },
-  { name: 'class method param',          src: 'class C\n  greet: (name:: string) -> name\n',           line: 1, token: 'name' },
+  { name: 'typed local declaration',     src: 'x: number = 42\nx + 1\n',                              line: 0, token: 'x' },
+  { name: 'typed local reference',       src: 'count: number = 0\ncount + 1\n',                       line: 1, token: 'count' },
+  { name: 'arrow param (typed)',         src: 'age = (dob: string, asOf: string) -> dob\n',          line: 0, token: 'asOf' },
+  { name: 'arrow optional param `?`',    src: 'f = (x: number, y?: number) -> x\nf(1)\n',            line: 0, token: 'y' },
+  { name: 'class method param',          src: 'class C\n  greet: (name: string) -> name\n',           line: 1, token: 'name' },
   { name: 'object literal key',          src: 'p = { totalPrice: 10 }\np.totalPrice\n',                line: 0, token: 'totalPrice' },
   { name: 'property access',             src: 'p = { totalPrice: 10 }\np.totalPrice\n',                line: 1, token: 'totalPrice' },
-  { name: 'call callee',                 src: 'add = (a:: number, b:: number) -> a + b\nadd(1, 2)\n',  line: 1, token: 'add' },
-  { name: 'repeated ident — signature',  src: 'age = (dob:: string, asOf:: string) -> asOf\nasOf = "x"\n', line: 0, token: 'asOf' },
-  { name: 'repeated ident — statement',  src: 'age = (dob:: string, asOf:: string) -> asOf\nasOf = "x"\n', line: 1, token: 'asOf' },
-  // RFC 12 phase 2: function return types are emitted inline (`def f():: T`),
+  { name: 'call callee',                 src: 'add = (a: number, b: number) -> a + b\nadd(1, 2)\n',  line: 1, token: 'add' },
+  { name: 'repeated ident — signature',  src: 'age = (dob: string, asOf: string) -> asOf\nasOf = "x"\n', line: 0, token: 'asOf' },
+  { name: 'repeated ident — statement',  src: 'age = (dob: string, asOf: string) -> asOf\nasOf = "x"\n', line: 1, token: 'asOf' },
+  // RFC 12 phase 2: function return types are emitted inline (`def f(): T`),
   // so the return-type token must remain map-resolvable on the check path.
-  { name: 'def return type',            src: 'def parseId(raw:: string):: number\n  42\n',       line: 0, token: 'number' },
+  { name: 'def return type',            src: 'def parseId(raw: string): number\n  42\n',       line: 0, token: 'number' },
   // RFC 12 phase 2: thin-arrow assignments also emit their return type inline
   // (`f = function(n: number): string {…}`), so the return token resolves on
   // the check path — proof the arrow impl is self-sufficient, not header-copied.
-  { name: 'thin-arrow return type',     src: 'f = (n:: number):: string -> "x"\n',               line: 0, token: 'string' },
+  { name: 'thin-arrow return type',     src: 'f = (n: number): string -> "x"\n',               line: 0, token: 'string' },
 ];
 
 for (const c of PASS) {
@@ -120,7 +120,7 @@ for (const c of PASS) {
 {
   const name = 'repeated ident — body distinct from signature';
   try {
-    const src = 'age = (dob:: string, asOf:: string) -> asOf\nasOf = "x"\n';
+    const src = 'age = (dob: string, asOf: string) -> asOf\nasOf = "x"\n';
     const sig  = resolve(src, 0, 'asOf', 0);          // signature occurrence
     const body = resolve(src, 0, 'asOf', 1);          // body occurrence (`-> asOf`)
     const distinct = sig.off != null && body.off != null && sig.off !== body.off;
