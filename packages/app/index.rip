@@ -28,6 +28,13 @@ export setContext = (key: unknown, value: unknown): void -> __ripCtx.setContext(
 export getContext = (key: unknown): unknown -> __ripCtx.getContext(key)
 export hasContext = (key: unknown): boolean -> __ripCtx.hasContext(key)
 
+# Live singletons that launch() publishes on globalThis. Read accessors for
+# non-component code (HTTP hooks, etc.) that must reach the running app or
+# router but loads before launch() constructs them — resolve late, at call
+# time, and return undefined during the pre-launch window.
+export currentApp    = (): Stash | undefined  -> globalThis.__ripApp
+export currentRouter = (): Router | undefined -> globalThis.__ripRouter
+
 # =============================================================================
 # Internal types — used by public function signatures below. Not exported,
 # since consumers only see the function types via `index.d.ts` inference;

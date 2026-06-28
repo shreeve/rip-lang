@@ -16945,7 +16945,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.17.4";
-  var BUILD_DATE = "2026-06-28@05:09:42GMT";
+  var BUILD_DATE = "2026-06-28@12:48:26GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -17355,6 +17355,8 @@ ${indented}`);
     getContext: () => getContext,
     delay: () => delay,
     debounce: () => debounce,
+    currentRouter: () => currentRouter,
+    currentApp: () => currentApp,
     createStash: () => createStash,
     createRouter: () => createRouter,
     createResource: () => createResource,
@@ -17536,6 +17538,12 @@ ${indented}`);
   };
   var hasContext = function(key) {
     return __ripCtx.hasContext(key);
+  };
+  var currentApp = function() {
+    return globalThis.__ripApp;
+  };
+  var currentRouter = function() {
+    return globalThis.__ripRouter;
   };
   assertBrowser = function(where) {
     if (typeof window === "undefined" || typeof document === "undefined") {
