@@ -5356,6 +5356,130 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     }
     return false;
   }
+  function isCompleteTypeExpr(tokens, a, b) {
+    if (b <= a)
+      return false;
+    const SEP = new Set(["|", "&", ",", ":", "?", ".", "...", "=>"]);
+    let par = 0, brk = 0, brc = 0, gen = 0, atomEnd = false;
+    for (let j = a;j < b; j++) {
+      const t = tokens[j][0], v = tokens[j][1];
+      if (t === "(" || t === "PARAM_START") {
+        par++;
+        atomEnd = false;
+        continue;
+      }
+      if (t === ")" || t === "PARAM_END") {
+        if (--par < 0)
+          return false;
+        atomEnd = true;
+        continue;
+      }
+      if (t === "[" || t === "INDEX_START") {
+        brk++;
+        atomEnd = false;
+        continue;
+      }
+      if (t === "]" || t === "INDEX_END") {
+        if (--brk < 0)
+          return false;
+        atomEnd = true;
+        continue;
+      }
+      if (t === "{") {
+        brc++;
+        atomEnd = false;
+        continue;
+      }
+      if (t === "}") {
+        if (--brc < 0)
+          return false;
+        atomEnd = true;
+        continue;
+      }
+      if (t === "COMPARE") {
+        if (v === "<") {
+          gen++;
+          atomEnd = false;
+          continue;
+        }
+        if (v === ">") {
+          if (gen <= 0)
+            return false;
+          gen--;
+          atomEnd = true;
+          continue;
+        }
+        return false;
+      }
+      if (t === "SHIFT") {
+        if (v === ">>") {
+          if (gen < 2)
+            return false;
+          gen -= 2;
+          atomEnd = true;
+          continue;
+        }
+        return false;
+      }
+      if (t === "=") {
+        if (gen > 0) {
+          atomEnd = false;
+          continue;
+        }
+        return false;
+      }
+      if (SEP.has(t)) {
+        atomEnd = false;
+        continue;
+      }
+      if (t === "IDENTIFIER" || t === "PROPERTY" || t === "NUMBER" || t === "STRING" || t === "NULL" || t === "UNDEFINED" || t === "BOOL") {
+        if (atomEnd)
+          return false;
+        atomEnd = true;
+        continue;
+      }
+      return false;
+    }
+    return par === 0 && brk === 0 && brc === 0 && gen === 0 && atomEnd;
+  }
+  function assignedLaterInBlock(tokens, start, name) {
+    const ASSIGN = new Set(["=", "REACTIVE_ASSIGN", "COMPUTED_ASSIGN", "READONLY_ASSIGN"]);
+    let indent = 0, bracket = 0, closureDepth = 0;
+    const closureAt = [];
+    for (let j = start;j < tokens.length; j++) {
+      const g = tokens[j][0];
+      if (g === "INDENT") {
+        indent++;
+        const p = tokens[j - 1]?.[0];
+        if (p === "->" || p === "=>") {
+          closureAt.push(indent);
+          closureDepth++;
+        }
+        continue;
+      }
+      if (g === "OUTDENT") {
+        if (indent === 0)
+          return false;
+        if (closureAt[closureAt.length - 1] === indent) {
+          closureAt.pop();
+          closureDepth--;
+        }
+        indent--;
+        continue;
+      }
+      if (g === "(" || g === "CALL_START" || g === "PARAM_START" || g === "[" || g === "INDEX_START" || g === "{") {
+        bracket++;
+        continue;
+      }
+      if (g === ")" || g === "CALL_END" || g === "PARAM_END" || g === "]" || g === "INDEX_END" || g === "}") {
+        bracket--;
+        continue;
+      }
+      if (closureDepth === 0 && bracket === 0 && (g === "IDENTIFIER" || g === "PROPERTY") && tokens[j][1] === name && ASSIGN.has(tokens[j + 1]?.[0]))
+        return true;
+    }
+    return false;
+  }
   function reclassifyColonTypes(tokens) {
     const isOpen = (t) => t === "(" || t === "CALL_START" || t === "PARAM_START" || t === "{" || t === "[" || t === "INDEX_START";
     const isClose = (t) => t === ")" || t === "CALL_END" || t === "PARAM_END" || t === "}" || t === "]" || t === "INDEX_END";
@@ -5398,6 +5522,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             return false;
           if (BINDING_OPS.has(g))
             return true;
+          if ((g === "EFFECT" || g === "GATE") && j > start)
+            return true;
           if (g === "TERMINATOR" || g === "INDENT" || g === "OUTDENT")
             return false;
         }
@@ -5421,30 +5547,41 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       }
       return false;
     };
-    let pendingClass = false;
+    let pendingBody = false;
     const indentStack = [];
-    const inClassBody = () => indentStack.length > 0 && indentStack[indentStack.length - 1];
+    const inTypedBody = () => indentStack.length > 0 && indentStack[indentStack.length - 1];
+    const nameAtStatementStart = (i) => {
+      const p = tokens[i - 1]?.[0];
+      if (p !== "PROPERTY" && p !== "IDENTIFIER")
+        return false;
+      if (tokens[i - 2]?.[0] === "@")
+        return atStatementStart(tokens[i - 3]);
+      return atStatementStart(tokens[i - 2]);
+    };
     let inType = false, typeStartDepth = 0;
     const enterType = () => {
       inType = true;
       typeStartDepth = stack.length;
     };
+    let prevSiblingKV = false, curLineKV = false;
     const stack = [];
     for (let i = 0;i < tokens.length; i++) {
       const tag = tokens[i][0];
-      if (tag === "CLASS") {
-        pendingClass = true;
+      if (tag === "CLASS" || tag === "COMPONENT") {
+        pendingBody = true;
         continue;
       }
       if (tag === "INDENT") {
-        indentStack.push(pendingClass);
-        pendingClass = false;
+        indentStack.push(pendingBody);
+        pendingBody = false;
+        prevSiblingKV = curLineKV = false;
         if (inType && stack.length <= typeStartDepth)
           inType = false;
         continue;
       }
       if (tag === "OUTDENT") {
         indentStack.pop();
+        prevSiblingKV = curLineKV = false;
         if (inType && stack.length <= typeStartDepth)
           inType = false;
         continue;
@@ -5481,9 +5618,15 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           continue;
         }
       }
+      if (tag === "TERMINATOR" && stack.length === 0) {
+        prevSiblingKV = curLineKV;
+        curLineKV = false;
+      }
       if (tag === ":") {
         const prev = tokens[i - 1];
         const prevTag = prev?.[0];
+        if (stack.length === 0 && (prevTag === "IDENTIFIER" || prevTag === "PROPERTY") && atStatementStart(tokens[i - 2]))
+          curLineKV = true;
         if (prevTag === "PARAM_END" || (prevTag === ")" || prevTag === "CALL_END") && prev.data?.isDefParamEnd) {
           tokens[i][0] = "TYPE_ANNOTATION";
           enterType();
@@ -5496,19 +5639,73 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           enterType();
           continue;
         }
-        if (stack.length === 0 && (prevTag === "PROPERTY" || prevTag === "IDENTIFIER") && atStatementStart(tokens[i - 2]) && declBindsBeforeArrow(i + 1)) {
-          if (prevTag === "PROPERTY")
+        if (stack.length === 0 && nameAtStatementStart(i) && declBindsBeforeArrow(i + 1)) {
+          if (prevTag === "PROPERTY" && tokens[i - 2]?.[0] !== "@")
             prev[0] = "IDENTIFIER";
           tokens[i][0] = "TYPE_ANNOTATION";
           enterType();
           continue;
         }
-        if (inClassBody() && stack.length === 0 && (prevTag === "PROPERTY" || prevTag === "IDENTIFIER") && atStatementStart(tokens[i - 2]) && !valueIsMethod(i + 1)) {
-          if (prevTag === "PROPERTY")
+        if (stack.length === 0 && nameAtStatementStart(i)) {
+          let depth = 0;
+          for (let j = i + 1;j < tokens.length; j++) {
+            const g = tokens[j][0];
+            if (isOpen(g))
+              depth++;
+            else if (isClose(g)) {
+              if (depth === 0)
+                break;
+              depth--;
+            } else if (depth === 0) {
+              if (g === "TERMINATOR" || g === "INDENT" || g === "OUTDENT")
+                break;
+              if (g === "=" && isCompleteTypeExpr(tokens, i + 1, j)) {
+                if (prevTag === "PROPERTY" && tokens[i - 2]?.[0] !== "@")
+                  prev[0] = "IDENTIFIER";
+                tokens[i][0] = "TYPE_ANNOTATION";
+                enterType();
+                break;
+              }
+            }
+          }
+          if (tokens[i][0] === "TYPE_ANNOTATION")
+            continue;
+        }
+        if (inTypedBody() && stack.length === 0 && nameAtStatementStart(i) && !valueIsMethod(i + 1)) {
+          if (prevTag === "PROPERTY" && tokens[i - 2]?.[0] !== "@")
             prev[0] = "IDENTIFIER";
           tokens[i][0] = "TYPE_ANNOTATION";
           enterType();
           continue;
+        }
+        if (stack.length === 0 && nameAtStatementStart(i) && tokens[i - 2]?.[0] !== "@") {
+          let depth = 0, end = -1;
+          for (let j = i + 1;j < tokens.length; j++) {
+            const g = tokens[j][0];
+            if (isOpen(g))
+              depth++;
+            else if (isClose(g)) {
+              if (depth === 0)
+                break;
+              depth--;
+            } else if (depth === 0) {
+              if (g === "TERMINATOR") {
+                end = j;
+                break;
+              }
+              if (g === "INDENT" || g === "OUTDENT" || g === "=" || BINDING_OPS.has(g))
+                break;
+            }
+          }
+          const nk = tokens[end + 1];
+          const nextKV = nk && (nk[0] === "IDENTIFIER" || nk[0] === "PROPERTY") && tokens[end + 2]?.[0] === ":";
+          if (end > i + 1 && nk && nk[0] !== "OUTDENT" && !prevSiblingKV && !nextKV && isCompleteTypeExpr(tokens, i + 1, end) && assignedLaterInBlock(tokens, end + 1, prev[1])) {
+            if (prevTag === "PROPERTY")
+              prev[0] = "IDENTIFIER";
+            tokens[i][0] = "TYPE_ANNOTATION";
+            enterType();
+            continue;
+          }
         }
       }
       const f = stack[stack.length - 1];
@@ -5526,8 +5723,12 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           const prev = tokens[i - 1];
           const prevTag = prev?.[0];
           if (prevTag === "PROPERTY" || prevTag === "IDENTIFIER") {
-            if (prevTag === "PROPERTY")
+            if (prevTag === "PROPERTY" && tokens[i - 2]?.[0] !== "@")
               prev[0] = "IDENTIFIER";
+            tokens[i][0] = "TYPE_ANNOTATION";
+            f.sawType = true;
+            enterType();
+          } else if (prevTag === "}" || prevTag === "]" || prevTag === "INDEX_END") {
             tokens[i][0] = "TYPE_ANNOTATION";
             f.sawType = true;
             enterType();
@@ -6679,6 +6880,11 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             depth--;
           if (depth === 0 && tk[0] === "TYPE_ANNOTATION")
             return false;
+          if (depth === 0 && tk[0] === ":") {
+            let pv = this.tokens[k - 1];
+            if (pv && (pv[0] === ")" || pv[0] === "PARAM_END" || pv[0] === "CALL_END"))
+              return false;
+          }
           if (depth === 0 && tk[0] === "IDENTIFIER" && tk[1] === "type")
             return false;
           if (tk[0] === "INTERFACE")
@@ -16718,7 +16924,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.17.0-wip";
-  var BUILD_DATE = "2026-06-27@21:51:58GMT";
+  var BUILD_DATE = "2026-06-28@00:08:17GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
