@@ -14,44 +14,54 @@
  */
 
 import { writeFileSync, mkdirSync, rmSync } from 'fs';
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
+import os from 'os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
 const rip = resolve(root, 'bin', 'rip');
-const tmpDir = resolve(__dirname, '_check_tmp');
+const tmpRoot = resolve(__dirname, '_check_tmp');
 
 function color(code, s) { return process.stdout.isTTY ? `\x1b[${code}m${s}\x1b[0m` : s; }
 const green = s => color('32;1', s), red = s => color('31;1', s);
 let passed = 0, failed = 0;
-function check(name, fn) {
-  try { fn(); console.log(`  ${green('✓')} ${name}`); passed++; }
-  catch (e) { console.log(`  ${red('✗')} ${name}`); console.log(`    ${red(e.message)}`); failed++; }
-}
+
+// Each check spawns its own `rip check` subprocess in its own temp dir — they
+// are fully independent. The cost is per-process startup (compiler load + TS
+// program init), not the tiny check itself, so running them serially wastes it.
+// We queue the checks and drain the queue with bounded concurrency below.
+const tasks = [];
+function check(name, fn) { tasks.push({ name, fn }); }
 function assert(c, m) { if (!c) throw new Error(m || 'assertion failed'); }
 
-// Wipe the temp project, write the given files, run `rip check .` over it.
+// A private temp dir per checkProject call, so concurrent runs never collide.
+// The id is taken synchronously at call time (Node is single-threaded), so each
+// call owns its directory before any await.
+let projectId = 0;
+
+// Write the given files into a fresh private temp dir and run `rip check .`.
 // File names may contain subdirectories ('app/stash.rip').
 // `ripConfig` overrides/extends the default `rip` config (e.g. { exclude: [...] }).
 function checkProject(files, ripConfig = {}) {
-  rmSync(tmpDir, { recursive: true, force: true });
-  mkdirSync(tmpDir, { recursive: true });
+  const dir = resolve(tmpRoot, String(projectId++));
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
   const ripCfg = { strict: true, checkAll: true, ...ripConfig };
-  writeFileSync(resolve(tmpDir, 'package.json'),
+  writeFileSync(resolve(dir, 'package.json'),
     JSON.stringify({ rip: ripCfg, dependencies: { '@rip-lang/app': 'workspace:*' } }) + '\n');
   for (const [name, src] of Object.entries(files)) {
-    const dest = resolve(tmpDir, name);
+    const dest = resolve(dir, name);
     mkdirSync(dirname(dest), { recursive: true });
     writeFileSync(dest, src);
   }
-  try {
-    execSync(`'${rip}' check .`, { cwd: tmpDir, stdio: 'pipe' });
-    return { ok: true, out: '' };
-  } catch (e) {
-    return { ok: false, out: (e.stdout?.toString() || '') + (e.stderr?.toString() || '') };
-  }
+  return new Promise(res => {
+    execFile(rip, ['check', '.'], { cwd: dir }, (err, stdout, stderr) => {
+      if (err) res({ ok: false, out: (stdout || '') + (stderr || '') });
+      else res({ ok: true, out: '' });
+    });
+  });
 }
 
 // ── 1. Inline `schema :shape` as `.extend()` argument carries its type ──
@@ -62,8 +72,8 @@ function checkProject(files, ripConfig = {}) {
 // Fixed: codegen stamps a shadow-only `__anon` key on the descriptor and
 // the dts pass emits a keyed overload (SCHEMA-GAPS.md gap 14).
 
-check('inline-extend fields survive into the derived type', () => {
-  const r = checkProject({
+check('inline-extend fields survive into the derived type', async () => {
+  const r = await checkProject({
     'ex.rip': `export User = schema :shape
   name!  string
 
@@ -77,8 +87,8 @@ ok = a.permissions.length + a.name.length
   assert(r.ok, 'expected clean check, got:\n' + r.out);
 });
 
-check('a bogus property on the extended type still errors', () => {
-  const r = checkProject({
+check('a bogus property on the extended type still errors', async () => {
+  const r = await checkProject({
     'ex.rip': `export Base = schema :shape
   title! string
 
@@ -101,8 +111,8 @@ bad = b.bogus
 // types to body hoists by NAME. Fixed: function-locals no longer emit the
 // header line (the in-body typed hoist already covers them, scope-correctly).
 
-check('sibling functions with one typed local check independently', () => {
-  const r = checkProject({
+check('sibling functions with one typed local check independently', async () => {
+  const r = await checkProject({
     'scope.rip': `f = ->
   items = [1, 2]
   items.length
@@ -116,8 +126,8 @@ g = ->
   assert(r.ok, 'expected clean check, got:\n' + r.out);
 });
 
-check("the untyped sibling keeps its own inferred type, not the annotation", () => {
-  const r = checkProject({
+check("the untyped sibling keeps its own inferred type, not the annotation", async () => {
+  const r = await checkProject({
     'scope.rip': `f = ->
   items = [1, 2]
   items.push('nope')
@@ -139,8 +149,8 @@ g = ->
 // order.total` failed strict checking against `T | null`. Fixed: walkRender
 // emits real `if (...) { } else { }` blocks (mirroring its for-loop case).
 
-check('reads in the guarded render branch narrow to non-null', () => {
-  const r = checkProject({
+check('reads in the guarded render branch narrow to non-null', async () => {
+  const r = await checkProject({
     'dash.rip': `type Order = { id: number, total: number }
 
 export Dash = component
@@ -157,8 +167,8 @@ export Dash = component
   assert(r.ok, 'expected clean check, got:\n' + r.out);
 });
 
-check('reads in the else branch still see the null', () => {
-  const r = checkProject({
+check('reads in the else branch still see the null', async () => {
+  const r = await checkProject({
     'dash.rip': `type Order = { id: number, total: number }
 
 export Dash = component
@@ -190,8 +200,8 @@ export stash =
   order: source { fetch: (id: string) -> Promise.resolve({ id: id, total: 42 }) }
 `;
 
-check('gated binding is non-null at every read site', () => {
-  const r = checkProject({
+check('gated binding is non-null at every read site', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'app/stash.rip': SOURCE_STASH,
     'profile.rip': `export Profile = component
@@ -204,8 +214,8 @@ check('gated binding is non-null at every read site', () => {
   assert(r.ok, 'expected clean check, got:\n' + r.out);
 });
 
-check('ungated source read stays T | null — unguarded access errors', () => {
-  const r = checkProject({
+check('ungated source read stays T | null — unguarded access errors', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'app/stash.rip': SOURCE_STASH,
     'nav.rip': `export Nav = component
@@ -218,8 +228,8 @@ check('ungated source read stays T | null — unguarded access errors', () => {
   assert(/possibly 'null'/.test(r.out), 'unexpected output:\n' + r.out);
 });
 
-check('keyed gate narrows; ungated keyed read stays nullable', () => {
-  const r = checkProject({
+check('keyed gate narrows; ungated keyed read stays nullable', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'app/stash.rip': SOURCE_STASH,
     'detail.rip': `export Detail = component
@@ -230,7 +240,7 @@ check('keyed gate narrows; ungated keyed read stays nullable', () => {
   });
   assert(r.ok, 'expected clean check on the keyed gate, got:\n' + r.out);
 
-  const r2 = checkProject({
+  const r2 = await checkProject({
     'index.rip': `export ok = true\n`,
     'app/stash.rip': SOURCE_STASH,
     'detail.rip': `export Detail = component
@@ -243,8 +253,8 @@ check('keyed gate narrows; ungated keyed read stays nullable', () => {
   assert(/possibly 'null'/.test(r2.out), 'unexpected output:\n' + r2.out);
 });
 
-check('stash methods are typed: reset() and the source() handle', () => {
-  const r = checkProject({
+check('stash methods are typed: reset() and the source() handle', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'app/stash.rip': SOURCE_STASH,
     'tools.rip': `export Tools = component
@@ -268,8 +278,8 @@ check('stash methods are typed: reset() and the source() handle', () => {
 // whose source-ness isn't visible (imports, factory calls, spreads) stay
 // silent — the mount check backstops those.
 
-check('gating a plain key errors at check time (module-binding indirection)', () => {
-  const r = checkProject({
+check('gating a plain key errors at check time (module-binding indirection)', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
@@ -289,8 +299,8 @@ export stash =
   assert(/'orders <~' does not resolve to a source/.test(r.out), 'unexpected output:\n' + r.out);
 });
 
-check('gating a nullable plain key errors too (the silent-null case)', () => {
-  const r = checkProject({
+check('gating a nullable plain key errors too (the silent-null case)', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
@@ -307,8 +317,8 @@ export stash =
   assert(/'selected <~' does not resolve to a source/.test(r.out), 'unexpected output:\n' + r.out);
 });
 
-check('a gate on a missing key errors; sources via binding or subpath stay clean', () => {
-  const missing = checkProject({
+check('a gate on a missing key errors; sources via binding or subpath stay clean', async () => {
+  const missing = await checkProject({
     'index.rip': `export ok = true\n`,
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
@@ -323,7 +333,7 @@ export stash =
   assert(!missing.ok, 'expected a missing-key error');
   assert(/'stats <~' does not resolve to a source.*not a key/.test(missing.out), 'unexpected output:\n' + missing.out);
 
-  const clean = checkProject({
+  const clean = await checkProject({
     'index.rip': `export ok = true\n`,
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
@@ -350,8 +360,8 @@ export stash =
 // to return — is a compile error, caught at the source, not deep in a
 // component dereferencing a "non-null" null.
 
-check('a source whose fetch can resolve to null errors at the declaration', () => {
-  const r = checkProject({
+check('a source whose fetch can resolve to null errors at the declaration', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
@@ -363,8 +373,8 @@ export stash =
   assert(/Type 'null' is not assignable/.test(r.out), 'unexpected output:\n' + r.out);
 });
 
-check('a source whose fetch resolves to undefined (no value) errors at the declaration', () => {
-  const r = checkProject({
+check('a source whose fetch resolves to undefined (no value) errors at the declaration', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
@@ -376,8 +386,8 @@ export stash =
   assert(/Type 'undefined' is not assignable/.test(r.out), 'unexpected output:\n' + r.out);
 });
 
-check('a source with a non-null fetch passes (constraint does not over-fire)', () => {
-  const r = checkProject({
+check('a source with a non-null fetch passes (constraint does not over-fire)', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
@@ -399,8 +409,8 @@ export stash =
 // non-null, `void` fails the constraint — so the error lands at the
 // DECLARATION, at the fetch, not later at the consumer (where TS's `void`
 // leniency would otherwise only surface it as `{}`).
-check('a fetch that forgets to return errors at the declaration (async no-return)', () => {
-  const r = checkProject({
+check('a fetch that forgets to return errors at the declaration (async no-return)', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
@@ -419,8 +429,8 @@ export stash =
 // A source is async by contract — `fetch` must return a `Promise`. A
 // synchronous fetch (returning a value directly) is a type error, so static
 // non-null data isn't smuggled in as a source; it belongs in a plain stash key.
-check('a synchronous (non-Promise) fetch is rejected — a source must be async', () => {
-  const r = checkProject({
+check('a synchronous (non-Promise) fetch is rejected — a source must be async', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
@@ -437,8 +447,8 @@ export stash =
 // through __ripEl's generic props — which silently drops the param to `any`
 // for certain sibling-prop combinations. The handler must type-check cleanly
 // regardless of surrounding props, and the param must be genuinely typed.
-check('an inline @event handler types its param, robust to sibling props', () => {
-  const r = checkProject({
+check('an inline @event handler types its param, robust to sibling props', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'c.rip': `import { createMutation } from '@rip-lang/app'
 
@@ -457,8 +467,8 @@ export C = component
 // shorthand (`form noValidate`), NOT a reference — so it must not surface as
 // "Cannot find name". A bare identifier that resolves to an in-scope value is
 // still emitted as a reference, so a genuine value typo is still caught.
-check('an unresolved bare-ident attribute (form noValidate) checks clean', () => {
-  const r = checkProject({
+check('an unresolved bare-ident attribute (form noValidate) checks clean', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'c.rip': `export C = component
   render
@@ -469,8 +479,8 @@ check('an unresolved bare-ident attribute (form noValidate) checks clean', () =>
   assert(r.ok, 'a bare-ident boolean attribute must not error as an undefined name: ' + r.out);
 });
 
-check('a bare-ident text child that IS in scope still type-checks (loop var)', () => {
-  const r = checkProject({
+check('a bare-ident text child that IS in scope still type-checks (loop var)', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'c.rip': `export C = component
   items := ['a', 'b']
@@ -482,8 +492,8 @@ check('a bare-ident text child that IS in scope still type-checks (loop var)', (
   assert(r.ok, 'an in-scope loop var rendered as a text child should check clean: ' + r.out);
 });
 
-check('an unresolved bare-ident flag on a component checks clean (Btn disabled)', () => {
-  const r = checkProject({
+check('an unresolved bare-ident flag on a component checks clean (Btn disabled)', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'c.rip': `export Btn = component
   render
@@ -500,8 +510,8 @@ export C = component
   assert(r.ok, 'a bare-ident boolean flag on a component must not error as a missing element: ' + r.out);
 });
 
-check('an inline @event handler param is genuinely typed (a bogus member errors)', () => {
-  const r = checkProject({
+check('an inline @event handler param is genuinely typed (a bogus member errors)', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'c.rip': `export C = component
   render
@@ -522,8 +532,8 @@ check('an inline @event handler param is genuinely typed (a bogus member errors)
 // of { value } | { __bind_value__ }, so either form satisfies it. Optional
 // props never hit this (nothing to leave missing).
 
-check('a required prop bound with <=> checks clean (binding satisfies it)', () => {
-  const r = checkProject({
+check('a required prop bound with <=> checks clean (binding satisfies it)', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'c.rip': `export Parent = component
   mode: 'a' | 'b' := 'a'
@@ -539,8 +549,8 @@ Child = component
   assert(r.ok, 'a required prop bound via <=> should check clean: ' + r.out);
 });
 
-check('a required prop passed by direct value still checks clean', () => {
-  const r = checkProject({
+check('a required prop passed by direct value still checks clean', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'c.rip': `export Parent = component
   render
@@ -555,8 +565,8 @@ Child = component
   assert(r.ok, 'a required prop passed directly should check clean: ' + r.out);
 });
 
-check('omitting a required prop entirely still errors', () => {
-  const r = checkProject({
+check('omitting a required prop entirely still errors', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'c.rip': `export Parent = component
   render
@@ -583,8 +593,8 @@ Child = component
 // class too. Fixed: an inline `{ … }`/`{}` on the constructor line is the
 // complete prop list — parse it inline, don't fall through to class members.
 
-check('a prop-less child component has no phantom required props', () => {
-  const r = checkProject({
+check('a prop-less child component has no phantom required props', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'c.rip': `export Parent = component
   render
@@ -606,8 +616,8 @@ Sibling = component
   assert(r.ok, 'a prop-less child must not require its reactive members as props: ' + r.out);
 });
 
-check('a prop-less component does not corrupt a following component def', () => {
-  const r = checkProject({
+check('a prop-less component does not corrupt a following component def', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'c.rip': `export Parent = component
   render
@@ -629,12 +639,12 @@ Sibling = component
   assert(/label/.test(r.out), 'error should name the mistyped prop:\n' + r.out);
 });
 
-check('a non-exported prop-less component still rejects unknown props', () => {
+check('a non-exported prop-less component still rejects unknown props', async () => {
   // `Picker` is non-exported (`declare class`, not `export declare class`) and
   // declares no props. It must still land in the component registry so its
   // usage sites are prop-checked — passing it `bogus` is an error, not silently
   // accepted.
-  const r = checkProject({
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'c.rip': `export Parent = component
   render
@@ -650,8 +660,8 @@ Picker = component
   assert(/bogus/.test(r.out), 'error should name the unknown prop:\n' + r.out);
 });
 
-check('opaque stash values stay silent (the mount check backstops them)', () => {
-  const r = checkProject({
+check('opaque stash values stay silent (the mount check backstops them)', async () => {
+  const r = await checkProject({
     'index.rip': `export ok = true\n`,
     'app/stash.rip': `import { source } from '@rip-lang/app'
 import { makeThing } from './factory.rip'
@@ -678,8 +688,8 @@ export stash =
 // the declaration site. Also pins backtick template-literal types
 // surviving the type emitter (buildTypeString re-wraps JS tokens).
 
-check("staleTime '5 min' checks clean; '5 mins' is a type error", () => {
-  const good = checkProject({
+check("staleTime '5 min' checks clean; '5 mins' is a type error", async () => {
+  const good = await checkProject({
     'index.rip': `export ok = true\n`,
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
@@ -689,7 +699,7 @@ export stash =
   });
   assert(good.ok, "'5 min' should be a valid Duration: " + good.out);
 
-  const bad = checkProject({
+  const bad = await checkProject({
     'index.rip': `export ok = true\n`,
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
@@ -701,8 +711,8 @@ export stash =
   assert(/5 mins/.test(bad.out), 'unexpected output:\n' + bad.out);
 });
 
-check("staleTime 'forever' checks clean; symbols and near-misses are type errors", () => {
-  const good = checkProject({
+check("staleTime 'forever' checks clean; symbols and near-misses are type errors", async () => {
+  const good = await checkProject({
     'index.rip': `export ok = true\n`,
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
@@ -712,7 +722,7 @@ export stash =
   });
   assert(good.ok, "'forever' should type-check: " + good.out);
 
-  const sym = checkProject({
+  const sym = await checkProject({
     'index.rip': `export ok = true\n`,
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
@@ -722,7 +732,7 @@ export stash =
   });
   assert(!sym.ok, 'the :forever symbol should be rejected — the keyword is a string');
 
-  const typo = checkProject({
+  const typo = await checkProject({
     'index.rip': `export ok = true\n`,
     'app/stash.rip': `import { source } from '@rip-lang/app'
 
@@ -742,8 +752,8 @@ export stash =
 // The stub now injects the canonical payload type for an unannotated
 // single param.
 
-check('untyped onError param checks clean and is typed, not any', () => {
-  const r = checkProject({
+check('untyped onError param checks clean and is typed, not any', async () => {
+  const r = await checkProject({
     'comp.rip': `export Layout = component
   msg: string | null := null
   onError: (err) -> msg = err.message ?? 'unknown'
@@ -752,7 +762,7 @@ check('untyped onError param checks clean and is typed, not any', () => {
   });
   assert(r.ok, 'expected clean check, got:\n' + r.out);
 
-  const misuse = checkProject({
+  const misuse = await checkProject({
     'comp.rip': `export Layout = component
   msg: string | null := null
   onError: (err) -> msg = err.bogus
@@ -771,8 +781,8 @@ check('untyped onError param checks clean and is typed, not any', () => {
 // matching the no-initializer prop case (`@label?: T`). A `?` with a real
 // default stays unwidened (the default fills the gap).
 
-check("x?: T := undefined declares Signal<T | undefined>; use still narrows", () => {
-  const r = checkProject({
+check("x?: T := undefined declares Signal<T | undefined>; use still narrows", async () => {
+  const r = await checkProject({
     'comp.rip': `export C = component
   gateError?: string := undefined
   msg ~= gateError ?? 'ok'
@@ -781,7 +791,7 @@ check("x?: T := undefined declares Signal<T | undefined>; use still narrows", ()
   });
   assert(r.ok, 'expected clean check, got:\n' + r.out);
 
-  const unguarded = checkProject({
+  const unguarded = await checkProject({
     'comp.rip': `export C = component
   gateError?: string := undefined
   bad ~= gateError.length
@@ -799,8 +809,8 @@ check("x?: T := undefined declares Signal<T | undefined>; use still narrows", ()
 // The honest type catches URLSearchParams-only calls like query.get(...) that
 // would crash at runtime, and lets keyed gates read query fields directly.
 
-check("query is Record<string, string>; URLSearchParams calls error", () => {
-  const ok = checkProject({
+check("query is Record<string, string>; URLSearchParams calls error", async () => {
+  const ok = await checkProject({
     'comp.rip': `export C = component
   sort ~= @query.sort ?? 'asc'
   render null
@@ -808,7 +818,7 @@ check("query is Record<string, string>; URLSearchParams calls error", () => {
   });
   assert(ok.ok, 'plain query field access should check clean, got:\n' + ok.out);
 
-  const bad = checkProject({
+  const bad = await checkProject({
     'comp.rip': `export C = component
   sort ~= @query.get('sort')
   render null
@@ -853,15 +863,15 @@ ${homeBody}
 `,
 });
 
-check('a bogus route in a component href errors at the call site', () => {
-  const r = checkProject(routeProject('    NavLink href: "/nope", "Broken"'));
+check('a bogus route in a component href errors at the call site', async () => {
+  const r = await checkProject(routeProject('    NavLink href: "/nope", "Broken"'));
   assert(!r.ok, 'expected a route error on NavLink href: "/nope"');
   assert(/not assignable/.test(r.out), 'unexpected output:\n' + r.out);
   assert(/"\/nope"/.test(r.out), 'error should name the bad href:\n' + r.out);
 });
 
-check('valid routes, external URLs, and variables in component href pass', () => {
-  const r = checkProject(routeProject(
+check('valid routes, external URLs, and variables in component href pass', async () => {
+  const r = await checkProject(routeProject(
     `    NavLink href: "/", "Home"
     NavLink href: "/orders", "Orders"
     NavLink href: "https://example.com", "External"`));
@@ -880,25 +890,25 @@ const routerBodyProject = (body) => ({
   'app/routes/index.rip': `export Home = component\n${body}\n  render\n    div\n`,
 });
 
-check('router.replace: a valid route passes; a path typo errors', () => {
-  let r = checkProject(routerBodyProject(`  mounted: -> @router.replace('/orders')`));
+check('router.replace: a valid route passes; a path typo errors', async () => {
+  let r = await checkProject(routerBodyProject(`  mounted: -> @router.replace('/orders')`));
   assert(r.ok, 'valid route replace should pass:\n' + r.out);
-  r = checkProject(routerBodyProject(`  mounted: -> @router.replace('/nope')`));
+  r = await checkProject(routerBodyProject(`  mounted: -> @router.replace('/nope')`));
   assert(!r.ok, 'a path typo in replace should error');
   assert(/not assignable/.test(r.out), 'unexpected output:\n' + r.out);
 });
 
-check('router.replace / push: a dynamic (non-literal) string passes', () => {
-  let r = checkProject(routerBodyProject(`  url: string := '/whatever'\n  mounted: -> @router.replace(url)`));
+check('router.replace / push: a dynamic (non-literal) string passes', async () => {
+  let r = await checkProject(routerBodyProject(`  url: string := '/whatever'\n  mounted: -> @router.replace(url)`));
   assert(r.ok, 'dynamic string replace should pass:\n' + r.out);
-  r = checkProject(routerBodyProject(`  url: string := '/whatever'\n  mounted: -> @router.push(url)`));
+  r = await checkProject(routerBodyProject(`  url: string := '/whatever'\n  mounted: -> @router.push(url)`));
   assert(r.ok, 'dynamic string push should pass:\n' + r.out);
 });
 
-check('router.push: a valid route passes; a path typo errors', () => {
-  let r = checkProject(routerBodyProject(`  mounted: -> @router.push('/orders')`));
+check('router.push: a valid route passes; a path typo errors', async () => {
+  let r = await checkProject(routerBodyProject(`  mounted: -> @router.push('/orders')`));
   assert(r.ok, 'valid route push should pass:\n' + r.out);
-  r = checkProject(routerBodyProject(`  mounted: -> @router.push('/nope')`));
+  r = await checkProject(routerBodyProject(`  mounted: -> @router.push('/nope')`));
   assert(!r.ok, 'a push typo should error');
 });
 
@@ -916,19 +926,19 @@ const routePathProject = (body) => ({
   'app/routes/index.rip': `${body}\n\nexport Home = component\n  render\n    div\n`,
 });
 
-check('RoutePath: a valid route literal passes', () => {
-  const r = checkProject(routePathProject(`home: RoutePath = '/orders'`));
+check('RoutePath: a valid route literal passes', async () => {
+  const r = await checkProject(routePathProject(`home: RoutePath = '/orders'`));
   assert(r.ok, 'expected clean check, got:\n' + r.out);
 });
 
-check('RoutePath: a bogus route literal errors', () => {
-  const r = checkProject(routePathProject(`home: RoutePath = '/nope'`));
+check('RoutePath: a bogus route literal errors', async () => {
+  const r = await checkProject(routePathProject(`home: RoutePath = '/nope'`));
   assert(!r.ok, 'expected a route error on RoutePath = "/nope"');
   assert(/not assignable/.test(r.out), 'unexpected output:\n' + r.out);
 });
 
-check('RoutePath: a file-local declaration wins (no duplicate-identifier clash)', () => {
-  const r = checkProject(routePathProject(`type RoutePath = 'custom'\n\nval: RoutePath = 'custom'`));
+check('RoutePath: a file-local declaration wins (no duplicate-identifier clash)', async () => {
+  const r = await checkProject(routePathProject(`type RoutePath = 'custom'\n\nval: RoutePath = 'custom'`));
   assert(r.ok, 'a user-defined RoutePath should win cleanly:\n' + r.out);
 });
 
@@ -942,8 +952,8 @@ check('RoutePath: a file-local declaration wins (no duplicate-identifier clash)'
 // the whole branch was skipped). Fixed: accept either quote style, and
 // compare union membership by inner content.
 
-check('single-quoted string prop defaults pass', () => {
-  const r = checkProject({
+check('single-quoted string prop defaults pass', async () => {
+  const r = await checkProject({
     'c.rip': `export Input = component extends input
   @value?: string := ''
   @label?: string := 'hi'
@@ -954,8 +964,8 @@ check('single-quoted string prop defaults pass', () => {
   assert(r.ok, 'single-quoted string defaults should pass:\n' + r.out);
 });
 
-check('single-quoted defaults in a string-literal union pass; a non-member errors', () => {
-  let r = checkProject({
+check('single-quoted defaults in a string-literal union pass; a non-member errors', async () => {
+  let r = await checkProject({
     'c.rip': `export Button = component extends button
   @variant?: 'primary' | 'secondary' := 'primary'
   render
@@ -963,7 +973,7 @@ check('single-quoted defaults in a string-literal union pass; a non-member error
 `,
   });
   assert(r.ok, 'single-quoted union default should pass:\n' + r.out);
-  r = checkProject({
+  r = await checkProject({
     'c.rip': `export Button = component extends button
   @variant?: 'primary' | 'secondary' := 'tertiary'
   render
@@ -974,8 +984,8 @@ check('single-quoted defaults in a string-literal union pass; a non-member error
   assert(/not assignable/.test(r.out), 'unexpected output:\n' + r.out);
 });
 
-check('a genuinely mismatched default still errors (string default on number)', () => {
-  const r = checkProject({
+check('a genuinely mismatched default still errors (string default on number)', async () => {
+  const r = await checkProject({
     'c.rip': `export Box = component extends div
   @count?: number := 'oops'
   render
@@ -994,21 +1004,45 @@ check('a genuinely mismatched default still errors (string default on number)', 
 // type-checked despite being excluded. Fixed: escape the full metacharacter
 // set. The error file below would fail `rip check` if the exclude were a no-op.
 
-check('exclude patterns with route-dir brackets/parens are honored', () => {
+check('exclude patterns with route-dir brackets/parens are honored', async () => {
   const files = {
     'app/routes/index.rip': `export Home = component\n  render\n    div\n`,
     'app/routes/[id]/x.rip': `bad: number := 'oops'\n`,
     'app/routes/(app)/y.rip': `bad: number := 'oops'\n`,
   };
   // Sanity: without the exclude, the bracketed files' errors surface.
-  let r = checkProject(files);
+  let r = await checkProject(files);
   assert(!r.ok, 'the deliberate errors should surface when not excluded');
   // With the exclude, both bracketed dirs are skipped → clean.
-  r = checkProject(files, { exclude: ['app/routes/[id]/**', 'app/routes/(app)/**'] });
+  r = await checkProject(files, { exclude: ['app/routes/[id]/**', 'app/routes/(app)/**'] });
   assert(r.ok, 'excluded route-dir files should be skipped:\n' + r.out);
 });
 
-rmSync(tmpDir, { recursive: true, force: true });
+// ── Drain the queued checks with bounded concurrency ──
+// Workers pull from a shared cursor; results are stored by index and printed in
+// definition order afterward, so output is deterministic regardless of which
+// subprocess finishes first.
+rmSync(tmpRoot, { recursive: true, force: true });
+const concurrency = Math.max(2, (os.availableParallelism?.() ?? os.cpus().length) - 1);
+const results = new Array(tasks.length);
+let cursor = 0;
+async function worker() {
+  while (true) {
+    const i = cursor++;
+    if (i >= tasks.length) break;
+    const { name, fn } = tasks[i];
+    try { await fn(); results[i] = { ok: true, name }; }
+    catch (e) { results[i] = { ok: false, name, msg: e.message }; }
+  }
+}
+await Promise.all(Array.from({ length: concurrency }, worker));
+
+for (const r of results) {
+  if (r.ok) { console.log(`  ${green('✓')} ${r.name}`); passed++; }
+  else { console.log(`  ${red('✗')} ${r.name}`); console.log(`    ${red(r.msg)}`); failed++; }
+}
+
+rmSync(tmpRoot, { recursive: true, force: true });
 console.log('');
 const total = passed + failed;
 if (failed === 0) { console.log(green(`${total} checks: ${passed} passing`)); process.exit(0); }

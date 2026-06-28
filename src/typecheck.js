@@ -536,24 +536,28 @@ export function parseComponentDTS(dtsString) {
   return result;
 }
 
-// Check component prop definitions for untyped props and invalid defaults.
+// Check component prop definitions for invalid defaults.
 // Returns array of { line (0-based), col, len, message } error objects.
+//
+// Type annotations use a single ':' (e.g. `@count: number := 0`); `:=`/`=` is
+// an untyped initializer whose type is inferred from the default, and `::` is
+// prototype access — never a type. A typed prop with a `:= default` has its
+// default validated against the annotation; untyped props carry no annotation
+// to check against and are left alone.
 export function checkComponentDefs(compProps, srcLines, startLine = 0) {
   const errors = [];
   for (const prop of compProps) {
     for (let s = startLine; s < srcLines.length; s++) {
-      const m = new RegExp('(@' + prop.name + ')\\??\\s*(::|([:!]?=))').exec(srcLines[s]);
+      // `@name` + optional `?`, then a single `:` that is NOT part of `:=`.
+      const m = new RegExp('(@' + prop.name + ')\\b\\??\\s*:(?!=)\\s*(.+)$').exec(srcLines[s]);
       if (!m) continue;
-      if (m[1 + 1] !== '::') {
-        errors.push({ line: s, col: m.index, len: m[1].length, propName: prop.name, message: `Prop '${prop.name}' has no type annotation` });
-      } else {
-        const dm = srcLines[s].match(new RegExp('@' + prop.name + '\\??\\s*::\\s*(.+?)\\s*:=\\s*(.+)'));
-        if (dm) {
-          const defVal = dm[2].replace(/#.*$/, '').trim();
-          const err = validatePropDefault(dm[1].trim(), defVal);
-          if (err) {
-            errors.push({ line: s, col: m.index, len: m[1].length, propName: prop.name, message: err });
-          }
+      // Validate a `:= default` against the annotation, if one is present.
+      const dm = m[2].match(/^(.+?)\s*:=\s*(.+)$/);
+      if (dm) {
+        const defVal = dm[2].replace(/#.*$/, '').trim();
+        const err = validatePropDefault(dm[1].trim(), defVal);
+        if (err) {
+          errors.push({ line: s, col: m.index, len: m[1].length, propName: prop.name, message: err });
         }
       }
       break;
@@ -4071,11 +4075,11 @@ export async function runCheck(targetDir, opts = {}) {
       }
     }
 
-    // Untyped component prop checking — flag props without :: annotation
+    // Component prop checking — validate prop default values against their types
     if (entry.dts) {
-      for (const [compName, compInfo] of parseComponentDTS(entry.dts)) {
+      for (const [, compInfo] of parseComponentDTS(entry.dts)) {
         for (const e of checkComponentDefs(compInfo.props, srcLines)) {
-          errors.push({ line: e.line + 1, col: e.col + 1, len: e.len, message: e.message.includes('type annotation') ? `Prop '${e.propName}' on component ${compName} has no type annotation` : e.message, severity: 'error', code: 'rip', srcLine: srcLines[e.line], related: [] });
+          errors.push({ line: e.line + 1, col: e.col + 1, len: e.len, message: e.message, severity: 'error', code: 'rip', srcLine: srcLines[e.line], related: [] });
           totalErrors++;
         }
       }
