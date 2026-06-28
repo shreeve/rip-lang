@@ -360,12 +360,12 @@ rip -cm example.rip
 > calls (`div outline` — text child) and imperative calls outside
 > `render` (`Btn(outline)` — positional arg) are unaffected.
 
-> **CRITICAL — `:` is the type-annotation separator everywhere; `::` is NO LONGER a type operator (removed in 3.18 — it now means prototype access only, e.g. `String::trim`):**
+> **CRITICAL — `:` is the type-annotation separator everywhere; `::` is prototype access only (e.g. `String::trim`), never a type operator:**
 >
 > - `x: number = 0` — CORRECT (typed declaration)
 > - `def foo(opts: { host?: string, port?: number })` — CORRECT
 > - `def greet(name: string): string` — CORRECT (param + return type)
-> - `x:: number` — ERROR (`::` type annotations were removed; use a single `:`)
+> - `x:: number` — ERROR (`::` is not a type annotation; use a single `:`)
 >
 > Typed destructuring uses an *external* type, TS-style — annotate the whole
 > pattern, not each binding:

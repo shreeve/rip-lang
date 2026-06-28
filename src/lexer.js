@@ -1392,10 +1392,9 @@ export class Lexer {
       return 2;
     }
     else if (val === '::')  {
-      // `::` is prototype access only (handled above when followed by an
-      // identifier). The type-annotation meaning was removed in Rip 3.18 — use
-      // a single `:` (e.g. `x: T`, `def f(a: T): R`).
-      syntaxError("'::' type annotations were removed — use a single ':' (e.g. `x: number`)", {row: this.row, col: this.col, len: 2});
+      // `::` is prototype access (handled above when followed by an identifier).
+      // Type annotations use a single `:` (e.g. `x: T`, `def f(a: T): R`).
+      syntaxError("type annotations use a single ':' (e.g. `x: number`), not '::'", {row: this.row, col: this.col, len: 2});
     }
     // Reactive and binding operators
     else if (val === '~=') tag = 'COMPUTED_ASSIGN';

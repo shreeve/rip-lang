@@ -71,8 +71,7 @@ This is the complete Rip Types sigil vocabulary.
 ## Type Annotations (`:`)
 
 A single colon `:` annotates types on variables, parameters, return values,
-and properties. (The older double-colon `::` form was removed in 3.18; `::` now
-means prototype access only, e.g. `String::trim`.)
+and properties. (`::` is prototype access only, e.g. `String::trim`.)
 
 ### Variables
 

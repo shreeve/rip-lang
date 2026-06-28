@@ -10,9 +10,9 @@
 # Type Annotations on Variables — Erased from JS
 # ==============================================================================
 
-# `::` was removed as a type-annotation sigil in 3.18 — a single `:` is the only
-# type separator now. (`::` survives solely as prototype access; see operators.)
-fail "double-colon type annotation is rejected", "x:: number = 0", "type annotations were removed"
+# A single `:` is the type separator; `::` is prototype access only (see the
+# prototype tests in operators), never a type annotation.
+fail "double-colon is not a type annotation", "x:: number = 0", "single ':'"
 
 code "typed variable", "count: number = 0", "let count;\ncount = 0;"
 code "typed string variable", 'name: string = "Rip"', "let name;\nname = \"Rip\";"
@@ -557,11 +557,10 @@ type "fat arrow return type dts", 'g = (x: number): string => "v"', "declare fun
 # body — so it's a hard error pointing at the fix.
 fail "fat arrow bare function-type return", 'g = (x: number): (n: number) => number => x'
 fail "fat arrow empty-params function-type return", 'g = (x: number): () => void => x'
-# A *parenthesized* return type in the `=`-arrow form is not supported with the
-# single-colon syntax: the tokenizer's arrow-param lookahead can't see past the
-# inner `=>` / `?:` to know `(x: number)` is a parameter list, so it mis-brackets
-# it. Use a `def`, a named `type` alias for the return, or the `->` form instead.
-# (These parsed only under the removed `::` annotation.)
+# A *parenthesized* return type in the `=`-arrow form is not supported: the
+# tokenizer's arrow-param lookahead can't see past the inner `=>` / `?:` to know
+# `(x: number)` is a parameter list, so it mis-brackets it. Use a `def`, a named
+# `type` alias for the return, or the `->` form instead.
 fail "fat arrow parenthesized function-type return", 'g = (x: number): ((n: number) => number) => h'
 fail "fat arrow parenthesized conditional return", 'f = (x: number): (T extends U ? A : B) => h'
 
