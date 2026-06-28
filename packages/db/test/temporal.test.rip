@@ -1,0 +1,107 @@
+# Temporal ser/de regression tests for @rip-lang/db.
+#
+# The bug these guard against is invisible on a UTC host, so the `test`
+# script pins `TZ=America/Los_Angeles` (a non-zero offset). The decode/encode
+# helpers are pure, so no running harbor is required.
+
+import { decodeEnvelope, encodeParams } from '../client.rip'
+
+pass = 0
+fail = 0
+
+ok = (name, cond) ->
+  if cond
+    pass += 1
+  else
+    fail += 1
+    console.error "  ✗ #{name}"
+
+eq = (name, a, b) -> ok name, a is b
+
+throws = (name, fn) ->
+  threw = false
+  try fn() catch then threw = true
+  ok name, threw
+
+envelope = (duckdbType, value) ->
+  columns: [{ name: 'v', duckdbType }]
+  data: [[value]]
+
+decoded = (duckdbType, value) -> decodeEnvelope(envelope(duckdbType, value)).data[0][0]
+
+# Sanity: the test is only meaningful off-UTC. Don't hard-fail on a UTC box
+# (CI may be UTC), but make the intent explicit.
+offUtc = new Date('2024-03-15T10:30:00').getTimezoneOffset() isnt 0
+console.warn '  ! TZ offset is 0 (UTC) — shift-correction assertions are vacuous here' unless offUtc
+
+# ── Read path: naive TIMESTAMP is UTC wall-clock, NOT local ──────────────────
+ts = decoded 'TIMESTAMP', '2024-03-15T10:30:00'
+ok  'TIMESTAMP -> Date instance', ts instanceof Date
+eq  'TIMESTAMP decoded as UTC (no host-offset shift)', ts.getTime(), Date.UTC(2024, 2, 15, 10, 30, 0)
+# Prove decoding actually corrected the shift a bare `new Date` would have made.
+ok  'TIMESTAMP decode differs from naive local parse (off-UTC)',
+  (not offUtc) or ts.getTime() isnt new Date('2024-03-15T10:30:00').getTime()
+
+# ── TIMESTAMP WITH TIME ZONE already carries Z ───────────────────────────────
+tstz = decoded 'TIMESTAMP WITH TIME ZONE', '2024-03-15T10:30:00Z'
+ok 'TIMESTAMPTZ -> Date instance', tstz instanceof Date
+eq 'TIMESTAMPTZ decoded as instant', tstz.getTime(), Date.UTC(2024, 2, 15, 10, 30, 0)
+eq 'TIMESTAMPTZ alias spelling', decoded('TIMESTAMPTZ', '2024-03-15T10:30:00Z').getTime(), Date.UTC(2024, 2, 15, 10, 30, 0)
+
+# ── DATE is a civil date at UTC midnight ─────────────────────────────────────
+d = decoded 'DATE', '2024-03-15'
+ok 'DATE -> Date instance', d instanceof Date
+eq 'DATE UTC year',  d.getUTCFullYear(), 2024
+eq 'DATE UTC month', d.getUTCMonth(), 2
+eq 'DATE UTC day',   d.getUTCDate(), 15
+
+# ── Engine-independent normalization: space separator + ±HHMM offset ─────────
+eq 'space-separated TIMESTAMP decodes as UTC',
+  decoded('TIMESTAMP', '2024-03-15 10:30:00').getTime(), Date.UTC(2024, 2, 15, 10, 30, 0)
+eq 'bare ±HHMM offset normalized',
+  decoded('TIMESTAMP WITH TIME ZONE', '2024-03-15T10:30:00-0700').getTime(), Date.UTC(2024, 2, 15, 17, 30, 0)
+
+# ── duckdbType casing/whitespace is tolerated ────────────────────────────────
+eq 'lowercase type still decodes', decoded('timestamp', '2024-03-15T10:30:00').getTime(), Date.UTC(2024, 2, 15, 10, 30, 0)
+
+# ── TIME has no date component: stays a string ───────────────────────────────
+eq 'TIME stays string', decoded('TIME', '10:30:00'), '10:30:00'
+
+# ── Microseconds truncate to millisecond precision ───────────────────────────
+us = decoded 'TIMESTAMP', '2024-03-15T10:30:00.123456'
+eq 'TIMESTAMP micros truncate to ms', us.getTime(), Date.UTC(2024, 2, 15, 10, 30, 0, 123)
+
+# ── Odd / unparseable values pass through unchanged (no crash) ───────────────
+eq 'infinity passes through',      decoded('TIMESTAMP', 'infinity'), 'infinity'
+eq 'null passes through',          decoded('TIMESTAMP', null), null
+eq 'non-ISO string passes through', decoded('TIMESTAMP', 'not a date'), 'not a date'
+
+# ── Fast path: no temporal column -> identical envelope object ────────────────
+plain = { columns: [{ name: 'n', duckdbType: 'INTEGER' }], data: [[42]] }
+ok 'fast path returns same object (no temporal columns)', decodeEnvelope(plain) is plain
+
+# ── Non-temporal cells in a mixed row are untouched ──────────────────────────
+mixed = decodeEnvelope
+  columns: [{ name: 'id', duckdbType: 'INTEGER' }, { name: 'ts', duckdbType: 'TIMESTAMP' }]
+  data: [[7, '2024-03-15T10:30:00']]
+eq 'mixed row: integer untouched', mixed.data[0][0], 7
+ok 'mixed row: timestamp decoded',  mixed.data[0][1] instanceof Date
+
+# ── Write path: Date -> explicit ISO-8601 UTC ────────────────────────────────
+enc = encodeParams [new Date(Date.UTC(2024, 2, 15, 10, 30, 0))]
+eq 'Date param -> ISO-Z string', enc[0], '2024-03-15T10:30:00.000Z'
+eq 'string param untouched',     encodeParams(['hello'])[0], 'hello'
+eq 'number param untouched',     encodeParams([42])[0], 42
+eq 'null param untouched',       encodeParams([null])[0], null
+
+# Nested Date in array / plain object is normalized.
+nested = encodeParams [[new Date(0)], { at: new Date(0) }]
+eq 'nested array Date normalized',  nested[0][0], '1970-01-01T00:00:00.000Z'
+eq 'nested object Date normalized', nested[1].at, '1970-01-01T00:00:00.000Z'
+
+# Invalid Date fails loudly rather than serializing to null.
+throws 'Invalid Date param throws', -> encodeParams [new Date('nope')]
+
+# ── Summary ──────────────────────────────────────────────────────────────────
+console.log "\n@rip-lang/db temporal: #{pass} passed, #{fail} failed"
+process.exit(1) if fail > 0

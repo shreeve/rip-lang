@@ -171,31 +171,61 @@ and `list_columns` to AI tools. Cursor config (`~/.cursor/mcp.json`):
 
 Values arrive per harbor SPEC §5.4; the column schema (`duckdbType` on each
 column entry, aliased as `type`) is the authority for decoding. The client
-passes values through without auto-decoding:
+passes values through verbatim **except temporal columns, which are decoded to
+real JS `Date` objects** (see below):
 
 - **BIGINT / HUGEINT / UBIGINT / UHUGEINT** — JSON number inside the JS
   safe-integer range (±2⁵³−1), JSON string outside it. Promote to `BigInt`
   at the boundary when exact arithmetic on large values matters.
 - **DECIMAL** — string, preserving width/scale.
-- **DATE / TIME / TIMESTAMP / TIMESTAMPTZ** — strings.
+- **DATE / TIMESTAMP / TIMESTAMP WITH TIME ZONE** — decoded to `Date` (below).
+- **TIME / TIME WITH TIME ZONE** — string (a JS `Date` can't represent a bare
+  time-of-day).
 - **INTERVAL** — `{months, days, micros}` with `micros` as a string.
 - **BLOB** — base64.
 - **LIST / ARRAY / STRUCT / MAP / UNION / ENUM** — nested per SPEC §5.4.
+  Temporal values *inside* nested types are not (yet) decoded.
 
-> **Known gotcha / TODO — timestamps are timezone-naive strings.** A `TIMESTAMP`
-> comes back as a bare wall-clock string with no `Z`/offset (e.g.
-> `2024-03-15 10:30:00`). JS `new Date(...)` parses such a string as **local**
-> time, so on a non-UTC host the value silently shifts by the host's offset
-> (east of UTC it lands in the past). Until the client decodes timestamps to a
-> real `Date` (or an ISO string with `Z`) at the boundary — the `duckdbType` /
-> `type` column metadata already says which columns to convert, so a client-side
-> fix would cover raw `query!`/`findAll!` too — callers must reinterpret the
-> string as UTC themselves. The schema ORM's `_hydrate`
-> (`src/schema/runtime-validate.js`) has the same gap on `datetime` fields, and
-> the `datetime` write path is inconsistent (a raw `Date` is sent as-is while
-> `@timestamps` go through `.toISOString()`). Surfaced by the medlabs app's
-> `auth/signin` "Code expired" bug; a fix must ship with a `TZ`-set regression
-> test (the bug is invisible on a UTC CI box).
+### Temporal handling (dates & timestamps)
+
+DuckDB sends a naive `TIMESTAMP` as a bare wall-clock string with no `Z`/offset
+(e.g. `2024-03-15T10:30:00`); JS `new Date(...)` would parse that as **local**
+time, so on a non-UTC host every read silently shifts by the host's offset. To
+make this correct everywhere, the client decodes temporal columns to `Date` at
+the boundary (in `query`), keyed on `duckdbType` — so raw `query`/`findAll`,
+the materializers, and the schema ORM's hydration all agree, and the runtime
+matches the `Date` type the schema's generated `.d.ts` already declares for
+`date`/`datetime` fields.
+
+| DuckDB type | Decoded to | Rule |
+|---|---|---|
+| `TIMESTAMP` (and `TIMESTAMP_S/_MS/_NS`) | `Date` | **naive value is defined as UTC** — `Z` appended, then parsed |
+| `TIMESTAMP WITH TIME ZONE` / `TIMESTAMPTZ` | `Date` | already carries an offset; parsed as-is |
+| `DATE` | `Date` | date-only → UTC midnight; use **UTC getters** for civil-date semantics |
+| `TIME` / `TIME WITH TIME ZONE` | string | left as-is |
+
+Notes & guarantees:
+
+- **Convention:** naive `TIMESTAMP` columns are treated as holding **UTC**
+  wall-clock. Store UTC; convert to a display zone at the edge (e.g. with
+  `@rip-lang/time`).
+- **Write path is symmetric:** a JS `Date` param is encoded to an ISO-8601 UTC
+  string before sending. DuckDB CASTs it to `TIMESTAMP` by dropping the `Z`
+  (storing UTC wall-clock, matching the read convention) or to `TIMESTAMPTZ` by
+  honoring the offset. An **Invalid Date** param throws rather than silently
+  serializing to `null`.
+- **Precision:** sub-millisecond precision is **not** preserved (JS `Date` is
+  millisecond-grained); `…:00.123456` decodes to `…:00.123Z`.
+- **Robustness:** only `YYYY-MM-DD…`-shaped strings are decoded; anything else
+  (DuckDB `infinity`/`-infinity`, `null`, unexpected formats) passes through
+  unchanged, so one odd value can't change a column's type or crash a result
+  set.
+- **Escape hatch:** `decodeEnvelope(env)` and `encodeParams(params)` are
+  exported for callers post-processing a raw harbor envelope or normalizing
+  params by hand.
+
+Guarded by `TZ=America/Los_Angeles` regression tests (`bun run test`) — the
+original shift bug is invisible on a UTC CI box.
 
 ## License
 

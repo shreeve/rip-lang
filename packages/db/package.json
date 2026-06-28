@@ -11,6 +11,9 @@
   "bin": {
     "rip-db": "./bin/rip-db"
   },
+  "scripts": {
+    "test": "TZ=America/Los_Angeles rip test/temporal.test.rip"
+  },
   "keywords": [
     "db",
     "database",

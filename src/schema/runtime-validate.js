@@ -904,6 +904,13 @@ class __SchemaDef {
     // a non-enumerable accessor so order.user_id and order.userId read
     // the same slot — useful when DB column names leak into user code
     // via raw SQL helpers.
+    //
+    // Temporal values arrive already decoded by the adapter: @rip-lang/db
+    // decodes date/datetime columns to real `Date` at the wire boundary
+    // (naive TIMESTAMP is read as UTC), so hydrate stores them verbatim —
+    // do NOT add a decode here. That keeps a single decode seam and honors
+    // the `date`/`datetime` -> `Date` .d.ts contract. (`_coerceDates` below
+    // is parse-only, for JSON/HTTP input — it never runs on this path.)
     const data = {};
     for (let i = 0; i < columns.length; i++) {
       data[__schemaCamel(columns[i].name)] = row[i];

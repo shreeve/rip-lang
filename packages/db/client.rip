@@ -64,15 +64,18 @@
 #     come back as plain JSON values.
 #   - LIST / ARRAY / STRUCT / MAP / UNION / ENUM nest per harbor SPEC §5.4.
 #
-# v1 does NOT auto-decode any of these (no Date parsing, no BLOB
-# base64 decode). One-shot JSON pass-through for now.
-#
-# TODO (timestamps): naive TIMESTAMP strings have no `Z`/offset, so
-# `new Date(value)` parses them as LOCAL time and reads shift by the host's
-# UTC offset. `duckdbType` identifies the columns to convert — decode
-# TIMESTAMP/TIMESTAMPTZ to a real Date (or ISO-with-`Z`) here to fix all
-# reads (raw + ORM); needs a TZ-set regression test. See README "Known
-# gotcha / TODO" and the schema `_hydrate` gap in src/schema/runtime-validate.js.
+# Auto-decoding is deliberately minimal — ONLY temporal columns are
+# decoded (see "Temporal decoding" below). Their wire form is actively
+# wrong for `new Date()`: a naive TIMESTAMP arrives with no `Z`/offset
+# (e.g. `2024-03-15T10:30:00`), so `new Date(value)` reads it as LOCAL
+# and every read shifts by the host's UTC offset. We define naive
+# TIMESTAMP as UTC wall-clock and decode it (plus DATE / TIMESTAMPTZ) to
+# a real JS `Date` at this boundary, so raw `query`, the materializers,
+# and the schema ORM's `_hydrate` all agree — and match the `Date` type
+# the schema's generated `.d.ts` already promises for `date`/`datetime`.
+# Everything else (BLOB base64, out-of-range BIGINT strings, DECIMAL
+# strings) stays a faithful JSON pass-through; promote it at the call
+# site if needed.
 
 # ==============================================================================
 # Connection
@@ -139,6 +142,94 @@ normalizeEnvelope = (env) ->
   cols = env.columns.map (c) -> { ...c, type: c.duckdbType ?? c.type }
   { ...env, columns: cols }
 
+# ==============================================================================
+# Temporal decoding (read path)
+# ==============================================================================
+#
+# Decode DuckDB temporal columns to real JS `Date` objects at the boundary.
+# See the wire-format notes in the file header for the full rationale; the
+# short version is that naive TIMESTAMP has no zone marker, so `new Date` would
+# read it as LOCAL and shift by the host offset. Pure + side-effect-free so it
+# can be unit-tested under any `TZ` (see test/temporal.test.rip).
+#
+# Only `YYYY-MM-DD[...]` shaped strings are decoded; anything else (notably
+# DuckDB's `infinity` / `-infinity` sentinels, or an unexpected format) passes
+# through untouched so a single odd value can't crash a whole result set. (A
+# read-path throw was considered and rejected: robustness at the boundary wins
+# over failing a whole query on one stray cell.)
+_ISO_SHAPE =! /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}:\d{2}(\.\d+)?)?([Zz]|[+-]\d{2}:?\d{2})?$/
+
+_HAS_ZONE =! /([Zz]|[+-]\d{2}:?\d{2})$/
+
+# How a given DuckDB type's string value becomes an instant:
+#   'utc'     naive wall-clock we define as UTC      -> append `Z`, then parse
+#   'instant' already carries `Z`/offset (TIMESTAMPTZ) -> parse as-is
+#   'civil'   date-only                              -> parse as-is (UTC midnight)
+#   null      not a type we decode (TIME, INTERVAL, scalars, nested) -> leave
+# Type strings are trimmed + upper-cased so casing/whitespace variants still match.
+temporalKind = (duckdbType) ->
+  switch String(duckdbType ?? '').trim().toUpperCase()
+    when 'TIMESTAMP', 'TIMESTAMP_S', 'TIMESTAMP_MS', 'TIMESTAMP_NS', 'DATETIME'
+      'utc'
+    when 'TIMESTAMP WITH TIME ZONE', 'TIMESTAMPTZ'
+      'instant'
+    when 'DATE'
+      'civil'
+    else
+      null
+
+# Decode one cell. Returns the original value unchanged for null, non-strings,
+# non-ISO-shaped strings, or anything that fails to parse to a valid Date —
+# so the type of a column stays stable except for genuine temporal values.
+# Sub-millisecond precision is not preserved (JS `Date` is millisecond-grained).
+decodeTemporal = (value, kind) ->
+  return value unless kind and typeof value is 'string' and _ISO_SHAPE.test(value)
+  # Canonicalize to ISO 8601 so parsing is engine-independent: ` ` -> `T`
+  # date/time separator, and a bare `±HHMM` offset -> `±HH:MM`.
+  iso = value.replace(' ', 'T').replace(/([+-]\d{2})(\d{2})$/, '$1:$2')
+  iso = "#{iso}Z" if kind is 'utc' and not _HAS_ZONE.test(iso)
+  date = new Date(iso)
+  if Number.isNaN(date.getTime()) then value else date
+
+# Decode every temporal cell in a harbor envelope in one pass. Fast path:
+# if no column is a temporal type, the envelope is returned untouched (no
+# row copy). Exported so callers post-processing a raw `query` envelope (or
+# a cached one) can apply the same decoding.
+export decodeEnvelope = (env) ->
+  return env unless env?.columns? and Array.isArray(env?.data)
+  kinds = env.columns.map (c) -> temporalKind(c.duckdbType ?? c.type)
+  return env unless kinds.some (k) -> k?
+  data = env.data.map (row) ->
+    row.map (v, i) -> if kinds[i] then decodeTemporal(v, kinds[i]) else v
+  { ...env, data }
+
+# ==============================================================================
+# Parameter encoding (write path)
+# ==============================================================================
+#
+# Normalize outbound params before JSON serialization. A JS `Date` becomes an
+# explicit ISO-8601 UTC string (rather than relying on JSON.stringify's
+# implicit `Date.toJSON`): DuckDB CASTs it to TIMESTAMP by dropping the `Z`
+# and storing the UTC wall-clock — exactly matching the read convention above
+# — or to TIMESTAMPTZ by honoring the offset. An Invalid Date is a caller bug;
+# fail loudly here instead of letting JSON silently turn it into `null`.
+# Arrays and plain objects are walked so a `Date` nested in a JSON-column value
+# is normalized too; everything else passes through unchanged.
+_isPlainObject = (v) -> v? and typeof v is 'object' and (Object.getPrototypeOf(v) is Object.prototype or Object.getPrototypeOf(v) is null)
+
+encodeParam = (v) ->
+  if v instanceof Date
+    throw new TypeError 'cannot bind an Invalid Date as a query parameter' if Number.isNaN(v.getTime())
+    return v.toISOString()
+  return v.map(encodeParam) if Array.isArray(v)
+  if _isPlainObject(v)
+    out = {}
+    out[k] = encodeParam(val) for own k, val of v
+    return out
+  v
+
+export encodeParams = (params = []) -> params.map(encodeParam)
+
 # Throw RipDBError when the response indicates failure; otherwise
 # return the (normalized) success envelope. Accepts both well-formed
 # harbor envelopes and degenerate cases (network-level failures arrive
@@ -150,7 +241,7 @@ throwOrReturn = (res, data) ->
       code:       data?.errorCode
       details:    data?.errorDetails
       httpStatus: res?.status
-  normalizeEnvelope data
+  decodeEnvelope normalizeEnvelope data
 
 # Robustly turn a fetch Response into a parsed body. Harbor's happy path
 # is JSON; the unhappy path can be HTML (reverse proxy 500), plain text
@@ -218,7 +309,7 @@ export query = (sql, params = [], opts = {}) ->
       ctrl.abort new Error "query timed out after #{timeoutMs}ms"
     ), timeoutMs
 
-  body = if params.length > 0 then { sql, params } else { sql }
+  body = if params.length > 0 then { sql, params: encodeParams(params) } else { sql }
   body.sessionId = opts.sessionId if opts.sessionId
 
   try
