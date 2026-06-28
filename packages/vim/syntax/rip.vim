@@ -112,8 +112,10 @@ syn match  ripArrow         /[=-]>/
 " Reactive (high priority)
 syn match  ripReactive      /<=>\|:=\|\~=\|\~>\|=!/
 
-" Type annotations (highest operator priority)
-syn match  ripTypeOp        /::\%(=\)\@!/
+" Prototype access: String::trim (since 3.17.3, `::` is prototype access
+" only — `:` is the sole type-annotation operator. Type names after a `:`
+" still highlight via ripType / ripPascalCase below.)
+syn match  ripProtoOp       /::\%(=\)\@!/
 
 " --- Object Keys ------------------------------------------------------------
 
@@ -197,7 +199,7 @@ hi def link ripInstVar        Identifier
 hi def link ripOperator       Operator
 hi def link ripArrow          Operator
 hi def link ripReactive       Special
-hi def link ripTypeOp         Type
+hi def link ripProtoOp        Operator
 
 hi def link ripObjKey         Identifier
 hi def link ripFuncCall       Function
