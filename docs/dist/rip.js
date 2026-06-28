@@ -16923,7 +16923,7 @@ if (typeof globalThis !== 'undefined') {
     return new CodeEmitter({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.17.0-wip.1";
+  var VERSION = "3.17.1";
   var BUILD_DATE = "2026-06-28@00:08:17GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
