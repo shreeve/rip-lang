@@ -1389,8 +1389,8 @@ test "render-local binding is visible to subsequent statements at runtime", '''
 
 test "tag-named local passed as a child component prop compiles", '''
   CodeBlock = component
-    @label?:: string := ""
-    @code?:: string := ""
+    @label?: string := ""
+    @code?: string := ""
     render
       pre @code
   A = component
@@ -2020,7 +2020,7 @@ test "extends exposes @rest as reactive signal", '''
 # __clsx, so parents can pass strings, arrays, or {name: bool} objects.
 test "extends class-merge pattern via @rest in computed", '''
   A = component extends button
-    @variant?:: 'primary' | 'secondary' := 'primary'
+    @variant?: 'primary' | 'secondary' := 'primary'
     classes ~=
       parts = []
       parts.push 'secondary' if @variant is 'secondary'
@@ -2039,7 +2039,7 @@ test "extends class-merge pattern via @rest in computed", '''
 # `:=` only assigns a default; it no longer implies optionality.
 test "optional typed prop without default omitted by caller is undefined at runtime", '''
   A = component
-    @label?:: string
+    @label?: string
     render
       span
   a = A.new()
@@ -2049,7 +2049,7 @@ test "optional typed prop without default omitted by caller is undefined at runt
 
 test "optional typed prop without default accepts a value", '''
   A = component
-    @label?:: string
+    @label?: string
     render
       span
   a = A.new(label: "hi")
@@ -2059,7 +2059,7 @@ test "optional typed prop without default accepts a value", '''
 
 test "optional typed prop with default falls back when omitted", '''
   A = component
-    @label?:: string := "fallback"
+    @label?: string := "fallback"
     render
       span
   a = A.new()
@@ -2069,7 +2069,7 @@ test "optional typed prop with default falls back when omitted", '''
 
 test "typed prop with default but no ? still applies the default at runtime", '''
   A = component
-    @label:: string := "fallback"
+    @label: string := "fallback"
     render
       span
   a = A.new()
@@ -4590,7 +4590,7 @@ code 'render: CSS class + property access attr coexist', '''
 
 code 'component extends: inherits tag, rest props forwarded', '''
   export Test = component extends input
-    @label?:: string := ""
+    @label?: string := ""
     render
       fieldset
         input

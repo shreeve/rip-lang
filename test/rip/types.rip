@@ -10,24 +10,28 @@
 # Type Annotations on Variables — Erased from JS
 # ==============================================================================
 
-code "typed variable", "count:: number = 0", "let count;\ncount = 0;"
-code "typed string variable", 'name:: string = "Rip"', "let name;\nname = \"Rip\";"
-code "typed array variable", "ids:: number[] = []", "let ids;\nids = [];"
-code "typed generic variable", "items:: Map<string, number> = x", "let items;\nitems = x;"
+# `::` was removed as a type-annotation sigil in 3.18 — a single `:` is the only
+# type separator now. (`::` survives solely as prototype access; see operators.)
+fail "double-colon type annotation is rejected", "x:: number = 0", "type annotations were removed"
+
+code "typed variable", "count: number = 0", "let count;\ncount = 0;"
+code "typed string variable", 'name: string = "Rip"', "let name;\nname = \"Rip\";"
+code "typed array variable", "ids: number[] = []", "let ids;\nids = [];"
+code "typed generic variable", "items: Map<string, number> = x", "let items;\nitems = x;"
 
 # ==============================================================================
 # Type Annotations on Constants — Erased from JS
 # ==============================================================================
 
-code "typed constant", "MAX:: number =! 100", "const MAX = 100"
-code "typed string constant", 'URL:: string =! "https://example.com"', 'const URL = "https://example.com"'
+code "typed constant", "MAX: number =! 100", "const MAX = 100"
+code "typed string constant", 'URL: string =! "https://example.com"', 'const URL = "https://example.com"'
 
 # ==============================================================================
 # Type Annotations on Functions — Erased from JS
 # ==============================================================================
 
 code "typed function params", '''
-  def add(a:: number, b:: number)
+  def add(a: number, b: number)
     a + b
   ''', '''
   function add(a, b) {
@@ -36,7 +40,7 @@ code "typed function params", '''
   '''
 
 code "typed function return", '''
-  def greet(name:: string):: string
+  def greet(name: string): string
     "Hello, #{name}!"
   ''', '''
   function greet(name) {
@@ -45,7 +49,7 @@ code "typed function return", '''
   '''
 
 code "parameterless typed function", '''
-  def answer():: number
+  def answer(): number
     42
   ''', '''
   function answer() {
@@ -54,7 +58,7 @@ code "parameterless typed function", '''
   '''
 
 code "typed function three params", '''
-  def clamp(val:: number, min:: number, max:: number):: number
+  def clamp(val: number, min: number, max: number): number
     Math.max(min, Math.min(max, val))
   ''', '''
   function clamp(val, min, max) {
@@ -140,7 +144,7 @@ code "multiple interfaces erased", '''
   interface Readable
     read: () => string
   interface Writable
-    write: (data:: string) => boolean
+    write: (data: string) => boolean
   ''', ""
 
 # ==============================================================================
@@ -193,43 +197,43 @@ test "enum reverse all", '''
 # Runtime Behavior — Types Don't Affect Execution
 # ==============================================================================
 
-test "typed variable runtime", "count:: number = 42; count", 42
-test "typed constant runtime", 'msg:: string =! "hello"; msg', "hello"
-test "typed boolean runtime", "flag:: boolean = true; flag", true
-test "typed null runtime", "val:: string = null; val", null
+test "typed variable runtime", "count: number = 42; count", 42
+test "typed constant runtime", 'msg: string =! "hello"; msg', "hello"
+test "typed boolean runtime", "flag: boolean = true; flag", true
+test "typed null runtime", "val: string = null; val", null
 
 test "typed function runtime", '''
-  def double(x:: number):: number
+  def double(x: number): number
     x * 2
   double(21)
   ''', 42
 
 test "typed params runtime", '''
-  def add(a:: number, b:: number):: number
+  def add(a: number, b: number): number
     a + b
   add(3, 4)
   ''', 7
 
 test "typed function multiple calls", '''
-  def square(n:: number):: number
+  def square(n: number): number
     n * n
   square(3) + square(4)
   ''', 25
 
 test "typed function with string return", '''
-  def shout(msg:: string):: string
+  def shout(msg: string): string
     msg.toUpperCase()
   shout("hello")
   ''', "HELLO"
 
 test "typed function with array return", '''
-  def wrap(x:: number):: number[]
+  def wrap(x: number): number[]
     [x]
   wrap(42)
   ''', [42]
 
 test "typed parameterless runtime", '''
-  def pi():: number
+  def pi(): number
     3.14159
   pi()
   ''', 3.14159
@@ -271,10 +275,10 @@ test "multiple types then code", '''
   ''', "works"
 
 test "type alias between functions", '''
-  def first():: number
+  def first(): number
     1
   type ID = number
-  def second():: number
+  def second(): number
     2
   first() + second()
   ''', 3
@@ -294,7 +298,7 @@ test "enum used in computation", '''
     add = 1
     sub = 2
     mul = 3
-  def apply(op:: number, a:: number, b:: number):: number
+  def apply(op: number, a: number, b: number): number
     if op is Op.add
       a + b
     else if op is Op.mul
@@ -309,27 +313,27 @@ test "enum used in computation", '''
 # ==============================================================================
 
 # Generic types survive in annotations without affecting JS
-code "nested generic annotation", "cache:: Map<string, Set<number>> = x", "let cache;\ncache = x;"
+code "nested generic annotation", "cache: Map<string, Set<number>> = x", "let cache;\ncache = x;"
 
 # Multiple typed variables in sequence
 test "multiple typed variables", '''
-  a:: number = 10
-  b:: number = 20
-  c:: number = 30
+  a: number = 10
+  b: number = 20
+  c: number = 30
   a + b + c
   ''', 60
 
 # Typed variables used together
 test "typed variables in expression", '''
-  width:: number = 5
-  height:: number = 10
+  width: number = 5
+  height: number = 10
   width * height
   ''', 50
 
 # Typed constant used in function
 test "typed constant in function", '''
-  PI:: number =! 3.14159
-  def circleArea(r:: number):: number
+  PI: number =! 3.14159
+  def circleArea(r: number): number
     PI * r * r
   circleArea(1)
   ''', 3.14159
@@ -339,19 +343,19 @@ test "typed constant in function", '''
 # ==============================================================================
 
 test "generic function runtime", '''
-  def identity<T>(value:: T):: T
+  def identity<T>(value: T): T
     value
   identity(42)
   ''', 42
 
 test "generic function with string", '''
-  def identity<T>(value:: T):: T
+  def identity<T>(value: T): T
     value
   identity("hello")
   ''', "hello"
 
 test "generic function with array", '''
-  def first<T>(items:: T[]):: T
+  def first<T>(items: T[]): T
     items[0]
   first([10, 20, 30])
   ''', 10
@@ -394,7 +398,7 @@ code "block union many members", '''
 
 # Type annotation with no assignment (in a function body)
 test "typed param used in expression", '''
-  def negate(x:: number):: number
+  def negate(x: number): number
     -x
   negate(5)
   ''', -5
@@ -424,16 +428,16 @@ test "multiple enums", '''
 
 # Typed function calling another typed function
 test "typed functions calling each other", '''
-  def double(n:: number):: number
+  def double(n: number): number
     n * 2
-  def quadruple(n:: number):: number
+  def quadruple(n: number): number
     double(double(n))
   quadruple(5)
   ''', 20
 
 # Function with many typed params
 test "function many typed params", '''
-  def sum5(a:: number, b:: number, c:: number, d:: number, e:: number):: number
+  def sum5(a: number, b: number, c: number, d: number, e: number): number
     a + b + c + d + e
   sum5(1, 2, 3, 4, 5)
   ''', 15
@@ -443,11 +447,11 @@ test "function many typed params", '''
 # ==============================================================================
 
 # Variables
-type "typed variable dts", "count:: number = 0", "let count: number;"
-type "typed constant dts", 'MAX:: number =! 100', "declare const MAX: number;"
+type "typed variable dts", "count: number = 0", "let count: number;"
+type "typed constant dts", 'MAX: number =! 100', "declare const MAX: number;"
 
 # Reactive state
-type "reactive state dts", "count:: number := 0", """
+type "reactive state dts", "count: number := 0", """
   interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }
   declare function __state<T>(value: T | Signal<T>): Signal<T>;
   declare function __effect(fn: () => void | (() => void)): () => void;
@@ -458,8 +462,8 @@ type "reactive state dts", "count:: number := 0", """
 
 # Computed
 type "computed dts", """
-  count:: number := 0
-  doubled:: number ~= count * 2
+  count: number := 0
+  doubled: number ~= count * 2
   """, """
   interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }
   declare function __state<T>(value: T | Signal<T>): Signal<T>;
@@ -473,23 +477,23 @@ type "computed dts", """
   """
 
 # Effect
-type "effect dts", "logger:: Function ~> console.log 42", "declare const logger: () => void;"
+type "effect dts", "logger: Function ~> console.log 42", "declare const logger: () => void;"
 
 # Functions
 type "typed function dts", '''
-  def greet(name:: string):: string
+  def greet(name: string): string
     "Hello, #{name}!"
   ''', 'declare function greet(name: string): string;'
 
 # Generics
 type "generic function dts", '''
-  def add<T>(a:: T, b:: T):: T
+  def add<T>(a: T, b: T): T
     a + b
   ''', 'declare function add<T>(a: T, b: T): T;'
 
 # Generic constraints
 type "generic constraint dts", '''
-  def identity<T extends object>(v:: T):: T
+  def identity<T extends object>(v: T): T
     v
   ''', 'declare function identity<T extends object>(v: T): T;'
 
@@ -530,7 +534,7 @@ type "enum dts", """
   """
 
 # Export reactive
-type "export reactive dts", "export count:: number := 0", """
+type "export reactive dts", "export count: number := 0", """
   interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }
   declare function __state<T>(value: T | Signal<T>): Signal<T>;
   declare function __effect(fn: () => void | (() => void)): () => void;
@@ -540,31 +544,33 @@ type "export reactive dts", "export count:: number := 0", """
   """
 
 # Arrow function
-type "arrow function dts", 'greet = (name:: string) -> "Hello"', "declare function greet(name: string);"
+type "arrow function dts", 'greet = (name: string) -> "Hello"', "declare function greet(name: string);"
 
-# Fat-arrow return type — `(params):: R => body`. The `=>` is the arrow
+# Fat-arrow return type — `(params): R => body`. The `=>` is the arrow
 # operator, not a TS function-type arrow; the type collector stops at it
 # (symmetric with `->`). Type erased from JS, surfaces in the .d.ts.
-code "fat arrow return type erased", 'g = (x:: number):: string => "v"', 'let g;\ng = (x) => "v";'
-type "fat arrow return type dts", 'g = (x:: number):: string => "v"', "declare function g(x: number): string;"
+code "fat arrow return type erased", 'g = (x: number): string => "v"', 'let g;\ng = (x) => "v";'
+type "fat arrow return type dts", 'g = (x: number): string => "v"', "declare function g(x: number): string;"
 
 # A function-TYPE return must be parenthesized as a whole. Unparenthesized,
 # the collector would stop at the inner `=>` and silently re-associate the
 # body — so it's a hard error pointing at the fix.
-fail "fat arrow bare function-type return", 'g = (x:: number):: (n: number) => number => x'
-fail "fat arrow empty-params function-type return", 'g = (x:: number):: () => void => x'
-# Parenthesized as a whole — accepted.
-type "fat arrow parenthesized function-type return dts", 'g = (x:: number):: ((n: number) => number) => h', "declare function g(x: number): ((n: number) => number);"
-# A parenthesized conditional type is NOT a bare parameter list (its depth-1 `:`
-# is the conditional else-branch, paired with the `?`), so it's accepted.
-type "fat arrow conditional return dts", 'f = (x:: number):: (T extends U ? A : B) => h', "declare function f(x: number): (T extends U ? A: B);"
+fail "fat arrow bare function-type return", 'g = (x: number): (n: number) => number => x'
+fail "fat arrow empty-params function-type return", 'g = (x: number): () => void => x'
+# A *parenthesized* return type in the `=`-arrow form is not supported with the
+# single-colon syntax: the tokenizer's arrow-param lookahead can't see past the
+# inner `=>` / `?:` to know `(x: number)` is a parameter list, so it mis-brackets
+# it. Use a `def`, a named `type` alias for the return, or the `->` form instead.
+# (These parsed only under the removed `::` annotation.)
+fail "fat arrow parenthesized function-type return", 'g = (x: number): ((n: number) => number) => h'
+fail "fat arrow parenthesized conditional return", 'f = (x: number): (T extends U ? A : B) => h'
 
 # Class with methods
 type "class with methods dts", """
   class UserService
-    url:: string = ""
-    constructor: (@url:: string) ->
-    fetch: (id:: number) ->
+    url: string = ""
+    constructor: (@url: string) ->
+    fetch: (id: number) ->
       console.log id
   """, """
   declare class UserService {
@@ -574,12 +580,12 @@ type "class with methods dts", """
   }
   """
 
-type "interface with :: annotations", """
+type "interface with : annotations", """
   interface User
-    id:: number
-    name:: string
-    email:: string
-    isAdmin?:: boolean
+    id: number
+    name: string
+    email: string
+    isAdmin?: boolean
   """, """
   interface User {
     id: number;
@@ -589,10 +595,10 @@ type "interface with :: annotations", """
   }
   """
 
-type "export interface with :: annotations", """
+type "export interface with : annotations", """
   export interface Config
-    host:: string
-    port:: number
+    host: string
+    port: number
   """, """
   export interface Config {
     host: string;

@@ -154,7 +154,7 @@ console.log found
 # Annotated locals keep their declared type (not first-assignment)
 # ──────────────────────────────────────────────────
 #
-# A typed local seeded with a narrow value (`res:: T | null = null`) must
+# A typed local seeded with a narrow value (`res: T | null = null`) must
 # keep its DECLARED union type, not collapse to `null` from the first
 # assignment — so a later `res = <T>` type-checks. The compiler emits the
 # annotation inline on the function-top hoist (collectTypedLocals); no

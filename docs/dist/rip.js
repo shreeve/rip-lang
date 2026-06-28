@@ -7303,8 +7303,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         this.emit(".", ".");
         return 2;
       } else if (val === "::") {
-        tag = "TYPE_ANNOTATION";
-        this.inTypeAnnotation = true;
+        syntaxError("'::' type annotations were removed — use a single ':' (e.g. `x: number`)", { row: this.row, col: this.col, len: 2 });
       } else if (val === "~=")
         tag = "COMPUTED_ASSIGN";
       else if (val === ":=")
@@ -16939,7 +16938,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.17.2";
-  var BUILD_DATE = "2026-06-28@03:29:47GMT";
+  var BUILD_DATE = "2026-06-28@03:54:38GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

@@ -1391,7 +1391,12 @@ export class Lexer {
       this.emit('.', '.');
       return 2;
     }
-    else if (val === '::')  { tag = 'TYPE_ANNOTATION'; this.inTypeAnnotation = true; }
+    else if (val === '::')  {
+      // `::` is prototype access only (handled above when followed by an
+      // identifier). The type-annotation meaning was removed in Rip 3.18 — use
+      // a single `:` (e.g. `x: T`, `def f(a: T): R`).
+      syntaxError("'::' type annotations were removed — use a single ':' (e.g. `x: number`)", {row: this.row, col: this.col, len: 2});
+    }
     // Reactive and binding operators
     else if (val === '~=') tag = 'COMPUTED_ASSIGN';
     else if (val === ':=') tag = 'REACTIVE_ASSIGN';

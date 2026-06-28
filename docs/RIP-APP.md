@@ -246,7 +246,7 @@ export stash =
   products: source                                          # five minutes of freshness is plenty
     fetch: -> Product.array.parse(api.get!('products').json!())   # validated Product[]
     staleTime: '5 min'
-  order: source { fetch: (id:: string) -> Order.parse(api.get!("orders/#{id}").json!()) }
+  order: source { fetch: (id: string) -> Order.parse(api.get!("orders/#{id}").json!()) }
 ```
 
 A source is **lazy** (loads on first touch, not at startup) and **not a

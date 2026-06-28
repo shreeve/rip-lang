@@ -761,7 +761,7 @@ signature (typed params, `this`, and the inferred return) instead of
 ```coffee
 greet: -> "Hello, #{@name}!"
 
-add: (other:: Money) ->
+add: (other: Money) ->
   Money.parse amount: @amount + other.amount, currency: @currency
   # shadow TS: add(this: Money, other: Money): Money
 

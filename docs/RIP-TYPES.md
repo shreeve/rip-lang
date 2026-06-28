@@ -23,7 +23,7 @@ def greet(name)
   "Hello, #{name}!"
 
 # With types (also valid, same runtime behavior)
-def greet(name:: string):: string
+def greet(name: string): string
   "Hello, #{name}!"
 ```
 
@@ -57,9 +57,9 @@ Both compile to identical JavaScript.
 
 | Sigil | Meaning | Example |
 |-------|---------|---------|
-| `::` | Type annotation | `count:: number = 0` |
+| `:` | Type annotation | `count: number = 0` |
 | `type` | Type alias | `type ID = number` |
-| `?::` | Optional parameter / field / prop | `email?:: string` |
+| `?:` | Optional parameter / field / prop | `email?: string` |
 | `\|` | Union member | `"a" \| "b" \| "c"` |
 | `=>` | Function type arrow | `(a: number) => string` |
 | `<T>` | Generic parameter | `Container<T>` |
@@ -68,17 +68,18 @@ This is the complete Rip Types sigil vocabulary.
 
 ---
 
-## Type Annotations (`::`)
+## Type Annotations (`:`)
 
-The double-colon `::` annotates types on variables, parameters, return values,
-and properties.
+A single colon `:` annotates types on variables, parameters, return values,
+and properties. (The older double-colon `::` form was removed in 3.18; `::` now
+means prototype access only, e.g. `String::trim`.)
 
 ### Variables
 
 ```coffee
-count:: number = 0
-name:: string = "Rip"
-items:: string[] = []
+count: number = 0
+name: string = "Rip"
+items: string[] = []
 ```
 
 **Emits:**
@@ -92,8 +93,8 @@ let items: string[]; items = [];
 ### Constants
 
 ```coffee
-MAX_RETRIES:: number =! 3
-API_URL:: string =! "https://api.example.com"
+MAX_RETRIES: number =! 3
+API_URL: string =! "https://api.example.com"
 ```
 
 **Emits:**
@@ -106,10 +107,10 @@ const API_URL: string = "https://api.example.com";
 ### Function Parameters
 
 ```coffee
-def greet(name:: string)
+def greet(name: string)
   "Hello, #{name}!"
 
-def add(a:: number, b:: number)
+def add(a: number, b: number)
   a + b
 ```
 
@@ -123,10 +124,10 @@ function add(a: number, b: number) { ... }
 ### Return Types
 
 ```coffee
-def getUser(id:: number):: User
+def getUser(id: number): User
   db.find!(id)
 
-def fetchData():: Promise<Data>
+def fetchData(): Promise<Data>
   fetch!("/api/data")
 ```
 
@@ -140,7 +141,7 @@ async function fetchData(): Promise<Data> { ... }
 ### Combined
 
 ```coffee
-def processUser(id:: number, options:: Options):: Result
+def processUser(id: number, options: Options): Result
   user = getUser!(id)
   transform(user, options)
 ```
@@ -156,8 +157,8 @@ function processUser(id: number, options: Options): Result { ... }
 Types work with Rip's reactive operators:
 
 ```coffee
-count:: number := 0
-doubled:: number ~= count * 2
+count: number := 0
+doubled: number ~= count * 2
 ```
 
 **Emits:**
@@ -181,8 +182,8 @@ type Name = string
 
 # Complex types
 type UserID = number | string
-type Callback = (error:: Error?, data:: any) => void
-type Handler = (req:: Request, res:: Response) => Promise<void>
+type Callback = (error: Error?, data: any) => void
+type Handler = (req: Request, res: Response) => Promise<void>
 ```
 
 **Emits:**
@@ -287,16 +288,16 @@ Rip uses a single optionality marker: `?` placed on the **name**
 type-suffix operators — write `T | undefined`, `T | null | undefined`,
 or `NonNullable<T>` directly when you need them.
 
-### Optional Parameter / Field: `name?:: T`
+### Optional Parameter / Field: `name?: T`
 
 ```coffee
-def greet(name?:: string):: void
+def greet(name?: string): void
   console.log "hello #{name ?? 'world'}"
 
 type User =
-  id:: number
-  name:: string
-  email?:: string      # Optional field — may be absent
+  id: number
+  name: string
+  email?: string      # Optional field — may be absent
 ```
 
 **Emits:**
@@ -311,7 +312,7 @@ type User = {
 };
 ```
 
-### Component Props: `@prop?:: T [:= default]`
+### Component Props: `@prop?: T [:= default]`
 
 A `?` on a component prop name marks it optional in the generated
 constructor type. A `:=` default is purely a runtime initializer — it
@@ -319,9 +320,9 @@ does NOT make the prop optional on its own. The three canonical shapes:
 
 ```coffee
 export Counter = component
-  @value::  number              # required, no default
-  @step?::  number              # optional, no default
-  @label?:: string := "Count"   # optional with default
+  @value:  number              # required, no default
+  @step?:  number              # optional, no default
+  @label?: string := "Count"   # optional with default
 ```
 
 **Emits:**
@@ -336,7 +337,7 @@ export declare class Counter {
 }
 ```
 
-Writing `@prop:: T := V` (typed, defaulted, no `?`) declares a
+Writing `@prop: T := V` (typed, defaulted, no `?`) declares a
 **required prop with a default** — the parent must still pass it. To
 make a prop optional, add `?` to the name.
 
@@ -346,9 +347,9 @@ When the **value** itself needs to permit `undefined` or `null`, write
 the union explicitly:
 
 ```coffee
-email::  string | undefined
-middle:: string | null | undefined
-id::     NonNullable<ID>
+email:  string | undefined
+middle: string | null | undefined
+id:     NonNullable<ID>
 ```
 
 This is the same form TypeScript uses, so the emitted DTS is a
@@ -406,23 +407,23 @@ numeric values.
 
 ```coffee
 # Type aliases for function signatures
-type Comparator = (a:: any, b:: any) => number
-type AsyncFetcher = (url:: string) => Promise<Response>
+type Comparator = (a: any, b: any) => number
+type AsyncFetcher = (url: string) => Promise<Response>
 
 # Overloads
-def toHtml(content:: string):: string
-def toHtml(nodes:: Element[]):: string
-def toHtml(input:: any):: string
+def toHtml(content: string): string
+def toHtml(nodes: Element[]): string
+def toHtml(input: any): string
   switch typeof input
     when "string" then escapeHtml(input)
     else renderNodes(input)
 
 # Method signatures in classes
 class UserService
-  find: (id:: number):: User? ->
+  find: (id: number): User? ->
     @db.find(id)
 
-  create: (data:: CreateUserInput):: User ->
+  create: (data: CreateUserInput): User ->
     @db.create(data)
 ```
 
@@ -461,16 +462,16 @@ type Pair<K, V> =
 # With constraints
 type Comparable<T extends Ordered> =
   value: T
-  compareTo: (other:: T) => number
+  compareTo: (other: T) => number
 
 # Generic functions
-def identity<T>(value:: T):: T
+def identity<T>(value: T): T
   value
 
-def map<T, U>(items:: T[], fn:: (item:: T) => U):: U[]
+def map<T, U>(items: T[], fn: (item: T) => U): U[]
   items.map(fn)
 
-def merge<T extends object, U extends object>(a:: T, b:: U):: T & U
+def merge<T extends object, U extends object>(a: T, b: U): T & U
   {...a, ...b}
 ```
 
@@ -586,14 +587,14 @@ Types should be explicit at boundaries, optional elsewhere:
 
 ```coffee
 # Explicit — function signatures, exports, class properties
-def processUser(id:: number, options:: Options):: Result
+def processUser(id: number, options: Options): Result
   ...
 
-export config:: Config = loadConfig()
+export config: Config = loadConfig()
 
 class UserService
-  db:: Database
-  cache:: Map<string, User>
+  db: Database
+  cache: Map<string, User>
 
 # Inferred — local variables
 user = getUser!(id)           # Inferred from return type
@@ -668,7 +669,7 @@ export type User =
   id: number
   name: string
 
-export def getUser(id:: number):: User?
+export def getUser(id: number): User?
   db.find(id)
 ```
 
@@ -705,7 +706,7 @@ User = schema :input
   email! email
 
 # Validate at an API boundary
-def createUser(req:: Request):: User
+def createUser(req: Request): User
   User.parse req.json!        # throws SchemaError on invalid
 
 # Or non-throwing for structured error responses
@@ -907,7 +908,7 @@ rewriteTypes() {
   this.scanTokens((token, i, tokens) => {
     let tag = token[0];
 
-    // --- Handle :: (type annotations) ---
+    // --- Handle : (type annotations) ---
     if (tag === 'TYPE_ANNOTATION') {
       let prevToken = tokens[i - 1];
       if (!prevToken) return 1;
@@ -998,7 +999,7 @@ rewriteTypes() {
         if (k >= 0) target = tokens[k];
         propName = 'returnType';
       } else if (prevToken[0] === 'PARAM_END') {
-        // Return type on arrow function: (x:: number):: string -> ...
+        // Return type on arrow function: (x: number): string -> ...
         // Scan forward past the type tokens to find the -> token.
         let arrowIdx = i + 1 + typeTokens.length;
         let arrowToken = tokens[arrowIdx];
@@ -1008,15 +1009,15 @@ rewriteTypes() {
         propName = 'returnType';
       } else if (prevToken[0] === 'IDENTIFIER' && i >= 2 &&
                  tokens[i - 2]?.[0] === 'DEF') {
-        // Return type on parameterless function: def foo:: string
+        // Return type on parameterless function: def foo: string
         propName = 'returnType';
       }
 
       if (!target.data) target.data = {};
       target.data[propName] = typeStr;
 
-      // Remove :: and type tokens from stream
-      let removeCount = 1 + typeTokens.length;  // :: + type tokens
+      // Remove : and type tokens from stream
+      let removeCount = 1 + typeTokens.length;  // : + type tokens
       tokens.splice(i, removeCount);
       return 0;  // Re-examine current position
     }
@@ -1062,14 +1063,14 @@ always ends a type expression.
 **Worked examples:**
 
 ```
-INPUT:  count:: number = 0
-SCAN:   :: → start collecting
+INPUT:  count: number = 0
+SCAN:   : → start collecting
         number → depth=0, type token
         = → depth=0, assignment delimiter, STOP
 RESULT: type = "number"
 
-INPUT:  items:: Map<string, number> = x
-SCAN:   :: → start collecting
+INPUT:  items: Map<string, number> = x
+SCAN:   : → start collecting
         Map → depth=0, type token
         < → depth=1, type token
         string → depth=1, type token
@@ -1079,18 +1080,18 @@ SCAN:   :: → start collecting
         = → depth=0, assignment delimiter, STOP
 RESULT: type = "Map<string, number>"
 
-INPUT:  def f(a:: number, b:: string)
-SCAN:   :: (after a) → start collecting
+INPUT:  def f(a: number, b: string)
+SCAN:   : (after a) → start collecting
         number → depth=0, type token
         , → depth=0, parameter delimiter, STOP
 RESULT: type on a = "number"
-SCAN:   :: (after b) → start collecting
+SCAN:   : (after b) → start collecting
         string → depth=0, type token
         ) → depth=0, close paren, STOP
 RESULT: type on b = "string"
 
-INPUT:  fn:: (a: number, b: string) => void = ...
-SCAN:   :: → start collecting
+INPUT:  fn: (a: number, b: string) => void = ...
+SCAN:   : → start collecting
         ( → depth=1, type token
         a → depth=1, type token
         : → depth=1, type token
@@ -1105,8 +1106,8 @@ SCAN:   :: → start collecting
         = → depth=0, assignment delimiter, STOP
 RESULT: type = "(a: number, b: string) => void"
 
-INPUT:  (name:: string):: string -> "Hello!"
-SCAN:   :: (after PARAM_END) → start collecting return type
+INPUT:  (name: string): string -> "Hello!"
+SCAN:   : (after PARAM_END) → start collecting return type
         string → depth=0, type token
         -> → depth=0, code arrow delimiter, STOP
 RESULT: returnType = "string"
@@ -1137,7 +1138,7 @@ collection — the token itself is the answer:
 Return types appear after the parameter list close:
 
 ```coffee
-def greet(name:: string):: string
+def greet(name: string): string
 ```
 
 After `rewriteTypes()` processes the `::` after `)`, the return type must be
@@ -1169,7 +1170,7 @@ Each example shows: Rip source → tokens after rewrite → s-expression → out
 **Typed variable:**
 
 ```coffee
-count:: number = 0
+count: number = 0
 ```
 
 Tokens after `rewriteTypes()`:
@@ -1195,7 +1196,7 @@ let count: number;
 **Typed constant:**
 
 ```coffee
-MAX:: number =! 100
+MAX: number =! 100
 ```
 
 Tokens: `IDENTIFIER("MAX", {type: "number"}), READONLY_ASSIGN, NUMBER(100)`
@@ -1209,8 +1210,8 @@ S-expression: `["readonly", MAX, 100]` — MAX carries `.data.type = "number"`
 **Typed reactive state:**
 
 ```coffee
-count:: number := 0
-doubled:: number ~= count * 2
+count: number := 0
+doubled: number ~= count * 2
 ```
 
 S-expressions:
@@ -1228,7 +1229,7 @@ declare const doubled: Computed<number>;
 **Typed function:**
 
 ```coffee
-def getUser(id:: number):: User
+def getUser(id: number): User
   db.find!(id)
 ```
 
@@ -1250,7 +1251,7 @@ S-expression: `["def", getUser, [id], body]`
 **Typed arrow function:**
 
 ```coffee
-greet = (name:: string):: string -> "Hello, #{name}!"
+greet = (name: string): string -> "Hello, #{name}!"
 ```
 
 Tokens after rewrite:
@@ -1264,8 +1265,8 @@ PARAM_END, ->({returnType: "string"}), ...
 
 ```coffee
 class UserService
-  db:: Database
-  cache:: Map<string, User>
+  db: Database
+  cache: Map<string, User>
 ```
 
 Tokens: identifiers carry `.data.type`, grammar sees normal class body.
@@ -1592,10 +1593,10 @@ the rewriter and removed before parsing.
 #### 2.6 Generic Type Parameters
 
 ```coffee
-def identity<T>(value:: T):: T
+def identity<T>(value: T): T
   value
 
-def map<T, U>(items:: T[], fn:: (item:: T) => U):: U[]
+def map<T, U>(items: T[], fn: (item: T) => U): U[]
   items.map(fn)
 ```
 
@@ -1752,12 +1753,12 @@ A `?` placed unspaced **before** the `::` annotation on a parameter,
 field, or component prop name marks the name as optional:
 
 ```coffee
-def fetch(url:: string, opts?:: RequestInit):: Response
+def fetch(url: string, opts?: RequestInit): Response
   ...
 
 type User =
-  id::    number
-  email?:: string   # optional field
+  id:    number
+  email?: string   # optional field
 ```
 
 In the lexer, when `?` appears immediately before `::`, it is stripped
@@ -1781,7 +1782,7 @@ export type User =
   id: number
   name: string
 
-export def getUser(id:: number):: User?
+export def getUser(id: number): User?
   db.find(id)
 ```
 
@@ -1812,23 +1813,23 @@ Each row is a test case. Verify both .js and .d.ts output.
 
 | # | Rip Input | .js Output | .d.ts Output |
 |---|-----------|-----------|-------------|
-| 1 | `count:: number = 0` | `count = 0` | `let count: number;` |
-| 2 | `MAX:: number =! 100` | `const MAX = 100` | `declare const MAX: number;` |
-| 3 | `count:: number := 0` | `const count = __state(0)` | `declare const count: Signal<number>;` |
-| 4 | `doubled:: number ~= x * 2` | `const doubled = __computed(...)` | `declare const doubled: Computed<number>;` |
-| 5 | `def f(a:: number):: string` | `function f(a) { ... }` | `declare function f(a: number): string;` |
-| 6 | `(x:: number):: number -> x + 1` | `(x) => x + 1` | `(x: number) => number` |
+| 1 | `count: number = 0` | `count = 0` | `let count: number;` |
+| 2 | `MAX: number =! 100` | `const MAX = 100` | `declare const MAX: number;` |
+| 3 | `count: number := 0` | `const count = __state(0)` | `declare const count: Signal<number>;` |
+| 4 | `doubled: number ~= x * 2` | `const doubled = __computed(...)` | `declare const doubled: Computed<number>;` |
+| 5 | `def f(a: number): string` | `function f(a) { ... }` | `declare function f(a: number): string;` |
+| 6 | `(x: number): number -> x + 1` | `(x) => x + 1` | `(x: number) => number` |
 | 7 | `type ID = number` | *(empty)* | `type ID = number;` |
 | 8 | `type User =` (+ block) | *(empty)* | `type User = { id: number; ... };` |
 | 9 | `type Status = \| "a" \| "b"` | *(empty)* | `type Status = "a" \| "b";` |
 | 10 | `interface Foo` (+ block) | *(empty)* | `interface Foo { ... }` |
 | 11 | `enum Code` (+ block) | `const Code = { ... }` | `enum Code { ... }` |
-| 12 | `items:: Map<string, number> = x` | `items = x` | `let items: Map<string, number>;` |
-| 13 | `email:: string?` | — | `let email: string \| undefined;` |
-| 14 | `id:: ID!` | — | `let id: NonNullable<ID>;` |
-| 15 | `def identity<T>(v:: T):: T` | `function identity(v) { ... }` | `declare function identity<T>(v: T): T;` |
+| 12 | `items: Map<string, number> = x` | `items = x` | `let items: Map<string, number>;` |
+| 13 | `email: string?` | — | `let email: string \| undefined;` |
+| 14 | `id: ID!` | — | `let id: NonNullable<ID>;` |
+| 15 | `def identity<T>(v: T): T` | `function identity(v) { ... }` | `declare function identity<T>(v: T): T;` |
 | 16 | `export type User =` (+ block) | *(empty)* | `export type User = { ... };` |
-| 17 | `export def f(x:: number):: number` | `export function f(x) { ... }` | `export function f(x: number): number;` |
+| 17 | `export def f(x: number): number` | `export function f(x) { ... }` | `export function f(x: number): number;` |
 
 ---
 
@@ -1859,21 +1860,21 @@ The type system uses a two-phase approach:
 
 | Rip Input | .d.ts Output |
 |-----------|-------------|
-| `x:: number = 0` | `let x: number;` |
-| `x:: number =! 100` | `declare const x: number;` |
-| `x:: number := 0` | `declare const x: Signal<number>;` |
-| `x:: number ~= y * 2` | `declare const x: Computed<number>;` |
-| `x:: Function ~> ...` | `declare const x: () => void;` |
+| `x: number = 0` | `let x: number;` |
+| `x: number =! 100` | `declare const x: number;` |
+| `x: number := 0` | `declare const x: Signal<number>;` |
+| `x: number ~= y * 2` | `declare const x: Computed<number>;` |
+| `x: Function ~> ...` | `declare const x: () => void;` |
 | `export` variants of all above | `export const/let ...` |
 
 **Functions:**
 
 | Rip Input | .d.ts Output |
 |-----------|-------------|
-| `def f(a:: T):: R` | `declare function f(a: T): R;` |
-| `def f<T>(a:: T):: T` | `declare function f<T>(a: T): T;` |
+| `def f(a: T): R` | `declare function f(a: T): R;` |
+| `def f<T>(a: T): T` | `declare function f<T>(a: T): T;` |
 | `def f<T extends Base>(...)` | `declare function f<T extends Base>(...);` |
-| `f = (a:: T) -> ...` | `declare function f(a: T);` |
+| `f = (a: T) -> ...` | `declare function f(a: T);` |
 | `export def ...` | `export function ...;` |
 
 **Types, Interfaces, and Enums:**
@@ -1892,9 +1893,9 @@ The type system uses a two-phase approach:
 
 | Rip Input | .d.ts Output |
 |-----------|-------------|
-| `class X { prop:: T = val }` | `declare class X { prop: T; }` |
-| `constructor: (@name:: T) ->` | `constructor(name: T);` |
-| `method: (a:: T) ->` | `method(a: T);` |
+| `class X { prop: T = val }` | `declare class X { prop: T; }` |
+| `constructor: (@name: T) ->` | `constructor(name: T);` |
+| `method: (a: T) ->` | `method(a: T);` |
 | `class X extends Y` | `declare class X extends Y { ... }` |
 
 **Components:**
@@ -1902,7 +1903,7 @@ The type system uses a two-phase approach:
 | Rip Input | .d.ts Output |
 |-----------|-------------|
 | `Name = component { ... }` | `declare class Name { ... }` |
-| Reactive state `count:: number := 0` | `count: number;` |
+| Reactive state `count: number := 0` | `count: number;` |
 | Computed `doubled ~= ...` | `readonly doubled: any;` |
 | Methods | Method declarations |
 | Auto-generated | `constructor`, `mount()`, `unmount()` |
