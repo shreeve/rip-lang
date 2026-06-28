@@ -22,7 +22,9 @@ import os from 'os';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
 const rip = resolve(root, 'bin', 'rip');
-const tmpRoot = resolve(__dirname, '_check_tmp');
+// Scope the temp root to this process so two concurrent runs (e.g. a second
+// `bun test/check.test.js`) never share per-id dirs or wipe each other's.
+const tmpRoot = resolve(__dirname, '_check_tmp', String(process.pid));
 
 function color(code, s) { return process.stdout.isTTY ? `\x1b[${code}m${s}\x1b[0m` : s; }
 const green = s => color('32;1', s), red = s => color('31;1', s);
@@ -994,6 +996,56 @@ check('a genuinely mismatched default still errors (string default on number)', 
   });
   assert(!r.ok, 'a string default on a number prop should error');
   assert(/not assignable/.test(r.out), 'unexpected output:\n' + r.out);
+});
+
+// ── Only literal defaults are validated; non-literals are left to the checker ──
+//
+// validatePropDefault judges a default by its literal kind (string/number/
+// boolean). A default that is an identifier, call, or other expression has no
+// statically known type here, so it must NOT be flagged — flagging it was a
+// false positive on valid code. A literal of the wrong kind is still caught.
+
+check('a non-literal default (identifier/expression) is not flagged', async () => {
+  const r = await checkProject({
+    'c.rip': `DEFAULT_COUNT = 5
+export Box = component extends div
+  @count?: number := DEFAULT_COUNT
+  @label?: string := DEFAULT_COUNT.toString()
+  render
+    div
+`,
+  });
+  assert(r.ok, 'a non-literal prop default must not be flagged:\n' + r.out);
+});
+
+// ── A '#' inside a string default is not mistaken for a trailing comment ──
+//
+// The default-value comment strip used to cut at the first '#', mangling a CSS
+// color / fragment URL into an unterminated literal and reporting a bogus type
+// error. A '#' inside quotes is part of the value; only a '#' outside a string
+// starts a comment.
+
+check("a '#' inside a string default is kept (CSS color checks clean)", async () => {
+  const r = await checkProject({
+    'c.rip': `export Box = component extends div
+  @bg?: string := '#fff'  # the background color
+  render
+    div
+`,
+  });
+  assert(r.ok, "a '#' inside a quoted default must not be treated as a comment:\n" + r.out);
+
+  // The literal kind is still recognized after the strip, so a genuine mismatch
+  // (a string literal on a number prop) is caught — with the value intact.
+  const bad = await checkProject({
+    'c.rip': `export Box = component extends div
+  @hex?: number := '#fff'
+  render
+    div
+`,
+  });
+  assert(!bad.ok, "a string default on a number prop should still error");
+  assert(/'#fff'/.test(bad.out), 'the offending value should appear intact:\n' + bad.out);
 });
 
 // ── globToRegex escapes regex metacharacters in exclude patterns ──

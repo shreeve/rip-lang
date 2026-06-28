@@ -54,3 +54,6 @@ notes.txt
 !docs/extensions/**/*.duckdb_extension
 !docs/extensions/**/*.duckdb_extension.gz
 /packages/db/.cache
+
+# Temp projects written by test/check.test.js
+test/_check_tmp/

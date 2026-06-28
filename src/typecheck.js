@@ -407,25 +407,28 @@ export function validatePropDefault(type, defVal) {
   // A string literal in either quote style: "a" or 'a'.
   const isStrLit = s => /^"[^"]*"$/.test(s) || /^'[^']*'$/.test(s);
   const strInner = s => s.slice(1, -1);
+  // The literal kind of a default, or null when it isn't a recognizable literal
+  // (an identifier, call, or other expression). Only literal defaults can be
+  // judged here; a non-literal carries no statically known type, so it is left
+  // to the type checker and never flagged.
+  const litKind = s =>
+    isStrLit(s) ? 'string' :
+    /^-?\d+(\.\d+)?$/.test(s) ? 'number' :
+    (s === 'true' || s === 'false') ? 'boolean' : null;
   const parts = type.split('|').map(s => s.trim());
-  // String literal union: "a" | "b" | "c" (either quote style)
+  // String literal union: "a" | "b" | "c" (either quote style). Only a literal
+  // default naming no member is wrong; a non-literal default is left alone.
   if (parts.every(p => isStrLit(p))) {
     if (isStrLit(defVal) && !parts.some(p => strInner(p) === strInner(defVal))) {
       return `Type '${defVal}' is not assignable to type '${type}'`;
     }
     return null;
   }
-  // Single type checks
-  if (parts.length === 1) {
-    const t = parts[0];
-    if (t === 'boolean' && defVal !== 'true' && defVal !== 'false') {
-      return `Type '${defVal}' is not assignable to type 'boolean'`;
-    }
-    if (t === 'number' && !/^-?\d+(\.\d+)?$/.test(defVal)) {
-      return `Type '${defVal}' is not assignable to type 'number'`;
-    }
-    if (t === 'string' && !isStrLit(defVal)) {
-      return `Type '${defVal}' is not assignable to type 'string'`;
+  // Single primitive type: flag only a literal default of a different kind.
+  if (parts.length === 1 && (parts[0] === 'boolean' || parts[0] === 'number' || parts[0] === 'string')) {
+    const kind = litKind(defVal);
+    if (kind && kind !== parts[0]) {
+      return `Type '${defVal}' is not assignable to type '${parts[0]}'`;
     }
   }
   return null;
@@ -547,23 +550,35 @@ export function parseComponentDTS(dtsString) {
 export function checkComponentDefs(compProps, srcLines, startLine = 0) {
   const errors = [];
   for (const prop of compProps) {
+    // `@name` + optional `?`, then a single `:` that is NOT part of `:=`.
+    const re = new RegExp('(@' + prop.name + ')\\b\\??\\s*:(?!=)\\s*(.+)$');
     for (let s = startLine; s < srcLines.length; s++) {
-      // `@name` + optional `?`, then a single `:` that is NOT part of `:=`.
-      const m = new RegExp('(@' + prop.name + ')\\b\\??\\s*:(?!=)\\s*(.+)$').exec(srcLines[s]);
+      const m = re.exec(srcLines[s]);
       if (!m) continue;
       // Validate a `:= default` against the annotation, if one is present.
       const dm = m[2].match(/^(.+?)\s*:=\s*(.+)$/);
       if (dm) {
-        const defVal = dm[2].replace(/#.*$/, '').trim();
+        const defVal = stripDefaultComment(dm[2]).trim();
         const err = validatePropDefault(dm[1].trim(), defVal);
-        if (err) {
-          errors.push({ line: s, col: m.index, len: m[1].length, propName: prop.name, message: err });
-        }
+        if (err) errors.push({ line: s, col: m.index, len: m[1].length, message: err });
       }
       break;
     }
   }
   return errors;
+}
+
+// Strip a trailing `# comment` from a default-value expression, ignoring a `#`
+// inside a quoted string literal (e.g. a CSS color `'#fff'`).
+function stripDefaultComment(s) {
+  let quote = null;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (quote) { if (c === quote) quote = null; }
+    else if (c === '"' || c === "'") quote = c;
+    else if (c === '#') return s.slice(0, i);
+  }
+  return s;
 }
 
 // Patch uninitialized, untyped variables with inferred types from their
