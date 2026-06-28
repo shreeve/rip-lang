@@ -16937,8 +16937,8 @@ if (typeof globalThis !== 'undefined') {
     return new CodeEmitter({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.17.2";
-  var BUILD_DATE = "2026-06-28@04:00:39GMT";
+  var VERSION = "3.17.3";
+  var BUILD_DATE = "2026-06-28@04:18:51GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
