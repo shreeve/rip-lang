@@ -449,8 +449,8 @@
       }
     },
     {
-      "comment": "Return type annotation: ):: Type",
-      "begin": "(?<=\\))\\s*(::)(?!=)",
+      "comment": "Return type annotation: ): Type. The type-start lookahead keeps `): value` object/ternary tails out (single-colon era).",
+      "begin": "(?<=\\))\\s*(:)(?![:=])(?=\\s*(?:\\b(?:number|string|boolean|void|any|never|unknown|object|symbol|bigint|null|undefined|typeof|keyof|readonly|infer)\\b|[A-Z]\\w*\\b(?!\\s*[.(])|[{(\\[]))",
       "beginCaptures": {
         "1": { "name": "keyword.operator.type-annotation.rip" }
       },
@@ -459,8 +459,8 @@
       "patterns": [{ "include": "#type_expression" }]
     },
     {
-      "comment": "Typed constant: name:: Type =! (lookahead for =! to scope as constant)",
-      "begin": "(?:(@)([a-zA-Z_$]\\w*)|([a-zA-Z_$]\\w*))\\s*(::)(?!=)(?=.*=!)",
+      "comment": "Typed constant: name: Type =! (lookahead for =! to scope as constant; =! is itself enough to disambiguate from an object key)",
+      "begin": "(?:(@)([a-zA-Z_$]\\w*)|([a-zA-Z_$]\\w*))\\s*(:)(?![:=])(?=.*=!)",
       "beginCaptures": {
         "1": { "name": "punctuation.definition.variable.rip" },
         "2": { "name": "variable.other.constant.rip" },
@@ -472,8 +472,8 @@
       "patterns": [{ "include": "#type_expression" }]
     },
     {
-      "comment": "Type annotation: name:: Type or @name :: Type",
-      "begin": "(?:(@)([a-zA-Z_$]\\w*)|([a-zA-Z_$]\\w*))\\s*(::)(?!=)",
+      "comment": "Type annotation: name: Type or @name: Type. In the single-colon era this is ambiguous with an object key, so the type-start lookahead only fires when the colon is followed by a built-in type keyword or a PascalCase type name that is NOT a member access or call (so `x: Math.max(a, b)` and `x: User.find()` stay value expressions, not types).",
+      "begin": "(?:(@)([a-zA-Z_$]\\w*)|([a-zA-Z_$]\\w*))\\s*(:)(?![:=])(?=\\s*(?:\\b(?:number|string|boolean|void|any|never|unknown|object|symbol|bigint|null|undefined|typeof|keyof|readonly|infer)\\b|[A-Z]\\w*\\b(?!\\s*[.(])))",
       "beginCaptures": {
         "1": { "name": "punctuation.definition.variable.rip" },
         "2": { "name": "variable.other.readwrite.instance.rip" },
@@ -847,8 +847,8 @@
           "name": "meta.parameters.rip",
           "patterns": [
             {
-              "comment": "Type annotation inside params: person:: string or title?:: string",
-              "begin": "(?:(@)([a-zA-Z_$]\\w*)|([a-zA-Z_$]\\w*))(\\?)?\\s*(::)(?!=)",
+              "comment": "Type annotation inside params: person: string or title?: string. Single-colon era: the type-start lookahead also admits `{`/`(`/`[` so inline object, function, and tuple/array param types work (e.g. opts: { host: string }, cb: (n: number) => void), while a default object value like `(x = {a: 1})` is unaffected because it has no `name:` before the brace.",
+              "begin": "(?:(@)([a-zA-Z_$]\\w*)|([a-zA-Z_$]\\w*))(\\?)?\\s*(:)(?![:=])(?=\\s*(?:\\b(?:number|string|boolean|void|any|never|unknown|object|symbol|bigint|null|undefined|typeof|keyof|readonly|infer)\\b|[A-Z]\\w*\\b(?!\\s*[.(])|[{(\\[]))",
               "beginCaptures": {
                 "1": { "name": "punctuation.definition.variable.rip" },
                 "2": { "name": "variable.parameter.rip" },
