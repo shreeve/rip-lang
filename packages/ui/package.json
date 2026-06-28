@@ -29,7 +29,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "4.11.1",
-    "@rip-lang/server": "workspace:*",
+    "@rip-lang/server": "workspace:^",
     "playwright": "1.58.2"
   },
   "scripts": {

@@ -13,7 +13,7 @@
     "rip-server": "./bin/rip-server"
   },
   "dependencies": {
-    "@rip-lang/validate": "workspace:*"
+    "@rip-lang/validate": "workspace:^"
   },
   "scripts": {
     "build": "rip -c server.rip",

@@ -11,7 +11,7 @@
     "test": "rip test.rip"
   },
   "dependencies": {
-    "@rip-lang/server": "workspace:*"
+    "@rip-lang/server": "workspace:^"
   },
   "keywords": [
     "auth",
