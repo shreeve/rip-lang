@@ -99,8 +99,8 @@ export toPhone = (str: unknown): string | null ->
   num
 
 # Format integer cents for display: 129222 -> "$1,292.22". Expects integer
-# cents; rounds defensively so a stray float still renders, and treats a
-# nullish amount as 0 so a missing value renders "$0.00" instead of "$NaN.NaN".
+# cents; rounds defensively so a stray float still renders. A nullish amount
+# is treated as 0, so a missing value renders "$0.00" instead of "$NaN.NaN".
 export formatMoney = (cents?: number | null, opts: { symbol?: string, commas?: boolean } = {}): string ->
   symbol  = opts.symbol ?? '$'
   commas  = opts.commas ?? true
