@@ -113,12 +113,12 @@ export list_models = (ctx, params = {}) ->
 
 export chat = (ctx, params) ->
   raise "missing 'prompt'" unless params.prompt
-  spec = providers.resolveModel(params.model, providers.defaults().chat)
 
   loaded = att.load! ctx.store, null, params.attachments
   messages = [{ role: 'user', text: params.prompt }]
   result = providers.chat!
-    model: spec.id
+    model: params.model
+    fallback: providers.defaults().chat
     system: params.system or null
     messages: messages
     attachments: loaded.attachments
@@ -143,7 +143,7 @@ export chat = (ctx, params) ->
 export discuss = (ctx, params) ->
   raise "missing 'message'" unless params.message
   store = ctx.store
-  spec = providers.resolveModel(params.model, providers.defaults().discuss)
+  spec = providers.resolveModel! params.model, providers.defaults().discuss
 
   conv =
     if params.conversation_id
@@ -231,9 +231,8 @@ export panel = (ctx, params) ->
 
   callOne = (modelSpec) ->
     try
-      spec = providers.parseModel(modelSpec)
       result = providers.chat!
-        model: spec.id
+        model: modelSpec
         system: params.system or null
         messages: messages
         attachments: loaded.attachments
@@ -261,10 +260,9 @@ export panel = (ctx, params) ->
   synthesis = null
   if params.synthesize is true and successes.length > 1
     synModel = params.synthesis_model or providers.defaults().synthesis
-    synSpec = providers.parseModel(synModel)
     synPrompt = buildSynthesisPrompt(params.prompt, successes)
     synResult = providers.chat!
-      model: synSpec.id
+      model: synModel
       system: PANEL_SYNTHESIS_SYSTEM
       messages: [{ role: 'user', text: synPrompt }]
       attachments: []
@@ -306,15 +304,25 @@ export fresh_review = (ctx, params) ->
   raise "missing 'artifact'" unless params.artifact
   store = ctx.store
 
-  excluded = (params.exclude_models or []).map (m) -> providers.parseModel(m).id
+  # Resolve through resolveModel! (not sync parseModel) so a `latest` alias picks
+  # the true current flagship, not a possibly-unwarmed SEED, before we dispatch.
+  excluded = []
+  for m in (params.exclude_models or [])
+    resolved = providers.resolveModel! m
+    excluded.push resolved.id
+
   selectedSpec = null
   if params.model
-    spec = providers.parseModel(params.model)
+    spec = providers.resolveModel! params.model
     raise "requested model '#{spec.id}' is in exclude_models" if excluded.includes(spec.id)
     selectedSpec = spec
   else
-    candidates = candidateModels()
-    selectedSpec = candidates.find (c) -> not excluded.includes(c.id) and credentialedFor(c.provider)
+    ds = providers.defaults()
+    for alias in [ds.fresh_review, ds.discuss, ds.chat]
+      spec = providers.resolveModel! alias
+      if not excluded.includes(spec.id) and credentialedFor(spec.provider)
+        selectedSpec = spec
+        break
     raise "no available model after exclusions: #{excluded.join(', ')}" unless selectedSpec
 
   artifactInput = if typeof params.artifact is 'string' then { type: 'file', path: params.artifact } else params.artifact
@@ -343,11 +351,6 @@ export fresh_review = (ctx, params) ->
       cost_usd:   result.cost_usd
     warnings: warnings
   }
-
-candidateModels = ->
-  ds = providers.defaults()
-  for id in [ds.fresh_review, ds.discuss, ds.chat]
-    providers.parseModel(id)
 
 credentialedFor = (provider) ->
   switch provider

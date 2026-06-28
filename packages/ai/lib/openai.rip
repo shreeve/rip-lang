@@ -77,10 +77,20 @@ export chat = ({ model, system, messages, attachments, max_tokens }) ->
   choice = data.choices?[0]
   text = choice?.message?.content or ''
   usage = data.usage or {}
+  finish = choice?.finish_reason or null
+
+  # Reasoning models spend `max_completion_tokens` on hidden reasoning before any
+  # visible output. Too small a cap and reasoning eats the whole budget, leaving
+  # finish_reason 'length' with empty content. Fail loud instead of returning ''.
+  if not text and finish is 'length'
+    reasoning = usage.completion_tokens_details?.reasoning_tokens or 0
+    detail = if reasoning then " — #{reasoning} reasoning tokens consumed the entire budget" else ''
+    raise "OpenAI returned no visible output: hit the token limit#{detail}. Reasoning models count hidden reasoning against max_tokens — raise it substantially or omit it to use the model default."
+
   {
     text
     tokens_in:  usage.prompt_tokens     or 0
     tokens_out: usage.completion_tokens or 0
-    finish_reason: choice?.finish_reason or null
+    finish_reason: finish
     raw: data
   }

@@ -19,7 +19,7 @@ lib/store.rip             bun:sqlite schema, CRUD, attachment records
 lib/attachments.rip       file/url/blob load, SHA-256 cache, prompt rendering
 lib/openai.rip            OpenAI adapter (chat, list_models)
 lib/anthropic.rip         Anthropic adapter (chat, list_models)
-lib/providers.rip         registry, parseModel, pricing, catalog cache, cost
+lib/providers.rip         latest-model autodetect + cache, parseModel, pricing, cost, catalog
 lib/tools.rip             one function per MCP tool — pure orchestration
 bin/rip-ai                CLI shim
 ```
@@ -51,16 +51,26 @@ stdout JSON-RPC line
 | `mcp.rip` | Protocol & tool registration. Add new tools here + in `lib/tools.rip`. |
 | `lib/store.rip` | Schema migrations: edit `DDL`. All statements use prepared queries — keep them parameterized. |
 | `lib/attachments.rip` | Load/render rules. URL allowlist lives here. |
-| `lib/providers.rip` | **Pricing constants and aliases live here.** Update when providers change rates. |
-| `lib/openai.rip`, `lib/anthropic.rip` | Adapter HTTP shape. New providers go in their own file plus a registration in `providers.rip` (`ADAPTERS`, alias map, `LOCAL_META`). |
+| `lib/providers.rip` | **Flagship families, pricing, seeds, and latest-model autodetect live here.** Update `PRICING` when rates change; `FAMILY` only if a provider renames its flagship tier. |
+| `lib/openai.rip`, `lib/anthropic.rip` | Adapter HTTP shape. New providers go in their own file plus a registration in `providers.rip` (`ADAPTERS`, `FAMILY`, `SEED`, `PRICING`). |
 | `lib/tools.rip` | Tool orchestration. Each tool is a separate exported function. |
+
+## Model selection (latest-alias autodetect)
+
+The server exposes exactly two logical models: `gpt` (latest OpenAI flagship) and `claude` (latest Anthropic flagship). There is no hand-maintained model registry.
+
+- `LATEST_ALIASES` maps `gpt`/`chatgpt`/`openai`/`gpt-latest` → `openai` and `claude`/`anthropic`/`opus`/`claude-latest` → `anthropic`. These are the *only* aliases; anything else must be a concrete `provider:model`.
+- `ensureLatest!(provider)` queries the provider's `/models` API and picks the highest-versioned id matching `FAMILY[provider]` (version compared digit-group by digit-group via `modelVersion`/`cmpVersion`). Result is cached in `latest.json` with a **12h TTL**; `SEED[provider]` is the cold/offline fallback.
+- `parseModel` is **sync** and resolves latest aliases from the cache (may be `SEED` until warmed) — used where an id is needed up front (exclusions, logging). `resolveModel!` is **async** and does a freshness check (one network call if stale) before resolving — `providers.chat!` uses it.
+- `mcp.rip` calls `providers.warmLatest()` at startup (fire-and-forget) so the first real call usually hits a warm cache. Don't `await` it.
+- Don't steer the in-chat AI toward `list_models` for selection — `gpt`/`claude` are the answer. `list_models` is informational (flags `is_latest`).
 
 ## Adding a new provider
 
 1. New file `lib/<name>.rip` exporting `provider`, `listModels`, `chat`, matching the adapter shape used by `openai.rip` and `anthropic.rip`.
-2. In `lib/providers.rip`, add to `ADAPTERS`, add aliases, add `LOCAL_META` entries (pricing + tier + strengths).
+2. In `lib/providers.rip`, add to `ADAPTERS`, `FAMILY` (flagship regex), `SEED` (fallback id), `PRICING`, and `LATEST_ALIASES` (alias → provider key).
 3. Add the provider's env-var name to `providerEnvKey` in `providers.rip` and to `credentialedFor` in `tools.rip`.
-4. Update the `provider` enum on `list_models` in `mcp.rip`.
+4. Update the `provider` enum on `list_models` in `mcp.rip` and the alias list in `INSTRUCTIONS`.
 
 ## Adding a new MCP tool
 
@@ -80,11 +90,11 @@ stdout JSON-RPC line
 
 ## Pricing maintenance
 
-Pricing tables live in `LOCAL_META` in `lib/providers.rip`. When a provider changes rates:
+Pricing is provider-scoped in `PRICING` in `lib/providers.rip` (so an autodetected successor inherits the flagship's rate without a code change). When a provider changes rates:
 
-1. Edit the `pricing: { input_per_million, output_per_million }` block for that model.
+1. Edit the `{ input_per_million, output_per_million }` block for that provider.
 2. Run `bun run test` (no provider tests yet, but the parse check matters).
-3. Bump `package.json` version and CHANGELOG.
+3. Bump `package.json` + `mcp.rip` `VERSION` and note it in `CHANGELOG.md`.
 
 ## Tests
 
@@ -104,7 +114,7 @@ There are no provider mocks yet — most logic is exercised by:
 
 - **bun:sqlite is sync.** Don't put `!` on `db.exec`, `stmt.run`, `stmt.get`, `stmt.all` — they are not promises.
 - **JSON columns vs join tables.** Messages store attachment metadata as a JSON snapshot; the `attachments` table is a content-addressed cache, not a join. The query `findLastAttachmentBySource` uses `json_each` to walk it.
-- **Catalog cache layering.** `listAll` first checks an in-process Map (5 min TTL), then live provider APIs, then the disk cache (`models.json`, 24 h TTL fallback). Stale-but-cached beats no-data.
+- **Two caches, different jobs.** `latest.json` (12h TTL) holds the resolved flagship ids and is what model *selection* reads — keep it fast. `models.json` + the in-process Map (5 min) back `listAll`, which is now only the informational `list_models` catalog. Don't route selection through `listAll`.
 - **Coauthor protection.** `independent_of` is a soft guarantee — it warns, it does not refuse. `fresh_review`'s `exclude_models` is a hard refusal only when the explicitly requested model is excluded; otherwise it picks an unexcluded credentialed default.
 - **Cost caps.** `max_cost_usd` is a *preflight* check based on input-token estimation (chars/4). Output is unpredictable; we don't refuse mid-call. Overshoots are reported in `warnings[]`.
 
