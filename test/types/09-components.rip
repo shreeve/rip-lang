@@ -7,9 +7,9 @@
 # ── Components ──
 
 export Input = component extends input
-  @label?:: string
-  @value?:: string := ''
-  @error?:: string
+  @label?: string
+  @value?: string := ''
+  @error?: string
 
   render
     div
@@ -21,9 +21,9 @@ export Input = component extends input
         div error
 
 export Button = component extends button
-  @variant:: 'primary' | 'secondary'
-  @shape?:: 'rounded' | 'pill' := 'rounded'
-  @loading?:: boolean
+  @variant: 'primary' | 'secondary'
+  @shape?: 'rounded' | 'pill' := 'rounded'
+  @loading?: boolean
 
   bg ~= if variant is 'primary' then '#0066ff' else '#e5e5e5'
   fg ~= if variant is 'primary' then '#fff' else '#333'
@@ -37,12 +37,12 @@ export Button = component extends button
         slot
 
 export Form = component
-  @title?:: string
+  @title?: string
   email := ''
   password := ''
   loading := false
 
-  onSubmit: (e:: SubmitEvent) ->
+  onSubmit: (e: SubmitEvent) ->
     e.preventDefault()
     loading = true
     p "Signing in: #{email}"
@@ -108,8 +108,8 @@ export BindingTypeTests = component
 # ── Negative: type safety inside component bodies ──
 
 export TypeTestComp = component
-  @variant?:: 'primary' | 'secondary' := 'primary'
-  @count?:: number := 0
+  @variant?: 'primary' | 'secondary' := 'primary'
+  @count?: number := 0
   loading := false
 
   ok ~= if variant is 'primary' then '#0066ff' else '#e5e5e5'
@@ -170,7 +170,7 @@ export RenderCondTest = component
 # explicit `:: string` annotation is needed on `term`.
 
 export FilterGapTest = component
-  items:: string[] := ['a', 'b', 'c']
+  items: string[] := ['a', 'b', 'c']
   search := ''
 
   filtered ~=
@@ -214,10 +214,10 @@ export EventHandlerTest = component
 type TOptionShape = string | { value: string, label: string }
 
 export Select<TOption extends TOptionShape> = component extends select
-  @label?:: string
-  @options?:: TOption[] := []
-  @placeholder?:: string
-  @error?:: string
+  @label?: string
+  @options?: TOption[] := []
+  @placeholder?: string
+  @error?: string
 
   render
     div
@@ -276,7 +276,7 @@ export type Cart =
 
 # Typed value of `Cart` shape. Stub bodies — the section's job is to
 # verify the type DSL covers fields, methods, and negative cases.
-cart:: Cart =
+cart: Cart =
   items: []
   addItem: noop
   removeItem: noop
@@ -330,10 +330,10 @@ export CartTypeTests = component
 # typed params keep their declared type and reject mismatched args.
 
 export DefaultedMethodParams = component
-  setOne:   (key:: string, val = 'x')               -> p key, val
-  setTwo:   (key:: string, count:: number = 0)      -> p key, count
-  setThree: (key:: string, val = 'x', flag = false) -> p key, val, flag
-  setFour:  (val:: string = 'x', count = 1)         -> p val, count
+  setOne:   (key: string, val = 'x')               -> p key, val
+  setTwo:   (key: string, count: number = 0)      -> p key, count
+  setThree: (key: string, val = 'x', flag = false) -> p key, val, flag
+  setFour:  (val: string = 'x', count = 1)         -> p val, count
 
   callSites: ->
     @setOne('name')
@@ -368,8 +368,8 @@ export DefaultedMethodParamsTests = component
 # this guards that the equals form type-checks and enforces its param types.
 
 export EqualsFormMethods = component
-  greet = (n:: number) -> n + 1
-  label = (s:: string) -> s.toUpperCase()
+  greet = (n: number) -> n + 1
+  label = (s: string) -> s.toUpperCase()
 
   callSites: ->
     @greet(5)

@@ -20,11 +20,11 @@ MAX =! 100
 
 # --- Type Annotations -------------------------------------------------------
 
-age:: number = 25
-label:: string = 'hello'
-active:: boolean = true
-scores:: number[] = [90, 95, 88]
-cache:: Map<string, number> = new Map()
+age: number = 25
+label: string = 'hello'
+active: boolean = true
+scores: number[] = [90, 95, 88]
+cache: Map<string, number> = new Map()
 
 # --- Type Aliases & Interfaces ----------------------------------------------
 
@@ -43,11 +43,11 @@ type Status =
   | 'pending'
 
 interface Shape
-  area:: () => number
-  name:: string
+  area: () => number
+  name: string
 
 interface Widget extends Shape
-  render:: () => void
+  render: () => void
 
 enum Color
   Red
@@ -119,14 +119,14 @@ self = this
 
 # --- Functions --------------------------------------------------------------
 
-def greet(person:: string):: string
+def greet(person: string): string
   "Hello, #{person}!"
 
-def add(a:: number, b:: number):: number
+def add(a: number, b: number): number
   a + b
 
-square = (x:: number) -> x * x
-doubleFn = (x:: number) => x * 2
+square = (x: number) -> x * x
+doubleFn = (x: number) => x * 2
 
 def doNothing!
   return
@@ -134,23 +134,23 @@ def doNothing!
 # --- Classes ----------------------------------------------------------------
 
 class Animal
-  constructor: (@name:: string, @sound:: string) ->
+  constructor: (@name: string, @sound: string) ->
 
   speak: ->
     "#{@name} says #{@sound}"
 
 class Dog extends Animal
-  constructor: (name:: string) ->
+  constructor: (name: string) ->
     super(name, 'Woof')
 
-  fetch: (item:: string) ->
+  fetch: (item: string) ->
     "#{@name} fetches #{item}"
 
 dog = Dog.new('Buddy')
 
 # --- Operators --------------------------------------------------------------
 
-def operators(a:: number, b:: number)
+def operators(a: number, b: number)
   # Arithmetic
   sum = 1 + 2
   diff = 5 - 3
@@ -193,7 +193,7 @@ def operators(a:: number, b:: number)
 
 # --- Rip-Specific Operators -------------------------------------------------
 
-def ripOperators(obj:: any, val:: string | null, arr:: number[], fn:: Function)
+def ripOperators(obj: any, val: string | null, arr: number[], fn: Function)
   # Existential
   exists = val?
 
@@ -218,7 +218,7 @@ def ripOperators(obj:: any, val:: string | null, arr:: number[], fn:: Function)
 # --- Assignment Operators ---------------------------------------------------
 
 def assignments()
-  x:: number = 1
+  x: number = 1
   x += 2
   x -= 1
   x *= 3
@@ -231,13 +231,13 @@ def assignments()
 
 # --- Destructuring ----------------------------------------------------------
 
-def destructuring(person:: { name: string, age: number }, list:: number[])
+def destructuring(person: { name: string, age: number }, list: number[])
   { name: userName, age } = person
   [head, ...tail] = list
 
 # --- Control Flow -----------------------------------------------------------
 
-def controlFlow(active:: boolean, items:: number[], obj:: Record<string, number>, x:: number)
+def controlFlow(active: boolean, items: number[], obj: Record<string, number>, x: number)
   if active
     p 'yes'
   else if count is 0
@@ -265,7 +265,7 @@ def controlFlow(active:: boolean, items:: number[], obj:: Record<string, number>
   for item in items by -1
     p item
 
-  count:: number = 10
+  count: number = 10
   while count > 0
     count--
 
@@ -286,7 +286,7 @@ def controlFlow(active:: boolean, items:: number[], obj:: Record<string, number>
 
 # --- Guard Clauses ---------------------------------------------------------
 
-def guardClauses(getValue:: Function, lookup:: Function)
+def guardClauses(getValue: Function, lookup: Function)
   x = getValue() or return
   y = lookup() ?? throw new Error('missing')
 
@@ -300,7 +300,7 @@ def fetchData!
 # --- Instance Variables -----------------------------------------------------
 
 class User
-  constructor: (@name:: string, @email:: string) ->
+  constructor: (@name: string, @email: string) ->
 
   display: ->
     p @name, @email
@@ -332,7 +332,7 @@ rand 1, 10
 
 # --- Deprecated API (strikethrough test) -------------------------------------
 
-escaped:: string = escape('hello & world')
+escaped: string = escape('hello & world')
 
 # --- Word Literal -----------------------------------------------------------
 
@@ -346,14 +346,14 @@ doubled ~= counter * 2
 logger ~> p 'logged:', counter
 
 # Typed reactive variables
-clicks:: number := 0
-username:: string := 'Rip'
-enabled:: boolean := true
-tags:: string[] := []
-clicksDoubled:: number ~= clicks * 2
+clicks: number := 0
+username: string := 'Rip'
+enabled: boolean := true
+tags: string[] := []
+clicksDoubled: number ~= clicks * 2
 greeting ~= "Hello, #{username}!"
-MAX_RETRIES:: number =! 3
-clickLogger:: Function ~> p 'clicks:', clicks
+MAX_RETRIES: number =! 3
+clickLogger: Function ~> p 'clicks:', clicks
 
 # --- Components (no direct TS equivalent) -----------------------------------
 

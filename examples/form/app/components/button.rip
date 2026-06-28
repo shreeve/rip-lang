@@ -1,9 +1,9 @@
 export Button = component extends button
-  @variant:: 'primary' | 'secondary' := 'primary'
-  @shape?:: 'rounded' | 'pill' := 'rounded'
-  @compact?:: boolean
-  @loading?:: boolean
-  @classes?:: string
+  @variant: 'primary' | 'secondary' := 'primary'
+  @shape?: 'rounded' | 'pill' := 'rounded'
+  @compact?: boolean
+  @loading?: boolean
+  @classes?: string
 
   bgColor ~= if variant is 'primary' then 'bg-brand' else 'bg-input'
   rounded ~= if shape is 'pill' then 'rounded-full' else 'rounded-lg'

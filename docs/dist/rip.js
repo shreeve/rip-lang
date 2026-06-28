@@ -4844,12 +4844,236 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     } catch {}
   }
 
+  // src/error.js
+  class RipError extends Error {
+    constructor(message, {
+      code = null,
+      file = null,
+      line = null,
+      column = null,
+      length = 1,
+      source = null,
+      suggestion = null,
+      phase = null
+    } = {}) {
+      super(message);
+      this.name = "RipError";
+      this.code = code;
+      this.file = file;
+      this.line = line;
+      this.column = column;
+      this.length = length;
+      this.source = source;
+      this.suggestion = suggestion;
+      this.phase = phase;
+    }
+    static fromLexer(err, source, file) {
+      let loc = err.location || {};
+      return new RipError(err.message, {
+        code: "E_SYNTAX",
+        file,
+        line: loc.first_line ?? null,
+        column: loc.first_column ?? null,
+        length: loc.last_column != null && loc.first_column != null ? loc.last_column - loc.first_column + 1 : 1,
+        source,
+        phase: "lexer"
+      });
+    }
+    static fromParser(err, source, file) {
+      let h = err.hash || {};
+      let loc = h.loc || {};
+      let line = h.line ?? loc.r ?? null;
+      let column = loc.first_column ?? loc.c ?? null;
+      let suggestion = null;
+      if (h.expected?.length) {
+        let first5 = h.expected.slice(0, 5).map((e) => e.replace(/'/g, ""));
+        suggestion = `Expected ${first5.join(", ")}`;
+        if (h.expected.length > 5)
+          suggestion += `, ... (${h.expected.length} total)`;
+      }
+      let token = h.token || "token";
+      let expectedSet = new Set((h.expected || []).map((e) => e.replace(/'/g, "")));
+      let TERNARY_ENDERS = new Set([
+        "TERMINATOR",
+        ",",
+        ")",
+        "]",
+        "OUTDENT",
+        "CALL_END",
+        "INDEX_END",
+        "PARAM_END",
+        "EOF"
+      ]);
+      if (expectedSet.has(":") && (expectedSet.has("POST_IF") || expectedSet.has("POST_UNLESS") || expectedSet.has("FOR") || expectedSet.has("WHILE")) && TERNARY_ENDERS.has(token)) {
+        suggestion = "Binary `x ? y` was removed — use `x ?? y` for nullish coalescing, or a full ternary `x ? y : z`";
+      }
+      let near = h.text ? ` near '${h.text}'` : "";
+      let message = `Unexpected ${token}${near}`;
+      return new RipError(message, {
+        code: "E_PARSE",
+        file,
+        line,
+        column,
+        length: h.text?.length || 1,
+        source,
+        suggestion,
+        phase: "parser"
+      });
+    }
+    static fromSExpr(message, sexpr, source, file, suggestion) {
+      let loc = sexpr?.loc || {};
+      return new RipError(message, {
+        code: "E_CODEGEN",
+        file,
+        line: loc.r ?? null,
+        column: loc.c ?? null,
+        length: loc.n ?? 1,
+        source,
+        suggestion,
+        phase: "codegen"
+      });
+    }
+    get locationString() {
+      let parts = [];
+      if (this.file)
+        parts.push(this.file);
+      if (this.line != null) {
+        parts.push(`${this.line + 1}:${(this.column ?? 0) + 1}`);
+      }
+      return parts.join(":");
+    }
+    format({ color = true } = {}) {
+      let c = color ? {
+        red: "\x1B[31m",
+        yellow: "\x1B[33m",
+        cyan: "\x1B[36m",
+        dim: "\x1B[2m",
+        bold: "\x1B[1m",
+        reset: "\x1B[0m"
+      } : { red: "", yellow: "", cyan: "", dim: "", bold: "", reset: "" };
+      let lines = [];
+      let loc = this.locationString;
+      let header = loc ? `${c.cyan}${loc}${c.reset} ` : "";
+      lines.push(`${header}${c.red}${c.bold}error${c.reset}${c.bold}: ${this.message}${c.reset}`);
+      let snippet = this._snippet();
+      if (snippet) {
+        lines.push("");
+        for (let s of snippet) {
+          if (s.type === "source") {
+            lines.push(`${c.dim}${s.gutter}${c.reset}${s.text}`);
+          } else if (s.type === "caret") {
+            lines.push(`${c.dim}${s.gutter}${c.reset}${c.red}${c.bold}${s.text}${c.reset}`);
+          }
+        }
+      }
+      if (this.suggestion) {
+        lines.push("");
+        lines.push(`${c.yellow}hint${c.reset}: ${this.suggestion}`);
+      }
+      return lines.join(`
+`);
+    }
+    formatHTML() {
+      let lines = [];
+      lines.push('<div class="rip-error">');
+      lines.push("<style>");
+      lines.push(`.rip-error { font-family: ui-monospace, "SF Mono", Menlo, Monaco, monospace; font-size: 13px; line-height: 1.5; padding: 16px 20px; background: #1e1e2e; color: #cdd6f4; border-radius: 8px; overflow-x: auto; }`);
+      lines.push(`.rip-error .re-header { color: #f38ba8; font-weight: 600; }`);
+      lines.push(`.rip-error .re-loc { color: #89b4fa; }`);
+      lines.push(`.rip-error .re-gutter { color: #585b70; user-select: none; }`);
+      lines.push(`.rip-error .re-caret { color: #f38ba8; font-weight: 700; }`);
+      lines.push(`.rip-error .re-hint { color: #f9e2af; }`);
+      lines.push(`.rip-error .re-snippet { margin: 8px 0; }`);
+      lines.push("</style>");
+      let loc = this.locationString;
+      let locSpan = loc ? `<span class="re-loc">${esc(loc)}</span> ` : "";
+      lines.push(`<div class="re-header">${locSpan}error: ${esc(this.message)}</div>`);
+      let snippet = this._snippet();
+      if (snippet) {
+        lines.push('<pre class="re-snippet">');
+        for (let s of snippet) {
+          if (s.type === "source") {
+            lines.push(`<span class="re-gutter">${esc(s.gutter)}</span>${esc(s.text)}`);
+          } else if (s.type === "caret") {
+            lines.push(`<span class="re-gutter">${esc(s.gutter)}</span><span class="re-caret">${esc(s.text)}</span>`);
+          }
+        }
+        lines.push("</pre>");
+      }
+      if (this.suggestion) {
+        lines.push(`<div class="re-hint">hint: ${esc(this.suggestion)}</div>`);
+      }
+      lines.push("</div>");
+      return lines.join(`
+`);
+    }
+    _snippet() {
+      if (this.source == null || this.line == null)
+        return null;
+      let sourceLines = this.source.split(`
+`);
+      let errLine = this.line;
+      if (errLine < 0 || errLine >= sourceLines.length)
+        return null;
+      let contextRadius = 2;
+      let start = Math.max(0, errLine - contextRadius);
+      let end = Math.min(sourceLines.length - 1, errLine + contextRadius);
+      let gutterWidth = String(end + 1).length;
+      let result = [];
+      for (let i = start;i <= end; i++) {
+        let lineNum = String(i + 1).padStart(gutterWidth);
+        let gutter = ` ${lineNum} │ `;
+        result.push({ type: "source", gutter, text: sourceLines[i] });
+        if (i === errLine && this.column != null) {
+          let pad = " ".repeat(this.column);
+          let caretLen = Math.max(1, Math.min(this.length || 1, sourceLines[i].length - this.column));
+          let carets = "^".repeat(caretLen);
+          let emptyGutter = " ".repeat(gutterWidth + 2) + "│ ";
+          result.push({ type: "caret", gutter: emptyGutter, text: `${pad}${carets}` });
+        }
+      }
+      return result;
+    }
+  }
+  function isLexerError(err) {
+    return err instanceof SyntaxError && err.location != null;
+  }
+  function isParserError(err) {
+    return !(err instanceof SyntaxError) && err.hash != null;
+  }
+  function toRipError(err, source, file) {
+    if (err instanceof RipError) {
+      if (file && !err.file)
+        err.file = file;
+      if (source && !err.source)
+        err.source = source;
+      return err;
+    }
+    if (isLexerError(err))
+      return RipError.fromLexer(err, source, file);
+    if (isParserError(err))
+      return RipError.fromParser(err, source, file);
+    return new RipError(err.message, { file, source, phase: "unknown" });
+  }
+  function formatError(err, { source, file, color = true } = {}) {
+    let re = err instanceof RipError ? err : toRipError(err, source, file);
+    return re.format({ color });
+  }
+  function formatErrorHTML(err, { source, file } = {}) {
+    let re = err instanceof RipError ? err : toRipError(err, source, file);
+    return re.formatHTML();
+  }
+  function esc(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
   // src/types.js
   function installTypeSupport(Lexer) {
     let proto = Lexer.prototype;
     proto.rewriteTypes = function() {
       let tokens = this.tokens;
       let typeRefNames = this.typeRefNames = new Set;
+      reclassifyColonTypes(tokens);
       let gen = (tag, val, origin) => {
         let t = [tag, val];
         t.pre = 0;
@@ -4898,7 +5122,19 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           let prevToken = tokens2[i - 1];
           if (!prevToken)
             return 1;
-          let typeTokens = collectTypeExpression(tokens2, i + 1);
+          let isArrowReturn = prevToken[0] === "PARAM_END";
+          let typeTokens = collectTypeExpression(tokens2, i + 1, { stopAtFatArrow: isArrowReturn });
+          if (isArrowReturn && looksLikeBareFunctionType(typeTokens)) {
+            let loc = tokens2[i + 1]?.loc;
+            throw new RipError("A function-type return on an arrow must be parenthesized", {
+              code: "E_SYNTAX",
+              phase: "lexer",
+              line: loc?.r ?? null,
+              column: loc?.c ?? null,
+              length: loc?.n ?? 1,
+              suggestion: "wrap the whole function type in parens — " + "`(x):: ((a: T) => R) => body`, not `(x):: (a: T) => R => body`"
+            });
+          }
           let typeStr = buildTypeString(typeTokens);
           let target = prevToken;
           let propName = "type";
@@ -5083,7 +5319,224 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       }
     };
   }
-  function collectTypeExpression(tokens, j) {
+  function looksLikeBareFunctionType(typeTokens) {
+    const isOpen = (t) => t === "(" || t === "PARAM_START" || t === "CALL_START";
+    const isClose = (t) => t === ")" || t === "PARAM_END" || t === "CALL_END";
+    if (typeTokens.length < 2 || !isOpen(typeTokens[0][0]))
+      return false;
+    let depth = 0;
+    for (let k = 0;k < typeTokens.length; k++) {
+      const tag = typeTokens[k][0];
+      if (isOpen(tag))
+        depth++;
+      else if (isClose(tag)) {
+        if (--depth === 0 && k !== typeTokens.length - 1)
+          return false;
+      }
+    }
+    if (depth !== 0)
+      return false;
+    if (typeTokens.length === 2)
+      return true;
+    let d = 0, pendingTernary = false;
+    for (const t of typeTokens) {
+      const tag = t[0];
+      if (isOpen(tag) || tag === "[" || tag === "{" || tag === "INDEX_START")
+        d++;
+      else if (isClose(tag) || tag === "]" || tag === "}" || tag === "INDEX_END")
+        d--;
+      else if (d === 1 && tag === "TERNARY")
+        pendingTernary = true;
+      else if (d === 1 && tag === ":") {
+        if (pendingTernary)
+          pendingTernary = false;
+        else
+          return true;
+      }
+    }
+    return false;
+  }
+  function reclassifyColonTypes(tokens) {
+    const isOpen = (t) => t === "(" || t === "CALL_START" || t === "PARAM_START" || t === "{" || t === "[" || t === "INDEX_START";
+    const isClose = (t) => t === ")" || t === "CALL_END" || t === "PARAM_END" || t === "}" || t === "]" || t === "INDEX_END";
+    const isDefParamStart = (i) => {
+      let j = i - 1;
+      const g0 = tokens[j]?.[0], v0 = tokens[j]?.[1];
+      if (g0 === "COMPARE" && v0 === ">" || g0 === "SHIFT" && v0 === ">>") {
+        let depth = g0 === "SHIFT" ? 2 : 1;
+        j--;
+        while (j >= 0 && depth > 0) {
+          const g = tokens[j][0], v = tokens[j][1];
+          if (g === "COMPARE" && v === ">")
+            depth++;
+          else if (g === "SHIFT" && v === ">>")
+            depth += 2;
+          else if (g === "COMPARE" && v === "<")
+            depth--;
+          else if (g === "SHIFT" && v === "<<")
+            depth -= 2;
+          j--;
+        }
+      }
+      if (tokens[j]?.[0] !== "IDENTIFIER" && tokens[j]?.[0] !== "PROPERTY")
+        return false;
+      return tokens[j - 1]?.[0] === "DEF";
+    };
+    const STMT_START = new Set(["TERMINATOR", "INDENT", "OUTDENT", "EXPORT"]);
+    const BINDING_OPS = new Set(["=", "REACTIVE_ASSIGN", "COMPUTED_ASSIGN", "READONLY_ASSIGN"]);
+    const atStatementStart = (t) => !t || STMT_START.has(t[0]);
+    const declBindsBeforeArrow = (start) => {
+      let depth = 0;
+      for (let j = start;j < tokens.length; j++) {
+        const g = tokens[j][0];
+        if (isOpen(g))
+          depth++;
+        else if (isClose(g))
+          depth--;
+        else if (depth === 0) {
+          if (g === "->" || g === "=>")
+            return false;
+          if (BINDING_OPS.has(g))
+            return true;
+          if (g === "TERMINATOR" || g === "INDENT" || g === "OUTDENT")
+            return false;
+        }
+      }
+      return false;
+    };
+    const valueIsMethod = (start) => {
+      let depth = 0;
+      for (let j = start;j < tokens.length; j++) {
+        const g = tokens[j][0];
+        if (isOpen(g))
+          depth++;
+        else if (isClose(g))
+          depth--;
+        else if (depth === 0) {
+          if (g === "->" || g === "=>")
+            return true;
+          if (g === "TERMINATOR" || g === "INDENT" || g === "OUTDENT")
+            return false;
+        }
+      }
+      return false;
+    };
+    let pendingClass = false;
+    const indentStack = [];
+    const inClassBody = () => indentStack.length > 0 && indentStack[indentStack.length - 1];
+    let inType = false, typeStartDepth = 0;
+    const enterType = () => {
+      inType = true;
+      typeStartDepth = stack.length;
+    };
+    const stack = [];
+    for (let i = 0;i < tokens.length; i++) {
+      const tag = tokens[i][0];
+      if (tag === "CLASS") {
+        pendingClass = true;
+        continue;
+      }
+      if (tag === "INDENT") {
+        indentStack.push(pendingClass);
+        pendingClass = false;
+        if (inType && stack.length <= typeStartDepth)
+          inType = false;
+        continue;
+      }
+      if (tag === "OUTDENT") {
+        indentStack.pop();
+        if (inType && stack.length <= typeStartDepth)
+          inType = false;
+        continue;
+      }
+      if (isOpen(tag)) {
+        let kind = "other";
+        if (!inType) {
+          if (tag === "PARAM_START")
+            kind = "param";
+          else if ((tag === "CALL_START" || tag === "(") && isDefParamStart(i))
+            kind = "defparam";
+        }
+        stack.push({ kind, sawEq: false, sawType: false });
+        continue;
+      }
+      if (isClose(tag)) {
+        const f2 = stack.pop();
+        if (f2?.kind === "defparam") {
+          (tokens[i].data ??= {}).isDefParamEnd = true;
+        }
+        if (inType && stack.length < typeStartDepth)
+          inType = false;
+        continue;
+      }
+      if (tag === "TYPE_ANNOTATION") {
+        if (!inType)
+          enterType();
+        continue;
+      }
+      if (inType) {
+        if (stack.length <= typeStartDepth && (tag === "=" || tag === "," || tag === "TERMINATOR" || tag === "->" || BINDING_OPS.has(tag))) {
+          inType = false;
+        } else {
+          continue;
+        }
+      }
+      if (tag === ":") {
+        const prev = tokens[i - 1];
+        const prevTag = prev?.[0];
+        if (prevTag === "PARAM_END" || (prevTag === ")" || prevTag === "CALL_END") && prev.data?.isDefParamEnd) {
+          tokens[i][0] = "TYPE_ANNOTATION";
+          enterType();
+          continue;
+        }
+        if ((prevTag === "IDENTIFIER" || prevTag === "PROPERTY") && tokens[i - 2]?.[0] === "DEF") {
+          if (prevTag === "PROPERTY")
+            prev[0] = "IDENTIFIER";
+          tokens[i][0] = "TYPE_ANNOTATION";
+          enterType();
+          continue;
+        }
+        if (stack.length === 0 && (prevTag === "PROPERTY" || prevTag === "IDENTIFIER") && atStatementStart(tokens[i - 2]) && declBindsBeforeArrow(i + 1)) {
+          if (prevTag === "PROPERTY")
+            prev[0] = "IDENTIFIER";
+          tokens[i][0] = "TYPE_ANNOTATION";
+          enterType();
+          continue;
+        }
+        if (inClassBody() && stack.length === 0 && (prevTag === "PROPERTY" || prevTag === "IDENTIFIER") && atStatementStart(tokens[i - 2]) && !valueIsMethod(i + 1)) {
+          if (prevTag === "PROPERTY")
+            prev[0] = "IDENTIFIER";
+          tokens[i][0] = "TYPE_ANNOTATION";
+          enterType();
+          continue;
+        }
+      }
+      const f = stack[stack.length - 1];
+      if (f && (f.kind === "param" || f.kind === "defparam")) {
+        if (tag === ",") {
+          f.sawEq = false;
+          f.sawType = false;
+          continue;
+        }
+        if (tag === "=") {
+          f.sawEq = true;
+          continue;
+        }
+        if (tag === ":" && !f.sawEq && !f.sawType) {
+          const prev = tokens[i - 1];
+          const prevTag = prev?.[0];
+          if (prevTag === "PROPERTY" || prevTag === "IDENTIFIER") {
+            if (prevTag === "PROPERTY")
+              prev[0] = "IDENTIFIER";
+            tokens[i][0] = "TYPE_ANNOTATION";
+            f.sawType = true;
+            enterType();
+          }
+        }
+      }
+    }
+  }
+  function collectTypeExpression(tokens, j, opts = {}) {
     let typeTokens = [];
     let depth = 0;
     let bracketStack = [];
@@ -5122,6 +5575,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         break;
       }
       if (depth === 0) {
+        if (opts.stopAtFatArrow && tTag === "=>")
+          break;
         if (tTag === "INDENT" && typeTokens.length > 0 && typeTokens[typeTokens.length - 1][0] === "=>") {
           j++;
           let nest = 1;
@@ -6753,7 +7208,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           } else if (tg === "(" || tg === "[" || tg === "{" || tg === "CALL_START" || tg === "PARAM_START" || tg === "INDEX_START" || tg === "COMPARE" && tk[1] === "<") {
             depth--;
           } else if (depth === 0) {
-            if (tg === "TYPE_ANNOTATION") {
+            if (tg === "TYPE_ANNOTATION" || tg === ":") {
               if (j > 0 && this.tokens[j - 1][0] === ")")
                 found = j - 1;
               break;
@@ -6766,6 +7221,22 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         if (found < 0)
           return this.tagDoIife();
         closeIdx = found;
+      } else {
+        let d = 0, op = -1;
+        for (let k = closeIdx;k >= 0; k--) {
+          let tg = this.tokens[k][0];
+          if (tg === ")" || tg === "CALL_END" || tg === "PARAM_END")
+            d++;
+          else if (tg === "(" || tg === "CALL_START" || tg === "PARAM_START") {
+            if (--d === 0) {
+              op = k;
+              break;
+            }
+          }
+        }
+        if (op > 1 && this.tokens[op - 1][0] === "TYPE_ANNOTATION" && this.tokens[op - 2]?.[0] === ")") {
+          closeIdx = op - 2;
+        }
       }
       let i = closeIdx;
       let stack = [];
@@ -11315,229 +11786,6 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return name;
   }
 
-  // src/error.js
-  class RipError extends Error {
-    constructor(message, {
-      code = null,
-      file = null,
-      line = null,
-      column = null,
-      length = 1,
-      source = null,
-      suggestion = null,
-      phase = null
-    } = {}) {
-      super(message);
-      this.name = "RipError";
-      this.code = code;
-      this.file = file;
-      this.line = line;
-      this.column = column;
-      this.length = length;
-      this.source = source;
-      this.suggestion = suggestion;
-      this.phase = phase;
-    }
-    static fromLexer(err, source, file) {
-      let loc = err.location || {};
-      return new RipError(err.message, {
-        code: "E_SYNTAX",
-        file,
-        line: loc.first_line ?? null,
-        column: loc.first_column ?? null,
-        length: loc.last_column != null && loc.first_column != null ? loc.last_column - loc.first_column + 1 : 1,
-        source,
-        phase: "lexer"
-      });
-    }
-    static fromParser(err, source, file) {
-      let h = err.hash || {};
-      let loc = h.loc || {};
-      let line = h.line ?? loc.r ?? null;
-      let column = loc.first_column ?? loc.c ?? null;
-      let suggestion = null;
-      if (h.expected?.length) {
-        let first5 = h.expected.slice(0, 5).map((e) => e.replace(/'/g, ""));
-        suggestion = `Expected ${first5.join(", ")}`;
-        if (h.expected.length > 5)
-          suggestion += `, ... (${h.expected.length} total)`;
-      }
-      let token = h.token || "token";
-      let expectedSet = new Set((h.expected || []).map((e) => e.replace(/'/g, "")));
-      let TERNARY_ENDERS = new Set([
-        "TERMINATOR",
-        ",",
-        ")",
-        "]",
-        "OUTDENT",
-        "CALL_END",
-        "INDEX_END",
-        "PARAM_END",
-        "EOF"
-      ]);
-      if (expectedSet.has(":") && (expectedSet.has("POST_IF") || expectedSet.has("POST_UNLESS") || expectedSet.has("FOR") || expectedSet.has("WHILE")) && TERNARY_ENDERS.has(token)) {
-        suggestion = "Binary `x ? y` was removed — use `x ?? y` for nullish coalescing, or a full ternary `x ? y : z`";
-      }
-      let near = h.text ? ` near '${h.text}'` : "";
-      let message = `Unexpected ${token}${near}`;
-      return new RipError(message, {
-        code: "E_PARSE",
-        file,
-        line,
-        column,
-        length: h.text?.length || 1,
-        source,
-        suggestion,
-        phase: "parser"
-      });
-    }
-    static fromSExpr(message, sexpr, source, file, suggestion) {
-      let loc = sexpr?.loc || {};
-      return new RipError(message, {
-        code: "E_CODEGEN",
-        file,
-        line: loc.r ?? null,
-        column: loc.c ?? null,
-        length: loc.n ?? 1,
-        source,
-        suggestion,
-        phase: "codegen"
-      });
-    }
-    get locationString() {
-      let parts = [];
-      if (this.file)
-        parts.push(this.file);
-      if (this.line != null) {
-        parts.push(`${this.line + 1}:${(this.column ?? 0) + 1}`);
-      }
-      return parts.join(":");
-    }
-    format({ color = true } = {}) {
-      let c = color ? {
-        red: "\x1B[31m",
-        yellow: "\x1B[33m",
-        cyan: "\x1B[36m",
-        dim: "\x1B[2m",
-        bold: "\x1B[1m",
-        reset: "\x1B[0m"
-      } : { red: "", yellow: "", cyan: "", dim: "", bold: "", reset: "" };
-      let lines = [];
-      let loc = this.locationString;
-      let header = loc ? `${c.cyan}${loc}${c.reset} ` : "";
-      lines.push(`${header}${c.red}${c.bold}error${c.reset}${c.bold}: ${this.message}${c.reset}`);
-      let snippet = this._snippet();
-      if (snippet) {
-        lines.push("");
-        for (let s of snippet) {
-          if (s.type === "source") {
-            lines.push(`${c.dim}${s.gutter}${c.reset}${s.text}`);
-          } else if (s.type === "caret") {
-            lines.push(`${c.dim}${s.gutter}${c.reset}${c.red}${c.bold}${s.text}${c.reset}`);
-          }
-        }
-      }
-      if (this.suggestion) {
-        lines.push("");
-        lines.push(`${c.yellow}hint${c.reset}: ${this.suggestion}`);
-      }
-      return lines.join(`
-`);
-    }
-    formatHTML() {
-      let lines = [];
-      lines.push('<div class="rip-error">');
-      lines.push("<style>");
-      lines.push(`.rip-error { font-family: ui-monospace, "SF Mono", Menlo, Monaco, monospace; font-size: 13px; line-height: 1.5; padding: 16px 20px; background: #1e1e2e; color: #cdd6f4; border-radius: 8px; overflow-x: auto; }`);
-      lines.push(`.rip-error .re-header { color: #f38ba8; font-weight: 600; }`);
-      lines.push(`.rip-error .re-loc { color: #89b4fa; }`);
-      lines.push(`.rip-error .re-gutter { color: #585b70; user-select: none; }`);
-      lines.push(`.rip-error .re-caret { color: #f38ba8; font-weight: 700; }`);
-      lines.push(`.rip-error .re-hint { color: #f9e2af; }`);
-      lines.push(`.rip-error .re-snippet { margin: 8px 0; }`);
-      lines.push("</style>");
-      let loc = this.locationString;
-      let locSpan = loc ? `<span class="re-loc">${esc(loc)}</span> ` : "";
-      lines.push(`<div class="re-header">${locSpan}error: ${esc(this.message)}</div>`);
-      let snippet = this._snippet();
-      if (snippet) {
-        lines.push('<pre class="re-snippet">');
-        for (let s of snippet) {
-          if (s.type === "source") {
-            lines.push(`<span class="re-gutter">${esc(s.gutter)}</span>${esc(s.text)}`);
-          } else if (s.type === "caret") {
-            lines.push(`<span class="re-gutter">${esc(s.gutter)}</span><span class="re-caret">${esc(s.text)}</span>`);
-          }
-        }
-        lines.push("</pre>");
-      }
-      if (this.suggestion) {
-        lines.push(`<div class="re-hint">hint: ${esc(this.suggestion)}</div>`);
-      }
-      lines.push("</div>");
-      return lines.join(`
-`);
-    }
-    _snippet() {
-      if (this.source == null || this.line == null)
-        return null;
-      let sourceLines = this.source.split(`
-`);
-      let errLine = this.line;
-      if (errLine < 0 || errLine >= sourceLines.length)
-        return null;
-      let contextRadius = 2;
-      let start = Math.max(0, errLine - contextRadius);
-      let end = Math.min(sourceLines.length - 1, errLine + contextRadius);
-      let gutterWidth = String(end + 1).length;
-      let result = [];
-      for (let i = start;i <= end; i++) {
-        let lineNum = String(i + 1).padStart(gutterWidth);
-        let gutter = ` ${lineNum} │ `;
-        result.push({ type: "source", gutter, text: sourceLines[i] });
-        if (i === errLine && this.column != null) {
-          let pad = " ".repeat(this.column);
-          let caretLen = Math.max(1, Math.min(this.length || 1, sourceLines[i].length - this.column));
-          let carets = "^".repeat(caretLen);
-          let emptyGutter = " ".repeat(gutterWidth + 2) + "│ ";
-          result.push({ type: "caret", gutter: emptyGutter, text: `${pad}${carets}` });
-        }
-      }
-      return result;
-    }
-  }
-  function isLexerError(err) {
-    return err instanceof SyntaxError && err.location != null;
-  }
-  function isParserError(err) {
-    return !(err instanceof SyntaxError) && err.hash != null;
-  }
-  function toRipError(err, source, file) {
-    if (err instanceof RipError) {
-      if (file && !err.file)
-        err.file = file;
-      if (source && !err.source)
-        err.source = source;
-      return err;
-    }
-    if (isLexerError(err))
-      return RipError.fromLexer(err, source, file);
-    if (isParserError(err))
-      return RipError.fromParser(err, source, file);
-    return new RipError(err.message, { file, source, phase: "unknown" });
-  }
-  function formatError(err, { source, file, color = true } = {}) {
-    let re = err instanceof RipError ? err : toRipError(err, source, file);
-    return re.format({ color });
-  }
-  function formatErrorHTML(err, { source, file } = {}) {
-    let re = err instanceof RipError ? err : toRipError(err, source, file);
-    return re.formatHTML();
-  }
-  function esc(s) {
-    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  }
-
   // src/compiler.js
   var _typesEmitter = null;
   var meta = (node, key) => node instanceof String ? node[key] : undefined;
@@ -13011,10 +13259,10 @@ function _setDataSection() {
       let ret = this.inlineReturnType(name);
       return `${isAsync ? "async " : ""}function${isGen ? "*" : ""} ${cleanName}(${paramList})${ret} ${bodyCode}`;
     }
-    inlineReturnType(name) {
+    inlineReturnType(node) {
       if (!this.options.inlineTypes)
         return "";
-      let rt = meta(name, "returnType");
+      let rt = meta(node, "returnType");
       return rt ? `: ${ripToTs(rt)}` : "";
     }
     emitThinArrow(head, rest, context, sexpr) {
@@ -13026,7 +13274,8 @@ function _setDataSection() {
       let bodyCode = this.emitFunctionBody(body, params, sideEffectOnly);
       let isAsync = this.containsAwait(body);
       let isGen = this.containsYield(body);
-      let fn = `${isAsync ? "async " : ""}function${isGen ? "*" : ""}(${paramList}) ${bodyCode}`;
+      let ret = this.inlineReturnType(sexpr?.[0]);
+      let fn = `${isAsync ? "async " : ""}function${isGen ? "*" : ""}(${paramList})${ret} ${bodyCode}`;
       return context === "value" ? `(${fn})` : fn;
     }
     emitFatArrow(head, rest, context, sexpr) {
@@ -13035,7 +13284,8 @@ function _setDataSection() {
         params = ["it"];
       let sideEffectOnly = sexpr.isVoid || false;
       let paramList = this.emitParamList(params);
-      let isSingle = params.length === 1 && typeof params[0] === "string" && !paramList.includes("=") && !paramList.includes("...") && !paramList.includes("[") && !paramList.includes("{");
+      let ret = this.inlineReturnType(sexpr?.[0]);
+      let isSingle = !ret && params.length === 1 && typeof params[0] === "string" && !paramList.includes("=") && !paramList.includes("...") && !paramList.includes("[") && !paramList.includes("{");
       let paramSyntax = isSingle ? paramList : `(${paramList})`;
       let isAsync = this.containsAwait(body);
       let prefix = isAsync ? "async " : "";
@@ -13047,18 +13297,18 @@ function _setDataSection() {
             let code = this.emit(expr, "value");
             if (code[0] === "{")
               code = `(${code})`;
-            return `${prefix}${paramSyntax} => ${code}`;
+            return `${prefix}${paramSyntax}${ret} => ${code}`;
           }
         }
         if (!Array.isArray(body) || body[0] !== "block") {
           let code = this.emit(body, "value");
           if (code[0] === "{")
             code = `(${code})`;
-          return `${prefix}${paramSyntax} => ${code}`;
+          return `${prefix}${paramSyntax}${ret} => ${code}`;
         }
       }
       let bodyCode = this.emitFunctionBody(body, params, sideEffectOnly);
-      return `${prefix}${paramSyntax} => ${bodyCode}`;
+      return `${prefix}${paramSyntax}${ret} => ${bodyCode}`;
     }
     emitReturn(head, rest, context, sexpr) {
       if (rest.length === 0)
@@ -16467,8 +16717,8 @@ if (typeof globalThis !== 'undefined') {
     return new CodeEmitter({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.16.3";
-  var BUILD_DATE = "2026-06-27@12:04:52GMT";
+  var VERSION = "3.17.0-wip";
+  var BUILD_DATE = "2026-06-27@21:51:58GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

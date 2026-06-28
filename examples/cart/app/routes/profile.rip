@@ -6,12 +6,12 @@ import { createMutation } from '@rip-lang/app'
 
 export Profile = component
   user <~ @app.data.user
-  form:: User := { ...user }
-  errors:: ApiErrors<keyof User> := {}
+  form: User := { ...user }
+  errors: ApiErrors<keyof User> := {}
 
   mounted: -> document.title = title('Profile')
 
-  updateUser = createMutation (data:: User) -> User.parse(api.patch!('user', { json: data }).json!()),
+  updateUser = createMutation (data: User) -> User.parse(api.patch!('user', { json: data }).json!()),
     onSuccess: (user) ->
       errors = {}
       @app.data.user = user

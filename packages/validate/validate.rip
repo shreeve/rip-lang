@@ -27,7 +27,7 @@
 # Utility Functions
 # ==============================================================================
 
-export isBlank = (obj:: unknown):: boolean ->
+export isBlank = (obj: unknown): boolean ->
   return true unless obj?
   return true if obj is false
   return true if typeof obj is 'string' and /^\s*$/.test obj
@@ -54,7 +54,7 @@ toMoney = (value, half = false, cents = false) ->
   c = -c if neg and c isnt 0
   if cents then c else c / 100
 
-export toName = (str:: unknown, ...type:: string[]):: string ->
+export toName = (str: unknown, ...type: string[]): string ->
   s = String(str)
   s = s.toLowerCase().replace(/\s+/g, ' ').trim()
   s = s.replace /(^|(?<=\P{L}))(\p{L})/gu, (m, pre, ch) -> pre + ch.toUpperCase()
@@ -78,7 +78,7 @@ export toName = (str:: unknown, ...type:: string[]):: string ->
   s = s.replace /\bP\.? ?O\.? ?Box/i, 'PO Box'
   s
 
-export toPhone = (str:: unknown):: string | null ->
+export toPhone = (str: unknown): string | null ->
   return "" if isBlank(str)
   num = str.toString().replace(/\s+/g, ' ').trim()
   [num, ext] = num.split(/\s*(?:, ?)?(?:ext?\.?|x|#|:|,)\s*/i, 2)
@@ -100,7 +100,7 @@ export toPhone = (str:: unknown):: string | null ->
 
 # Format integer cents for display: 129222 -> "$1,292.22". Expects integer
 # cents; rounds defensively so a stray float still renders.
-export formatMoney = (cents:: number, opts:: { symbol?: string, commas?: boolean } = {}):: string ->
+export formatMoney = (cents: number, opts: { symbol?: string, commas?: boolean } = {}): string ->
   symbol  = opts.symbol ?? '$'
   commas  = opts.commas ?? true
   c       = Math.round(cents)
@@ -121,7 +121,7 @@ export formatMoney = (cents:: number, opts:: { symbol?: string, commas?: boolean
 # or null on miss.
 export type Validator = (v: any) => unknown
 
-export validators:: Record<string, Validator> =
+export validators: Record<string, Validator> =
   # Numbers
   id:         (v) -> v[/^([1-9]\d{0,14})$/]            and parseInt(_[1])
   int:        (v) -> v[/^([-+]?(?:0|[1-9]\d{0,14}))$/] and parseInt(_[1])
@@ -207,12 +207,12 @@ export validators:: Record<string, Validator> =
       Array.from(new Set(nums)).sort((a, b) -> a - b)
     catch then null
 
-export registerValidator = (name:: string, fn:: Validator):: Validator ->
+export registerValidator = (name: string, fn: Validator): Validator ->
   validators[name] = fn
   registerCoercer name, fn
   fn
 
-export getValidator = (name:: string):: Validator | undefined -> validators[name]
+export getValidator = (name: string): Validator | undefined -> validators[name]
 
 # ==============================================================================
 # Schema-coercer bridge
@@ -241,7 +241,7 @@ registerCoercer name, fn for own name, fn of validators
 # `read()`. Use it for session fields, env vars, config values, or any input
 # that lives outside a request body/query.
 
-export check = (value:: unknown, type:: string):: unknown ->
+export check = (value: unknown, type: string): unknown ->
   f = validators[type] or return
   v = if type in ['array', 'hash', 'json'] then value else String(value ?? '')
   f(v)

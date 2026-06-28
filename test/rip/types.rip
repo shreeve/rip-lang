@@ -599,3 +599,11 @@ type "export interface with :: annotations", """
     port: number;
   }
   """
+
+# Rip 3.17 — single-colon contexts B (function-type-valued decl) and D (bare
+# typed forward declaration). A (typed destructuring) deliberately keeps `::`.
+code "single-colon function-type-valued decl", "get: (p: string) => void = f", "let get;\nget = f;"
+code "single-colon generic function-type-valued decl", "watchers: Set<(e: string) => void> = x", "let watchers;\nwatchers = x;"
+code "single-colon bare typed decl (assigned later)", "r: R\nr = fn()", "let r;\nr;\nr = fn();"
+# `name: value` with no later assignment stays an object expression (not a decl).
+code "bare name: value stays an object", "mode: cfg", "({mode: cfg});"

@@ -21,7 +21,7 @@ export Products = component
 
   mounted: -> document.title = title('Products')
 
-  setQuery: (opts:: { search?: string, sort?: string }) ->
+  setQuery: (opts: { search?: string, sort?: string }) ->
     next = { ...@router.query, ...opts }
     params = new URLSearchParams()
     for key, val of next when val

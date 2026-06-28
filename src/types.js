@@ -37,6 +37,14 @@ export function installTypeSupport(Lexer) {
   proto.rewriteTypes = function() {
     let tokens = this.tokens;
     let typeRefNames = this.typeRefNames = new Set();
+
+    // Rip 3.17 — single-colon type annotations. A `:` in a type-annotation
+    // slot (function params, return types, statement-level typed declarations)
+    // is reclassified to TYPE_ANNOTATION so it flows through the same machinery
+    // as the explicit `::`. Object properties, ternary branches, and nested
+    // colons are deliberately left untouched. Runs before the main type scan.
+    reclassifyColonTypes(tokens);
+
     let gen = (tag, val, origin) => {
       let t = [tag, val];
       t.pre = 0;
@@ -385,6 +393,378 @@ function looksLikeBareFunctionType(typeTokens) {
     }
   }
   return false;
+}
+
+// Rip 3.17 — does the token slice [a, b) form a complete, well-formed *type*
+// expression (vs a value expression)? Used to decide whether a single `:` in a
+// bare decl (`r: R`) or a function-type-valued decl (`get: (p) => void = …`) is
+// a type annotation. A whitelist of type tokens + bracket/generic balance + an
+// adjacency rule (two atoms with no separator is not a type — kills the value
+// comparison `x < y > z`). Anything outside the whitelist (a CALL_START, `->`,
+// `new`/UNARY, arithmetic, `&&`, `==`, …) marks it as a value, so the `:` is
+// left alone and any side effects survive.
+function isCompleteTypeExpr(tokens, a, b) {
+  if (b <= a) return false;
+  const SEP = new Set(['|', '&', ',', ':', '?', '.', '...', '=>']);
+  let par = 0, brk = 0, brc = 0, gen = 0, atomEnd = false;
+  for (let j = a; j < b; j++) {
+    const t = tokens[j][0], v = tokens[j][1];
+    if (t === '(' || t === 'PARAM_START')      { par++; atomEnd = false; continue; }
+    if (t === ')' || t === 'PARAM_END')        { if (--par < 0) return false; atomEnd = true; continue; }
+    if (t === '[' || t === 'INDEX_START')      { brk++; atomEnd = false; continue; }
+    if (t === ']' || t === 'INDEX_END')        { if (--brk < 0) return false; atomEnd = true; continue; }
+    if (t === '{')                             { brc++; atomEnd = false; continue; }
+    if (t === '}')                             { if (--brc < 0) return false; atomEnd = true; continue; }
+    if (t === 'COMPARE') {
+      if (v === '<') { gen++; atomEnd = false; continue; }
+      if (v === '>') { if (gen <= 0) return false; gen--; atomEnd = true; continue; }
+      return false;                            // ==, !=, <=, >= → not a type
+    }
+    if (t === 'SHIFT') {
+      if (v === '>>') { if (gen < 2) return false; gen -= 2; atomEnd = true; continue; }
+      return false;
+    }
+    if (t === '=') { if (gen > 0) { atomEnd = false; continue; } return false; } // generic default only
+    if (SEP.has(t)) { atomEnd = false; continue; }
+    if (t === 'IDENTIFIER' || t === 'PROPERTY' || t === 'NUMBER' ||
+        t === 'STRING' || t === 'NULL' || t === 'UNDEFINED' || t === 'BOOL') {
+      if (atomEnd) return false;               // two atoms, no separator → not a type
+      atomEnd = true; continue;
+    }
+    return false;                              // any non-type token → value
+  }
+  return par === 0 && brk === 0 && brc === 0 && gen === 0 && atomEnd;
+}
+
+// Rip 3.17 — positive evidence that a bare `name: T` is a typed forward
+// declaration: the same identifier is assigned (`name = …`, `:=`, etc.)
+// somewhere later in the same block (any nesting depth before the block's
+// OUTDENT). Distinguishes `r: R` (then `r = …`) from a discarded object
+// property. Starts scanning at `start` (just past the decl line's TERMINATOR).
+function assignedLaterInBlock(tokens, start, name) {
+  const ASSIGN = new Set(['=', 'REACTIVE_ASSIGN', 'COMPUTED_ASSIGN', 'READONLY_ASSIGN']);
+  // Descend into control-flow sub-blocks (try/if/for — the medlabs `r = …`
+  // sits inside a `try`), but SKIP nested function bodies: an assignment inside
+  // a closure (`init -> … name = …`) is a different scope and must not count
+  // as evidence. A closure body is an INDENT immediately preceded by `->`/`=>`.
+  let indent = 0, bracket = 0, closureDepth = 0;
+  const closureAt = [];
+  for (let j = start; j < tokens.length; j++) {
+    const g = tokens[j][0];
+    if (g === 'INDENT') {
+      indent++;
+      const p = tokens[j - 1]?.[0];
+      if (p === '->' || p === '=>') { closureAt.push(indent); closureDepth++; }
+      continue;
+    }
+    if (g === 'OUTDENT') {
+      if (indent === 0) return false;            // left the starting block
+      if (closureAt[closureAt.length - 1] === indent) { closureAt.pop(); closureDepth--; }
+      indent--; continue;
+    }
+    if (g === '(' || g === 'CALL_START' || g === 'PARAM_START' ||
+        g === '[' || g === 'INDEX_START' || g === '{') { bracket++; continue; }
+    if (g === ')' || g === 'CALL_END' || g === 'PARAM_END' ||
+        g === ']' || g === 'INDEX_END' || g === '}') { bracket--; continue; }
+    if (closureDepth === 0 && bracket === 0 && (g === 'IDENTIFIER' || g === 'PROPERTY') &&
+        tokens[j][1] === name && ASSIGN.has(tokens[j + 1]?.[0])) return true;
+  }
+  return false;
+}
+
+// Rip 3.17 — reclassify single-colon `:` into TYPE_ANNOTATION in the contexts
+// where it means a type, so `:` and `::` share one code path. Scoped tightly:
+//
+//   - function parameters:  `(x: T)`, `(x: T = d)`  (arrow PARAM_START + def)
+//   - return types:         `(…): T ->`, `def f(…): T`
+//   - statement decls:      `x: T = v`  (binding name at statement start)
+//
+// Everything else keeps `:` as-is: object properties (`{x: 1}`, `foo a: 1`),
+// implicit-object call args (`foo(a: 1)`), ternary (`a ? b : c`), and any colon
+// nested inside `{}`/`[]`/`<>` (object-type interiors, generic args). The
+// preceding object-key `PROPERTY` token is retagged back to `IDENTIFIER` so the
+// downstream `::` handler treats it as a binder, not a property.
+//
+// Frame state is per parameter segment: a `:` is a param type only before any
+// top-level `=` (so a ternary in a default `(x = a ? b : c)` is untouched) and
+// only the first colon in the segment.
+function reclassifyColonTypes(tokens) {
+  const isOpen  = t => t === '(' || t === 'CALL_START' || t === 'PARAM_START' ||
+                       t === '{' || t === '[' || t === 'INDEX_START';
+  const isClose = t => t === ')' || t === 'CALL_END' || t === 'PARAM_END' ||
+                       t === '}' || t === ']' || t === 'INDEX_END';
+
+  // Is this CALL_START the param list of a `def`? Matches `DEF IDENT (` and
+  // `DEF IDENT <generics> (`. Deliberately narrow so an ordinary call
+  // `foo(a: 1)` (no preceding DEF) is never mistaken for a def param list.
+  const isDefParamStart = (i) => {
+    let j = i - 1;
+    // Skip a balanced generic list `<…>` between the def name and `(`.
+    const g0 = tokens[j]?.[0], v0 = tokens[j]?.[1];
+    if ((g0 === 'COMPARE' && v0 === '>') || (g0 === 'SHIFT' && v0 === '>>')) {
+      let depth = g0 === 'SHIFT' ? 2 : 1;
+      j--;
+      while (j >= 0 && depth > 0) {
+        const g = tokens[j][0], v = tokens[j][1];
+        if (g === 'COMPARE' && v === '>') depth++;
+        else if (g === 'SHIFT' && v === '>>') depth += 2;
+        else if (g === 'COMPARE' && v === '<') depth--;
+        else if (g === 'SHIFT' && v === '<<') depth -= 2;
+        j--;
+      }
+    }
+    if (tokens[j]?.[0] !== 'IDENTIFIER' && tokens[j]?.[0] !== 'PROPERTY') return false;
+    return tokens[j - 1]?.[0] === 'DEF';
+  };
+
+  // Statement-level typed declaration `name: T = v` (and `:=`, `~=`, `=!`,
+  // `~>`, `<~`). True only when an assignment/binding operator appears at the
+  // top level BEFORE any function arrow — so a method/value like
+  // `name: (x) -> …` or `name: (x) => y = x` (arrow first) stays a binding,
+  // and a bare `name: T` (no binding op) stays an object property.
+  const STMT_START  = new Set(['TERMINATOR', 'INDENT', 'OUTDENT', 'EXPORT']);
+  // Assignment/binding operators that mark `name: T <op> …` as a typed
+  // declaration. EFFECT (`~>`) and GATE (`<~`) are deliberately excluded: a
+  // bare `name: ~> …` is a schema computed getter (no type), so treating `~>`
+  // as a binding op would misread schema bodies as typed declarations.
+  const BINDING_OPS = new Set(['=', 'REACTIVE_ASSIGN', 'COMPUTED_ASSIGN', 'READONLY_ASSIGN']);
+  const atStatementStart = (t) => !t || STMT_START.has(t[0]);
+  const declBindsBeforeArrow = (start) => {
+    let depth = 0;
+    for (let j = start; j < tokens.length; j++) {
+      const g = tokens[j][0];
+      if (isOpen(g)) depth++;
+      else if (isClose(g)) depth--;
+      else if (depth === 0) {
+        if (g === '->' || g === '=>') return false;
+        if (BINDING_OPS.has(g)) return true;
+        // Typed effect/gate: `name: T ~> …` — an EFFECT/GATE that is NOT the
+        // first token after `:` follows a type (a bare `name: ~> …` schema
+        // getter has it first, so j === start, and stays excluded).
+        if ((g === 'EFFECT' || g === 'GATE') && j > start) return true;
+        if (g === 'TERMINATOR' || g === 'INDENT' || g === 'OUTDENT') return false;
+      }
+    }
+    return false;
+  };
+
+  // Does the value after a class-member `:` look like a function (a method),
+  // i.e. does a `->`/`=>` arrow appear at depth 0 before the member ends? If so
+  // it's a method binding, not a typed field — leave it alone.
+  const valueIsMethod = (start) => {
+    let depth = 0;
+    for (let j = start; j < tokens.length; j++) {
+      const g = tokens[j][0];
+      if (isOpen(g)) depth++;
+      else if (isClose(g)) depth--;
+      else if (depth === 0) {
+        if (g === '->' || g === '=>') return true;
+        if (g === 'TERMINATOR' || g === 'INDENT' || g === 'OUTDENT') return false;
+      }
+    }
+    return false;
+  };
+
+  // Track class/component bodies via INDENT/OUTDENT so a bare `name: T` member
+  // (or `@name: T` component prop) is read as a typed field. `pendingBody` is
+  // armed by `class`/`component` and consumed by the next INDENT (the body);
+  // methods inside it open their own (non-body) INDENT, so a member is in a
+  // typed body only when the innermost indent frame is that body.
+  let pendingBody = false;
+  const indentStack = [];
+  const inTypedBody = () => indentStack.length > 0 && indentStack[indentStack.length - 1];
+
+  // The binding name for a statement/field annotation is `tokens[i-1]` (a
+  // PROPERTY/IDENTIFIER), optionally preceded by `@` (component prop / promoted
+  // field). Returns true when that name sits at a statement boundary.
+  const nameAtStatementStart = (i) => {
+    const p = tokens[i - 1]?.[0];
+    if (p !== 'PROPERTY' && p !== 'IDENTIFIER') return false;
+    if (tokens[i - 2]?.[0] === '@') return atStatementStart(tokens[i - 3]);
+    return atStatementStart(tokens[i - 2]);
+  };
+
+  // A type expression (opened by any `::` / TYPE_ANNOTATION, or by a `:` we
+  // reclassify) must never have its interior touched: a function type like
+  // `{ cb: (r: R) => void }` carries single `:` colons that are TS member/param
+  // separators, not Rip annotations. `inType` suppresses reclassification until
+  // the type ends (a terminator at its start depth, or exiting that depth).
+  let inType = false, typeStartDepth = 0;
+  const enterType = () => { inType = true; typeStartDepth = stack.length; };
+
+  // Object-context detection for context D: a statement-start `name:` line that
+  // sits next to another `key:` line is an object member (`{a: A, b: B}`), not a
+  // bare typed declaration. `curLineKV` marks the current line as starting
+  // `name:`; committed to `prevSiblingKV` at the line's TERMINATOR; both reset
+  // at block boundaries.
+  let prevSiblingKV = false, curLineKV = false;
+
+  const stack = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const tag = tokens[i][0];
+
+    // Class-body tracking (INDENT/OUTDENT). `class` arms the next INDENT as a
+    // class body; nested method/blocks push non-class indents. INDENT/OUTDENT
+    // at the type's start depth also end a type expression.
+    if (tag === 'CLASS' || tag === 'COMPONENT') { pendingBody = true; continue; }
+    if (tag === 'INDENT') { indentStack.push(pendingBody); pendingBody = false; prevSiblingKV = curLineKV = false; if (inType && stack.length <= typeStartDepth) inType = false; continue; }
+    if (tag === 'OUTDENT') { indentStack.pop(); prevSiblingKV = curLineKV = false; if (inType && stack.length <= typeStartDepth) inType = false; continue; }
+
+    // Brackets are always tracked (depth drives the type-context boundary).
+    // Inside a type, an opener is never a real parameter list (it's a
+    // function-type's params), so it pushes a plain frame.
+    if (isOpen(tag)) {
+      let kind = 'other';
+      if (!inType) {
+        if (tag === 'PARAM_START') kind = 'param';
+        else if ((tag === 'CALL_START' || tag === '(') && isDefParamStart(i)) kind = 'defparam';
+      }
+      stack.push({ kind, sawEq: false, sawType: false });
+      continue;
+    }
+    if (isClose(tag)) {
+      const f = stack.pop();
+      if (f?.kind === 'defparam') { (tokens[i].data ??= {}).isDefParamEnd = true; }
+      if (inType && stack.length < typeStartDepth) inType = false;
+      continue;
+    }
+
+    // A type annotation token (pre-existing `::`, or one created below) opens a
+    // type expression.
+    if (tag === 'TYPE_ANNOTATION') { if (!inType) enterType(); continue; }
+
+    // Inside a type: clear at the type's terminator (at its start depth);
+    // otherwise skip — never reclassify a colon that belongs to a type. `=>`
+    // does not terminate (it's a function-type arrow).
+    if (inType) {
+      if (stack.length <= typeStartDepth &&
+          (tag === '=' || tag === ',' || tag === 'TERMINATOR' || tag === '->' ||
+           BINDING_OPS.has(tag))) {
+        inType = false;   // fall through; a terminator is never a `:` to reclassify
+      } else {
+        continue;
+      }
+    }
+
+    // Commit per-line key:value state at statement boundaries (depth 0).
+    if (tag === 'TERMINATOR' && stack.length === 0) { prevSiblingKV = curLineKV; curLineKV = false; }
+
+    if (tag === ':') {
+      const prev = tokens[i - 1];
+      const prevTag = prev?.[0];
+      // Mark this line as `name:`-shaped (object-member candidate) for D's
+      // adjacent-key detection.
+      if (stack.length === 0 && (prevTag === 'IDENTIFIER' || prevTag === 'PROPERTY') &&
+          atStatementStart(tokens[i - 2])) curLineKV = true;
+      // Return type: a `:` immediately after a closed param list. Arrow param
+      // lists close as PARAM_END; def param lists close as `)` or CALL_END
+      // (flagged `isDefParamEnd`).
+      if (prevTag === 'PARAM_END' ||
+          ((prevTag === ')' || prevTag === 'CALL_END') && prev.data?.isDefParamEnd)) {
+        tokens[i][0] = 'TYPE_ANNOTATION'; enterType(); continue;
+      }
+      // Parameterless def return type: `def foo: T`.
+      if ((prevTag === 'IDENTIFIER' || prevTag === 'PROPERTY') &&
+          tokens[i - 2]?.[0] === 'DEF') {
+        if (prevTag === 'PROPERTY') prev[0] = 'IDENTIFIER';
+        tokens[i][0] = 'TYPE_ANNOTATION'; enterType(); continue;
+      }
+      // Statement-level typed declaration (top level, name at statement start,
+      // binding operator before any arrow). Covers `@name: T := v` props too.
+      // An `@`-prefixed name stays PROPERTY (the `@`-prop / promoted-field
+      // machinery needs it); a plain name is retagged IDENTIFIER like `::`.
+      if (stack.length === 0 && nameAtStatementStart(i) &&
+          declBindsBeforeArrow(i + 1)) {
+        if (prevTag === 'PROPERTY' && tokens[i - 2]?.[0] !== '@') prev[0] = 'IDENTIFIER';
+        tokens[i][0] = 'TYPE_ANNOTATION'; enterType(); continue;
+      }
+      // Context B — function-type-valued declaration: `name: (…) => Ret = value`
+      // (statement start). The type carries a `=>` arrow, so the binding-before-
+      // arrow check above misses it. Scan for the first bracket-depth-0 `=`
+      // (only ()[]{} count) whose preceding slice is a complete type expression
+      // — the `=>` is then a function-TYPE arrow. Try-and-continue handles
+      // generic defaults `Foo<T = U>` (the inner `=` leaves `Foo<T` incomplete).
+      if (stack.length === 0 && nameAtStatementStart(i)) {
+        let depth = 0;
+        for (let j = i + 1; j < tokens.length; j++) {
+          const g = tokens[j][0];
+          if (isOpen(g)) depth++;
+          else if (isClose(g)) { if (depth === 0) break; depth--; }
+          else if (depth === 0) {
+            if (g === 'TERMINATOR' || g === 'INDENT' || g === 'OUTDENT') break;
+            if (g === '=' && isCompleteTypeExpr(tokens, i + 1, j)) {
+              if (prevTag === 'PROPERTY' && tokens[i - 2]?.[0] !== '@') prev[0] = 'IDENTIFIER';
+              tokens[i][0] = 'TYPE_ANNOTATION'; enterType(); break;
+            }
+          }
+        }
+        if (tokens[i][0] === 'TYPE_ANNOTATION') continue;
+      }
+      // Class/component-body typed field: a bare `name: T` (or `@name: T`)
+      // member with no initializer is a typed field unless its value is a
+      // method (`name: (…) -> …`).
+      if (inTypedBody() && stack.length === 0 && nameAtStatementStart(i) &&
+          !valueIsMethod(i + 1)) {
+        if (prevTag === 'PROPERTY' && tokens[i - 2]?.[0] !== '@') prev[0] = 'IDENTIFIER';
+        tokens[i][0] = 'TYPE_ANNOTATION'; enterType(); continue;
+      }
+      // Context D — bare typed declaration, no initializer: `name: T` at
+      // statement start, the line is NON-TAIL (not the last expression of its
+      // block — that would be an implicit-return object), the type slice is a
+      // complete type expression (rejects `name: build()` so side effects
+      // survive), and the same `name` is assigned later in the block (positive
+      // evidence it's a forward declaration, not a discarded object property).
+      if (stack.length === 0 && nameAtStatementStart(i) && tokens[i - 2]?.[0] !== '@') {
+        let depth = 0, end = -1;
+        for (let j = i + 1; j < tokens.length; j++) {
+          const g = tokens[j][0];
+          if (isOpen(g)) depth++;
+          else if (isClose(g)) { if (depth === 0) break; depth--; }
+          else if (depth === 0) {
+            if (g === 'TERMINATOR') { end = j; break; }
+            if (g === 'INDENT' || g === 'OUTDENT' || g === '=' || BINDING_OPS.has(g)) break;
+          }
+        }
+        const nk = tokens[end + 1];
+        const nextKV = nk && (nk[0] === 'IDENTIFIER' || nk[0] === 'PROPERTY') &&
+                       tokens[end + 2]?.[0] === ':';
+        if (end > i + 1 && nk && nk[0] !== 'OUTDENT' &&
+            !prevSiblingKV && !nextKV &&
+            isCompleteTypeExpr(tokens, i + 1, end) &&
+            assignedLaterInBlock(tokens, end + 1, prev[1])) {
+          if (prevTag === 'PROPERTY') prev[0] = 'IDENTIFIER';
+          tokens[i][0] = 'TYPE_ANNOTATION'; enterType(); continue;
+        }
+      }
+    }
+
+    const f = stack[stack.length - 1];
+    if (f && (f.kind === 'param' || f.kind === 'defparam')) {
+      if (tag === ',') { f.sawEq = false; f.sawType = false; continue; }
+      if (tag === '=') { f.sawEq = true; continue; }
+      if (tag === ':' && !f.sawEq && !f.sawType) {
+        const prev = tokens[i - 1];
+        const prevTag = prev?.[0];
+        if (prevTag === 'PROPERTY' || prevTag === 'IDENTIFIER') {
+          if (prevTag === 'PROPERTY' && tokens[i - 2]?.[0] !== '@') prev[0] = 'IDENTIFIER';
+          tokens[i][0] = 'TYPE_ANNOTATION';
+          f.sawType = true;
+          enterType();
+        } else if (prevTag === '}' || prevTag === ']' || prevTag === 'INDEX_END') {
+          // Context A — external destructuring param type, TS-style:
+          // `({pat}: Type)` / `([pat]: Type)`. The `:` follows the ROOT pattern
+          // close (the stack top is this param frame, so the pattern's own
+          // brackets have already been popped — a nested pattern's `:` is seen
+          // while an inner frame is on top and stays a rename). In-pattern `:`
+          // therefore keeps its destructuring-rename meaning; the type lives
+          // outside the pattern, after `}`/`]`.
+          tokens[i][0] = 'TYPE_ANNOTATION';
+          f.sawType = true;
+          enterType();
+        }
+      }
+    }
+  }
 }
 
 // Collect type expression tokens starting at position j, respecting brackets

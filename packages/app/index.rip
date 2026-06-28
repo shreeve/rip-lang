@@ -24,9 +24,9 @@
 # Re-export context functions from the component runtime
 __ripCtx = globalThis.__ripComponent or {}
 
-export setContext = (key:: unknown, value:: unknown):: void -> __ripCtx.setContext(key, value)
-export getContext = (key:: unknown):: unknown -> __ripCtx.getContext(key)
-export hasContext = (key:: unknown):: boolean -> __ripCtx.hasContext(key)
+export setContext = (key: unknown, value: unknown): void -> __ripCtx.setContext(key, value)
+export getContext = (key: unknown): unknown -> __ripCtx.getContext(key)
+export hasContext = (key: unknown): boolean -> __ripCtx.hasContext(key)
 
 # =============================================================================
 # Internal types — used by public function signatures below. Not exported,
@@ -198,7 +198,7 @@ type ComponentInstance =
   onError?: (err: unknown) => void
   _target?: Element
 
-type ComponentConstructor = new (props?:: Record<string, unknown>) => ComponentInstance
+type ComponentConstructor = new (props?: Record<string, unknown>) => ComponentInstance
 
 type Resolver =
   map: Record<string, string>
@@ -641,10 +641,10 @@ stashMethodFn = (proxy, prop) ->
   cache[prop] = fn
   fn
 
-export def createStash(data:: Record<string, any> = {}):: Stash
+export def createStash(data: Record<string, any> = {}): Stash
   makeProxy(data)
 
-export def unwrapStash(proxy:: Stash):: Stash
+export def unwrapStash(proxy: Stash): Stash
   if proxy?[:raw] then proxy[:raw] else proxy
 
 # Serialization projection helpers. Saving and restoring must
@@ -690,7 +690,7 @@ _restoreSaved = (target, saved) ->
 #
 # Returns a disposer that unsubscribes the autosave effect, removes the
 # beforeunload handler, and writes one final snapshot before unwiring.
-export def persistStash(app:: Stash, opts?:: { local?: boolean, key?: string } = {}):: Disposer
+export def persistStash(app: Stash, opts?: { local?: boolean, key?: string } = {}): Disposer
   assertBrowser 'persistStash'
   target = unwrapStash(app) or app
   # Double-call guard returns a no-op disposer. Parenthesized on purpose:
@@ -727,7 +727,7 @@ export def persistStash(app:: Stash, opts?:: { local?: boolean, key?: string } =
       value: -> (try storage.removeItem(storageKey) catch then null)
       configurable: true
       writable: true
-  disposed:: boolean = false
+  disposed: boolean = false
   ->
     return if disposed
     disposed = true
@@ -745,7 +745,7 @@ export def persistStash(app:: Stash, opts?:: { local?: boolean, key?: string } =
 # Call .refetch() to reload.
 # ==============================================================================
 
-export def createResource<T>(fn:: (signal?:: AbortSignal) => Promise<T>, opts?:: { initial?: T | null, lazy?: boolean } = {}):: Resource<T>
+export def createResource<T>(fn: (signal?: AbortSignal) => Promise<T>, opts?: { initial?: T | null, lazy?: boolean } = {}): Resource<T>
   # `?? null` instead of `or null` so falsy initials like 0, '', false
   # survive (the previous `or` collapsed them to null).
   _data       = __state(opts.initial ?? null)
@@ -830,7 +830,7 @@ export def createResource<T>(fn:: (signal?:: AbortSignal) => Promise<T>, opts?::
 # so the type and the runtime accept the same strings.
 DURATION_RE = /^(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*(s|sec|second|seconds|m|min|minute|minutes|h|hr|hour|hours|d|day|days|w|week|weeks|y|year|years)$/i
 
-def parseStaleTime(v:: number | string | symbol | null | undefined):: number
+def parseStaleTime(v: number | string | symbol | null | undefined): number
   return 0 unless v?
   return v if typeof v is 'number'
   if typeof v is 'string'
@@ -923,7 +923,7 @@ makeSourceCell = (fetchFn, staleTime) ->
   # Stale unless within staleTime OR within an unexpired preload freshness floor.
   isFresh = -> staleTime is Infinity or Date.now() - loadedAt < staleTime or Date.now() < freshUntil
 
-  cell:: Record<PropertyKey, any> = {}
+  cell: Record<PropertyKey, any> = {}
   cell[SOURCE] = true
 
   # Reactive read; first touch kicks the lazy load without blocking.
@@ -1052,7 +1052,7 @@ makeSourceFamily = (fetchFn, staleTime) ->
 # `fetch: (id) -> …` types and runs as one cell per key. A singleton fetch
 # receives an optional AbortSignal; declare it with a default
 # (`fetch: (signal = null) -> …`) so it doesn't read as a key parameter.
-export def source<T extends NonNullSourceValue, A extends unknown[]>(opts:: SourceOpts<T, A>):: SourceValue<T, A>
+export def source<T extends NonNullSourceValue, A extends unknown[]>(opts: SourceOpts<T, A>): SourceValue<T, A>
   staleTime = parseStaleTime(opts.staleTime)
   cell = if opts.fetch.length >= 1
     makeSourceFamily(opts.fetch, staleTime)
@@ -1075,7 +1075,7 @@ export def source<T extends NonNullSourceValue, A extends unknown[]>(opts:: Sour
 # to capture the component lexically.
 # ==============================================================================
 
-export def createMutation<R>(fn:: (...args: any[]) => Promise<R> | R, opts?:: { onSuccess?: (r: R) => void, onError?: (e: unknown) => void } = {}):: Mutation<R>
+export def createMutation<R>(fn: (...args: any[]) => Promise<R> | R, opts?: { onSuccess?: (r: R) => void, onError?: (e: unknown) => void } = {}): Mutation<R>
   _pending   = __state(false)
   _succeeded = __state(false)
   _error     = __state(null)
@@ -1083,12 +1083,12 @@ export def createMutation<R>(fn:: (...args: any[]) => Promise<R> | R, opts?:: { 
 
   # `any` because the callable + reactive-flags intersection is assembled
   # at runtime (defineProperty below) — TS can't see the flags on the fn.
-  mutation:: any = (...args) ->
+  mutation: any = (...args) ->
     me = ++generation
     _pending.value = true
     _succeeded.value = false
     _error.value = null
-    r:: R
+    r: R
     try
       r = await fn(...args)
     catch e
@@ -1162,7 +1162,7 @@ _proxy = (out, source, disposer) ->
 # delay(ms, source) — truthy waits ms, falsy immediate
 # Usage: showLoading := delay 200 -> loading
 #        navigating = delay 100, __state(false)
-export delay = (ms:: number, source:: TimingSource<unknown>):: TimedSignal<boolean> ->
+export delay = (ms: number, source: TimingSource<unknown>): TimedSignal<boolean> ->
   fn = _toFn(source)
   out = __state(!!fn())
   eff = __effect ->
@@ -1175,7 +1175,7 @@ export delay = (ms:: number, source:: TimingSource<unknown>):: TimedSignal<boole
 
 # debounce(ms, source) — waits ms after last change, then propagates
 # Usage: debouncedQuery := debounce 300 -> query
-export debounce = (ms:: number, source:: TimingSource<unknown>):: TimedSignal<unknown> ->
+export debounce = (ms: number, source: TimingSource<unknown>): TimedSignal<unknown> ->
   fn = _toFn(source)
   out = __state(fn())
   eff = __effect ->
@@ -1186,7 +1186,7 @@ export debounce = (ms:: number, source:: TimingSource<unknown>):: TimedSignal<un
 
 # throttle(ms, source) — propagates at most once per ms
 # Usage: smoothScroll := throttle 100 -> scrollY
-export throttle = (ms:: number, source:: TimingSource<unknown>):: TimedSignal<unknown> ->
+export throttle = (ms: number, source: TimingSource<unknown>): TimedSignal<unknown> ->
   fn = _toFn(source)
   out = __state(fn())
   last = 0
@@ -1207,7 +1207,7 @@ export throttle = (ms:: number, source:: TimingSource<unknown>):: TimedSignal<un
 
 # hold(ms, source) — once truthy, stays true for at least ms
 # Usage: showSaved := hold 2000 -> saved
-export hold = (ms:: number, source:: TimingSource<unknown>):: TimedSignal<boolean> ->
+export hold = (ms: number, source: TimingSource<unknown>): TimedSignal<boolean> ->
   fn = _toFn(source)
   out = __state(!!fn())
   eff = __effect ->
@@ -1226,9 +1226,9 @@ export hold = (ms:: number, source:: TimingSource<unknown>):: TimedSignal<boolea
 # create/change/delete. Compiled modules are cached alongside sources.
 # ==============================================================================
 
-export def createComponents():: ComponentsStore
+export def createComponents(): ComponentsStore
   files = new Map()
-  watchers:: Set<(event: string, path: string) => void> = new Set()  # idempotent disposers via Set, no -1 splice
+  watchers: Set<(event: string, path: string) => void> = new Set()  # idempotent disposers via Set, no -1 splice
   compiled = new Map()
 
   notify = (event, path) ->
@@ -1404,7 +1404,7 @@ getLayoutChain = (routeFile, root, layouts) ->
     chain.push layouts.get(dir) if layouts.has(dir)
   chain
 
-export def createRouter(components:: ComponentsStore, opts?:: RouterOpts = {}):: Router
+export def createRouter(components: ComponentsStore, opts?: RouterOpts = {}): Router
   assertBrowser 'createRouter'
   root = opts.root or '_route'
   base = opts.base or ''
@@ -1450,7 +1450,7 @@ export def createRouter(components:: ComponentsStore, opts?:: RouterOpts = {})::
   _normalizedUrl = __state(_path.value)
 
   tree = buildRoutes(components, root)
-  navCallbacks:: Set<(info: RouteInfo) => void> = new Set()
+  navCallbacks: Set<(info: RouteInfo) => void> = new Set()
 
   unwatchComponents = components.watch (event, path) ->
     return unless path.startsWith(root + '/')
@@ -1492,7 +1492,7 @@ export def createRouter(components:: ComponentsStore, opts?:: RouterOpts = {})::
   # ── Scroll management ────────────────────────────────────────────
   # Take manual control so the browser's native restoration (default
   # 'auto') doesn't race our saved-position logic on back/forward.
-  prevScrollRestoration:: ScrollRestoration | null = null
+  prevScrollRestoration: ScrollRestoration | null = null
   if typeof history isnt 'undefined' and 'scrollRestoration' of history
     prevScrollRestoration = history.scrollRestoration
     history.scrollRestoration = 'manual'
@@ -1522,7 +1522,7 @@ export def createRouter(components:: ComponentsStore, opts?:: RouterOpts = {})::
   # Keep the current history entry's saved scroll fresh so returning to it
   # (including departures via back/forward, which we can't intercept) lands
   # where the user was. Throttled — only the latest position matters.
-  scrollSaveTimer:: ReturnType<typeof setTimeout> | null = null
+  scrollSaveTimer: ReturnType<typeof setTimeout> | null = null
   onScroll = ->
     return if scrollSaveTimer or typeof window is 'undefined'
     scrollSaveTimer = setTimeout (->
@@ -1619,8 +1619,8 @@ export def createRouter(components:: ComponentsStore, opts?:: RouterOpts = {})::
         ownedAnchors.delete(a)
     return
 
-  ariaObserver:: MutationObserver | null = null
-  ariaScheduled:: boolean = false
+  ariaObserver: MutationObserver | null = null
+  ariaScheduled: boolean = false
   scheduleAria = ->
     return if ariaScheduled
     ariaScheduled = true
@@ -1973,7 +1973,7 @@ compileAndImport = (source, compile, components = null, path = null, resolver = 
         # bare/relative `.rip` specifier left in place would reach the browser's
         # native resolver and throw "Failed to resolve module specifier".
         ripImportRe = /^(\s*(?:import|export)\s+(?:(.*?)\s+from\s+)?['"])([^'"]*\.rip)(['"];?\s*)$/gm
-        matches:: Array<RegExpMatchArray> = Array.from(js.matchAll(ripImportRe))
+        matches: Array<RegExpMatchArray> = Array.from(js.matchAll(ripImportRe))
         # Walk matches in reverse so string indices stay valid after each splice
         for m in matches by -1
           [full, pre, bindingClause, specifier, post] = m
@@ -2095,7 +2095,7 @@ showFatalError = (container, text) ->
   pre.textContent = text
   container.appendChild pre
 
-export def createRenderer(opts:: RendererOpts):: Renderer
+export def createRenderer(opts: RendererOpts): Renderer
   assertBrowser 'createRenderer'
   { router, app, components, resolver, compile, target, onError } = opts
   preloadOnIntent = opts.preload is 'intent'
@@ -2110,16 +2110,16 @@ export def createRenderer(opts:: RendererOpts):: Renderer
     container.id = 'app'
     document.body.appendChild container
 
-  currentComponent:: ComponentInstance | null = null
-  currentRoute:: string | null = null
-  currentParams:: Record<string, string> | null = null
-  currentQuery:: Record<string, string> | null = null
-  currentLayouts:: Array<string> = []
-  layoutInstances:: Array<ComponentInstance> = []
+  currentComponent: ComponentInstance | null = null
+  currentRoute: string | null = null
+  currentParams: Record<string, string> | null = null
+  currentQuery: Record<string, string> | null = null
+  currentLayouts: Array<string> = []
+  layoutInstances: Array<ComponentInstance> = []
   mountPoint = container
   generation = 0
-  disposeEffect:: Disposer | null = null
-  unwatchSources:: Disposer | null = null
+  disposeEffect: Disposer | null = null
+  unwatchSources: Disposer | null = null
 
   # When a source file changes (hot reload), invalidate the resolver's
   # cached blob URL and class registry so the next compile picks up the
@@ -2294,7 +2294,7 @@ export def createRenderer(opts:: RendererOpts):: Renderer
     # key fns' outputs under old vs new query; differing keys force the
     # full mount path below.
     queryKeyedChanged = ->
-      ctor:: any = currentComponent?.constructor
+      ctor: any = currentComponent?.constructor
       gates = ctor?.__gates
       return false unless gates
       for g in gates
@@ -2515,7 +2515,7 @@ export def createRenderer(opts:: RendererOpts):: Renderer
         unmount()
         showFatalError container, (err.stack or err.message)
 
-  started:: boolean = false
+  started: boolean = false
 
   # ── Link-intent preloading ────────────────────────────────────────────
   # On hover/focus of a router-owned anchor, match the target URL, compile
@@ -2566,8 +2566,8 @@ export def createRenderer(opts:: RendererOpts):: Renderer
   # debounce per href. Freshness is still the cells' job: a preload only
   # ever goes through ensure(), which respects staleTime.
   lastPreload = { href: null, at: 0 }
-  settleTimer:: ReturnType<typeof setTimeout> | null = null
-  settleAnchor:: HTMLAnchorElement | null = null
+  settleTimer: ReturnType<typeof setTimeout> | null = null
+  settleAnchor: HTMLAnchorElement | null = null
 
   cancelSettle = ->
     if settleTimer
@@ -2656,7 +2656,7 @@ export def createRenderer(opts:: RendererOpts):: Renderer
     # unmount + remount even when the route hasn't changed. Used by hot
     # reload after a source change so the new component class actually
     # gets instantiated.
-    remount: (force:: boolean | { force?: boolean } = false) ->
+    remount: (force: boolean | { force?: boolean } = false) ->
       forceFlag = if typeof force is 'object' then !!force.force else !!force
       current = router.current
       mountRoute(current, forceFlag) if current.route
@@ -2688,7 +2688,7 @@ connectWatch = (url) ->
       location.reload()
 
     es.addEventListener 'css', ->
-      sheets:: NodeListOf<HTMLLinkElement> = document.querySelectorAll('link[rel="stylesheet"]')
+      sheets: NodeListOf<HTMLLinkElement> = document.querySelectorAll('link[rel="stylesheet"]')
       for link as sheets
         cssUrl = new URL(link.href)
         cssUrl.searchParams.set('_t', Date.now())
@@ -2724,7 +2724,7 @@ connectWatch = (url) ->
 # connects SSE hot-reload.
 # ==============================================================================
 
-export def launch(opts?:: LaunchOpts = {}):: Promise<LaunchResult>
+export def launch(opts?: LaunchOpts = {}): Promise<LaunchResult>
   assertBrowser 'launch'
   appBase = (opts.base or '').replace(/\/+$/, '')   # strip trailing slashes
   target = opts.target or '#app'
@@ -2765,7 +2765,7 @@ export def launch(opts?:: LaunchOpts = {}):: Promise<LaunchResult>
     throw new Error "launch: no bundle or bundleUrl provided"
 
   # Create the unified stash
-  app:: Record<string, any> = createStash { components: {}, routes: {}, data: {} }
+  app: Record<string, any> = createStash { components: {}, routes: {}, data: {} }
   globalThis.__ripApp = app
 
   # Create components store and load component sources
@@ -2780,7 +2780,7 @@ export def launch(opts?:: LaunchOpts = {}):: Promise<LaunchResult>
   # Auto-load app/stash.rip if present — provides defaults + methods that
   # survive the server-side JSON.stringify boundary that bundle.data goes
   # through. Must export a top-level `stash`: write `export stash:: ... = ...`.
-  stashRaw:: Record<string, unknown> | null = null
+  stashRaw: Record<string, unknown> | null = null
   stashPath = '_app/stash.rip'
   if appComponents.exists(stashPath)
     stashSource = appComponents.read(stashPath)
@@ -2811,7 +2811,7 @@ export def launch(opts?:: LaunchOpts = {}):: Promise<LaunchResult>
     app.routes = bundle.routes
 
   # Restore persisted state (overrides bundle defaults with saved user state)
-  persistDisposer:: Disposer | null = null
+  persistDisposer: Disposer | null = null
   if persist
     persistDisposer = persistStash app, local: persist is 'local', key: "__rip_#{appBase}"
 
@@ -2844,12 +2844,12 @@ export def launch(opts?:: LaunchOpts = {}):: Promise<LaunchResult>
   renderer.start()
 
   # Connect SSE watch if enabled
-  watchDisposer:: Disposer | null = null
+  watchDisposer: Disposer | null = null
   if bundle.data?.watch
     watchDisposer = connectWatch "#{appBase}/watch"
 
-  win:: Window & Record<string, any> = window
-  destroyed:: boolean = false
+  win: Window & Record<string, any> = window
+  destroyed: boolean = false
   destroy = ->
     return if destroyed
     destroyed = true
@@ -3182,7 +3182,7 @@ _FOCUSABLE =! 'a[href],button:not([disabled]),input:not([disabled]),select:not([
 _ariaTrapFocus = (panel) ->
   handler = (e) ->
     return unless e.key is 'Tab'
-    nodes:: NodeListOf<HTMLElement> = panel.querySelectorAll(_FOCUSABLE)
+    nodes: NodeListOf<HTMLElement> = panel.querySelectorAll(_FOCUSABLE)
     list = Array.from(nodes).filter (f) -> f.offsetParent isnt null
     return unless list.length
     first = list[0]; last = list[list.length - 1]
@@ -3208,7 +3208,7 @@ _ariaWireAria = (panel, id) ->
 # Shared modal scroll-lock stack — fixes race when Dialog + AlertDialog both open
 # lockScroll(instance): locks body scroll
 # unlockScroll(instance): removes from stack, restores scroll if stack empty
-_ariaModalStack:: Array<{instance: unknown, scrollY: number}> = []
+_ariaModalStack: Array<{instance: unknown, scrollY: number}> = []
 _ariaLockScroll = (instance) ->
   scrollY = window.scrollY
   _ariaModalStack.push { instance, scrollY }
@@ -3233,8 +3233,8 @@ _ariaUnlockScroll = (instance) ->
 # later call (after body exists) on a browser that DOES support anchor
 # positioning would still return the cached false. So we only flip
 # `_ariaAnchorChecked = true` after we've successfully run a real probe.
-_ariaAnchorChecked:: boolean = false
-_ariaAnchorSupported:: boolean = false
+_ariaAnchorChecked: boolean = false
+_ariaAnchorSupported: boolean = false
 _ariaHasAnchor = ->
   return _ariaAnchorSupported if _ariaAnchorChecked
   return false unless typeof document isnt 'undefined' and document.body
@@ -3267,7 +3267,7 @@ _ariaResetPositionStyles = (el) ->
   for prop in _ARIA_POSITION_OWNED
     el.style[prop] = ''
 
-_ariaPosition = (trigger, floating, opts?:: { placement?: string, offset?: number, matchWidth?: boolean } = {}) ->
+_ariaPosition = (trigger, floating, opts?: { placement?: string, offset?: number, matchWidth?: boolean } = {}) ->
   return unless trigger and floating
   placement = opts.placement ?? 'bottom start'
   offset = opts.offset ?? 4

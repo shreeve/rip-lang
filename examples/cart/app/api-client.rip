@@ -6,8 +6,8 @@ export type ApiErrors<K extends string = string> =
   form?: string
   field?: Partial<Record<K, string>>
 
-export def parseApiError(err:: unknown):: Promise<ApiErrors>
+export def parseApiError(err: unknown): Promise<ApiErrors>
   return { form: 'Network error' } unless err instanceof HTTPError
-  body:: { errors?: ApiErrors } | null = try err.response.json!() catch then null
+  body: { errors?: ApiErrors } | null = try err.response.json!() catch then null
   return body.errors if body?.errors?.form or body?.errors?.field
   return { form: 'Something went wrong' }

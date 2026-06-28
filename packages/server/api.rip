@@ -24,18 +24,18 @@ import { posix } from 'node:path'
 # Module State
 # ==============================================================================
 
-_:: RegExpMatchArray | null            = null  # Match capture holder for Rip's =~
-_errorHandler:: Function | null        = null  # Custom error handler
-_notFoundHandler:: Function | null     = null  # Custom 404 handler
-_rawFilter:: Function | null           = null  # Raw request filter (before body parsing)
-_beforeFilters:: Function[]            = []    # Before request filters
-_afterFilters:: Function[]             = []    # After request filters
-_routes:: any[]                        = []    # Route definitions
-_middlewares:: Function[]              = []    # Global middleware functions
-_prefix:: string                       = ''    # Current route prefix for grouping
-_corsPreflightPolicy:: Function | null = null  # Policy fn set by cors middleware: see setCorsPreflightPolicy
-_openapiRegistered:: boolean           = false # GET /openapi.json auto-registered?
-_openapiInfo:: Record<string, any>     = { title: 'Rip API', version: '0.0.0' }
+_: RegExpMatchArray | null            = null  # Match capture holder for Rip's =~
+_errorHandler: Function | null        = null  # Custom error handler
+_notFoundHandler: Function | null     = null  # Custom 404 handler
+_rawFilter: Function | null           = null  # Raw request filter (before body parsing)
+_beforeFilters: Function[]            = []    # Before request filters
+_afterFilters: Function[]             = []    # After request filters
+_routes: any[]                        = []    # Route definitions
+_middlewares: Function[]              = []    # Global middleware functions
+_prefix: string                       = ''    # Current route prefix for grouping
+_corsPreflightPolicy: Function | null = null  # Policy fn set by cors middleware: see setCorsPreflightPolicy
+_openapiRegistered: boolean           = false # GET /openapi.json auto-registered?
+_openapiInfo: Record<string, any>     = { title: 'Rip API', version: '0.0.0' }
 
 export resetGlobals = ->
   _errorHandler        = null
@@ -77,7 +77,7 @@ export setCorsPreflightPolicy = (fn) ->
 export enableCorsPreflight = -> null
 
 # AsyncLocalStorage for request context (enables sync read() in handlers)
-export requestContext:: AsyncLocalStorage<{ env?: any, data: any }> = new AsyncLocalStorage()
+export requestContext: AsyncLocalStorage<{ env?: any, data: any }> = new AsyncLocalStorage()
 
 # ==============================================================================
 # Router: Pattern Compiler
@@ -224,7 +224,7 @@ createContext = (req, params = {}) ->
       out.set 'ETag', etag
       new Response file, { status: 200, headers: out }
 
-    header: (name, value, opts:: { append?: boolean } = {}) ->
+    header: (name, value, opts: { append?: boolean } = {}) ->
       if value?
         if opts.append then out.append(name, value) else out.set(name, value)
         return
@@ -318,7 +318,7 @@ compose = (middlewares, beforeFilters, afterFilters, handler) ->
 # Smart Response Wrapper
 # ==============================================================================
 
-STATUS_TEXT:: Record<number, string> =
+STATUS_TEXT: Record<number, string> =
   400: 'Bad Request'
   401: 'Unauthorized'
   403: 'Forbidden'
@@ -338,7 +338,7 @@ export type ApiError = { message?: string, notice?: string, issues?: unknown[] }
 # throws (no/invalid status) are masked to a generic status message so internal
 # details never leak. Exported so a custom `onError` can reuse the same shape.
 # (`err` is an arbitrary thrown value — untyped by nature, like a catch binding.)
-export errorEnvelope = (err:: any):: { status: number, error: ApiError } ->
+export errorEnvelope = (err: any): { status: number, error: ApiError } ->
   raw = err?.status
   status = if Number.isInteger(raw) and 400 <= raw <= 599 then raw else 500
   error =
@@ -432,12 +432,12 @@ addRoute = (method, path, ...handlers) ->
       inputSchema: null,
     }
 
-export get::   (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'GET',    path, ...handlers
-export post::  (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'POST',   path, ...handlers
-export put::   (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'PUT',    path, ...handlers
-export patch:: (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'PATCH',  path, ...handlers
-export del::   (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'DELETE', path, ...handlers
-export all::   (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'ALL',    path, ...handlers
+export get:   (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'GET',    path, ...handlers
+export post:  (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'POST',   path, ...handlers
+export put:   (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'PUT',    path, ...handlers
+export patch: (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'PATCH',  path, ...handlers
+export del:   (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'DELETE', path, ...handlers
+export all:   (path: string, ...handlers: RouteHandler[]) => void = (path, ...handlers) -> addRoute 'ALL',    path, ...handlers
 
 # ==============================================================================
 # OpenAPI generation
@@ -463,7 +463,7 @@ buildOpenAPI = ->
     continue if r.method is 'ALL'
     p = r.path.replace(/:([A-Za-z0-9_]+)\??/g, '{$1}')
     entry = (paths[p] ?= {})
-    op:: Record<string, any> =
+    op: Record<string, any> =
       responses:
         '200': { description: 'OK' }
         '400':
@@ -510,12 +510,12 @@ export prefix = (base, fn) ->
   finally
     _prefix = old
 
-export onError::  (handler: RouteHandler) => void = (handler) -> _errorHandler = handler
-export notFound:: (handler: RouteHandler) => void = (handler) -> _notFoundHandler = handler
+export onError:  (handler: RouteHandler) => void = (handler) -> _errorHandler = handler
+export notFound: (handler: RouteHandler) => void = (handler) -> _notFoundHandler = handler
 
-export raw::    (fn: (req: Request) => any) => void = (fn) -> _rawFilter = fn
-export before:: (fn: RouteHandler) => void = (fn) -> _beforeFilters.push fn
-export after::  (fn: RouteHandler) => void = (fn) -> _afterFilters.push fn
+export raw:    (fn: (req: Request) => any) => void = (fn) -> _rawFilter = fn
+export before: (fn: RouteHandler) => void = (fn) -> _beforeFilters.push fn
+export after:  (fn: RouteHandler) => void = (fn) -> _afterFilters.push fn
 
 # ==============================================================================
 # Main Fetch Handler
@@ -567,7 +567,7 @@ export fetch = (req) ->
   _rawFilter?.(req) if method in ['POST', 'PUT', 'PATCH']
 
   # Pre-parse body and query for sync read() — baked in, zero ceremony
-  data:: any = {}
+  data: any = {}
   try
     ct = req.headers.get('content-type') or ''
     if method in ['POST', 'PUT', 'PATCH']
@@ -620,7 +620,7 @@ runHandler = (c, handler) ->
 
 export startHandler = -> fetch
 
-export start = (opts?:: { host?: string, port?: number, silent?: boolean }) ->
+export start = (opts?: { host?: string, port?: number, silent?: boolean }) ->
   handler = startHandler()
 
   # If running under rip-server, set global handler and return
@@ -723,7 +723,7 @@ export { isBlank, toName, toPhone, formatMoney, validators, registerValidator, g
 # read() — Sinatra-style Parameter Reading
 # ==============================================================================
 
-export read = (name?:: string, type?:: string | RegExp | any[] | Record<string, any>, miss?:: any) ->
+export read = (name?: string, type?: string | RegExp | any[] | Record<string, any>, miss?: any) ->
   store = requestContext.getStore() or throw new Error 'no context for read()'
 
   # missing value helper
@@ -768,7 +768,7 @@ export read = (name?:: string, type?:: string | RegExp | any[] | Record<string, 
   # Array: [min, max] constraint or enumeration
   else if Array.isArray(type)
     s = String(v ?? '')
-    y:: boolean = true
+    y: boolean = true
     if typeof type[0] is 'number'
       [min, max] = type
       if typeof v is 'number' or (s =~ /^[-+]?\d+$/)
@@ -790,7 +790,7 @@ export read = (name?:: string, type?:: string | RegExp | any[] | Record<string, 
       n = if s =~ /^[-+]?\d+$/ then +s else NaN
       v = if not isNaN(n) and (not type.start? or n >= type.start) and (not type.end? or n <= type.end) then n else null
     else if type.min? or type.max?
-      y:: boolean = true
+      y: boolean = true
       if typeof v is 'number' or (s =~ /^[-+]?\d+$/)
         n = if typeof v is 'number' then v else +s
         y = false if type.min? and n < type.min

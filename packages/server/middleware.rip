@@ -209,7 +209,7 @@ assertBundleDepsDeclared = (appDir, dirs) ->
         raise "Import of '#{pkgKey}' (used in #{dir}/#{path}) is not declared in #{appDir}/package.json. Run 'bun add #{pkgKey}' (or use 'workspace:*' inside this monorepo)."
   return
 
-export cors = (opts:: {
+export cors = (opts: {
   origin?: string | string[] | ((origin: string) => boolean)
   methods?: string | string[]
   headers?: string | string[]
@@ -291,7 +291,7 @@ export cors = (opts:: {
 #   stream: { write: (msg) -> } (default: console)
 #
 
-export logger = (opts:: {
+export logger = (opts: {
   format?: 'tiny' | 'short' | 'dev' | 'full' | ((info: any) => string)
   skip?: (c: any) => boolean
   stream?: { write: (msg: string) => any }
@@ -344,7 +344,7 @@ export logger = (opts:: {
 # Note: Requires Bun's built-in compression support
 #
 
-export compress = (opts:: { threshold?: number, encodings?: string[] } = {}) ->
+export compress = (opts: { threshold?: number, encodings?: string[] } = {}) ->
   threshold = opts.threshold or 1024
   encodings = opts.encodings or ['gzip', 'deflate']
 
@@ -468,7 +468,7 @@ b64urlToU8 = (s) ->
   pad = s.length % 4
   s += '='.repeat(4 - pad) if pad
   bin = atob(s)
-  Uint8Array.from(bin, (c:: string) -> c.charCodeAt(0))
+  Uint8Array.from(bin, (c: string) -> c.charCodeAt(0))
 
 deriveAesKey = (secret) ->
   encoder = new TextEncoder()
@@ -524,7 +524,7 @@ decodeSession = (cookie, secret, encrypt) ->
   catch
     {}
 
-export sessions = (opts:: {
+export sessions = (opts: {
   secret?: string
   encrypt?: boolean
   name?: string
@@ -661,7 +661,7 @@ tokensEqual = (a, b) ->
 
 SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
-export csrf = (opts:: {
+export csrf = (opts: {
   cookieName?: string
   headerName?: string
   fieldName?: string
@@ -758,7 +758,7 @@ export csrf = (opts:: {
 #   Content-Security-Policy (optional)
 #
 
-export secureHeaders = (opts:: {
+export secureHeaders = (opts: {
   frameOptions?: string
   referrerPolicy?: string
   contentSecurityPolicy?: string
@@ -790,7 +790,7 @@ export secureHeaders = (opts:: {
 #   status: number (status code, default 408)
 #
 
-export timeout = (opts:: { ms?: number, message?: string, status?: number } = {}) ->
+export timeout = (opts: { ms?: number, message?: string, status?: number } = {}) ->
   ms = opts.ms or 30000
   message = opts.message or 'Request Timeout'
   status = opts.status or 408
@@ -823,7 +823,7 @@ export timeout = (opts:: { ms?: number, message?: string, status?: number } = {}
 #   message: string (error message)
 #
 
-export bodyLimit = (opts:: { maxSize?: number, message?: string } = {}) ->
+export bodyLimit = (opts: { maxSize?: number, message?: string } = {}) ->
   maxSize = opts.maxSize or 1024 * 1024  # 1MB default
   message = opts.message or 'Request body too large'
 
@@ -927,9 +927,9 @@ pre{margin:0;white-space:pre-wrap;word-break:break-word}
 #   preload:    'intent'        — preload a route's source data on link hover/focus (default: off)
 #
 
-serveRegistered:: boolean = false
+serveRegistered: boolean = false
 
-export serve = (opts:: {
+export serve = (opts: {
   dir?: string
   routes?: string
   bundle?: string[] | Record<string, string[]>
@@ -1021,7 +1021,7 @@ export serve = (opts:: {
     moduleFiles = {}
     hasRoutes = false
     if includeRoutes and existsSync(routesDir)
-      routePaths:: string[] = Array.from(glob.scanSync(routesDir), String).sort()
+      routePaths: string[] = Array.from(glob.scanSync(routesDir), String).sort()
       for path in routePaths
         modules["_route/#{path}"] = Bun.file("#{routesDir}/#{path}").text!
         moduleFiles["_route/#{path}"] = "#{routesDir}/#{path}"
@@ -1032,7 +1032,7 @@ export serve = (opts:: {
       isAppDir   = rel is '' or rel is '.'
       # appDir → _app/<path>; external or named subdir → _lib/<name>/<path>
       keyPrefix  = if isExternal then "_lib/#{name}" else if isAppDir then '_app' else "_lib/#{rel}"
-      dirPaths:: string[] = Array.from(glob.scanSync(dir), String).sort()
+      dirPaths: string[] = Array.from(glob.scanSync(dir), String).sort()
       for path in dirPaths
         continue if path is 'index.rip' or path.endsWith('/index.rip')
         # In auto-scan mode, skip the routes/ subtree (already keyed under _route/ above)
@@ -1088,7 +1088,7 @@ export serve = (opts:: {
             if ck.startsWith(existingKey)
               raise "Package '#{pkgKey}' collides with an existing module at '_pkg/#{short}/'."
           pkgGlob = new Bun.Glob("**/*.rip")
-          pkgPaths:: string[] = Array.from(pkgGlob.scanSync(classified.dir), String).sort()
+          pkgPaths: string[] = Array.from(pkgGlob.scanSync(classified.dir), String).sort()
           unless pkgPaths.length > 0
             raise "Package '#{pkgKey}' has no .rip source files at #{classified.dir}."
           for path in pkgPaths
@@ -1101,7 +1101,7 @@ export serve = (opts:: {
     bundle = { modules }
     bundle.packages = packages if Object.keys(packages).length > 0
     if includeRoutes
-      data:: Record<string, any> = {}
+      data: Record<string, any> = {}
       data.title = appTitle if appTitle
       data.watch = enableWatch
       data.router = true if hasRoutes

@@ -13,7 +13,7 @@ export type Cart =
   totalPrice(): number
   clear(): void
 
-cart:: Cart =
+cart: Cart =
   items: []
   addItem: (product) -> @items = [...@items, { ...product, quantity: 1 }]
   removeItem: (product) -> @items = @items.filter((i) -> i.id isnt product.id)
@@ -35,4 +35,4 @@ export stash =
   orders: source
     fetch: -> Order.array.parse(api.get!('orders').json!())
   order: source
-    fetch: (id:: string) -> Order.parse(api.get!("orders/#{id}").json!())
+    fetch: (id: string) -> Order.parse(api.get!("orders/#{id}").json!())
