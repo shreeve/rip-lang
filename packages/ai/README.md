@@ -225,7 +225,22 @@ Change `FAMILY` only if a provider renames its flagship tier (e.g. Anthropic mov
 
 ## Cost
 
-Every tool that calls a model returns `usage: { tokens_in, tokens_out, cost_usd }`. `discuss` also returns `conversation_usage` rolling totals. `max_cost_usd` (or `per_model_max_cost_usd` for `panel`) refuses calls whose preflight estimate exceeds the cap, and warns when actual cost overshoots after the fact.
+Every tool that calls a model returns a `usage` object with a token breakdown, the dollar cost, and a ready-to-print one-line `summary`:
+
+```json
+{
+  "tokens_in": 12525,
+  "tokens_out": 7290,
+  "reasoning_tokens": 3200,
+  "cached_tokens": 0,
+  "cost_usd": 0.171975,
+  "summary": "12,525 in · 7,290 out (3,200 reasoning + 4,090 answer) · $0.1720"
+}
+```
+
+`reasoning_tokens` is the hidden reasoning portion of the output (OpenAI reasoning models; Anthropic folds thinking into `tokens_out`). `cached_tokens` is the cached-input portion when the provider reports it. `discuss` also returns `conversation_usage` (same shape) with rolling conversation totals; `panel`'s `usage` is the summed total across all panelists plus synthesis.
+
+`max_cost_usd` (or `per_model_max_cost_usd` for `panel`) refuses calls whose preflight estimate exceeds the cap, and warns when actual cost overshoots after the fact.
 
 ## Failure semantics
 

@@ -269,6 +269,46 @@ export computeCost = (id, tokensIn, tokensOut) ->
   ((tokensOut or 0) / 1_000_000) * price.output_per_million
 
 # ==============================================================================
+# Usage formatting — a structured breakdown + a one-line human summary
+# ==============================================================================
+
+fmtInt = (n) -> Number(n or 0).toLocaleString('en-US')
+
+fmtCost = (c) ->
+  v = Number(c or 0)
+  if v >= 1 then "$#{v.toFixed(2)}" else "$#{v.toFixed(4)}"
+
+# Takes a chat result / usage-like object and returns the normalized usage
+# object plus a `.summary` string, e.g.
+#   "12,525 in · 7,290 out (3,200 reasoning + 4,090 answer) · $0.1720"
+export formatUsage = (u = {}) ->
+  tin       = u.tokens_in        or 0
+  tout      = u.tokens_out       or 0
+  reasoning = u.reasoning_tokens or 0
+  cached    = u.cached_tokens    or 0
+  cost      = u.cost_usd         or 0
+
+  outPart =
+    if reasoning > 0
+      answer = Math.max(0, tout - reasoning)
+      "#{fmtInt(tout)} out (#{fmtInt(reasoning)} reasoning + #{fmtInt(answer)} answer)"
+    else
+      "#{fmtInt(tout)} out"
+
+  segs = ["#{fmtInt(tin)} in", outPart]
+  segs.push "#{fmtInt(cached)} cached input" if cached > 0
+  segs.push fmtCost(cost)
+
+  {
+    tokens_in: tin
+    tokens_out: tout
+    reasoning_tokens: reasoning
+    cached_tokens: cached
+    cost_usd: cost
+    summary: segs.join(' · ')
+  }
+
+# ==============================================================================
 # Catalog cache (memory + disk) — informational; selection no longer needs it
 # ==============================================================================
 
@@ -390,6 +430,8 @@ export chat = (opts) ->
     text: result.text
     tokens_in:  result.tokens_in
     tokens_out: result.tokens_out
+    reasoning_tokens: result.reasoning_tokens or 0
+    cached_tokens:    result.cached_tokens or 0
     cost_usd:   cost
     finish_reason: result.finish_reason
     warnings:   warnings

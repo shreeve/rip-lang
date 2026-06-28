@@ -40,6 +40,17 @@
 - **Concurrent refreshes coalesce.** Startup warm + first request share one
   in-flight `/models` call per provider.
 
+**Usage transparency:**
+
+- Every model-calling tool now returns a richer `usage` object — `tokens_in`,
+  `tokens_out`, `reasoning_tokens`, `cached_tokens`, `cost_usd` — plus a
+  ready-to-print `summary`, e.g.
+  `"12,525 in · 7,290 out (3,200 reasoning + 4,090 answer) · $0.1720"`.
+  `reasoning_tokens` exposes the hidden-reasoning portion of OpenAI reasoning
+  models; `cached_tokens` the cached-input portion when reported. `discuss`
+  persists the breakdown in message metadata, and `panel`/`conversation_usage`
+  totals carry the same shape.
+
 Migration: replace any pinned alias (`opus`, `haiku`, `gpt-5.4`, …) with `gpt` or
 `claude`, or use an explicit `provider:model`. Concrete `provider:model` specs still
 work everywhere.

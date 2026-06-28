@@ -91,6 +91,8 @@ export chat = ({ model, system, messages, attachments, max_tokens }) ->
     text
     tokens_in:  usage.prompt_tokens     or 0
     tokens_out: usage.completion_tokens or 0
+    reasoning_tokens: usage.completion_tokens_details?.reasoning_tokens or 0
+    cached_tokens:    usage.prompt_tokens_details?.cached_tokens or 0
     finish_reason: finish
     raw: data
   }

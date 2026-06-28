@@ -49,12 +49,14 @@ PANEL_SYNTHESIS_SYSTEM =! '''
 # Helpers
 # ==============================================================================
 
-usageZero = -> { tokens_in: 0, tokens_out: 0, cost_usd: 0 }
+usageZero = -> { tokens_in: 0, tokens_out: 0, reasoning_tokens: 0, cached_tokens: 0, cost_usd: 0 }
 
 addUsage = (a, b) ->
-  tokens_in:  (a.tokens_in or 0)  + (b.tokens_in or 0)
-  tokens_out: (a.tokens_out or 0) + (b.tokens_out or 0)
-  cost_usd:   (a.cost_usd or 0)   + (b.cost_usd or 0)
+  tokens_in:        (a.tokens_in or 0)        + (b.tokens_in or 0)
+  tokens_out:       (a.tokens_out or 0)       + (b.tokens_out or 0)
+  reasoning_tokens: (a.reasoning_tokens or 0) + (b.reasoning_tokens or 0)
+  cached_tokens:    (a.cached_tokens or 0)    + (b.cached_tokens or 0)
+  cost_usd:         (a.cost_usd or 0)         + (b.cost_usd or 0)
 
 normalizeMessages = (history, userText) ->
   out = []
@@ -129,10 +131,7 @@ export chat = (ctx, params) ->
     model: result.model
     text: result.text
     attachments: att.viewsFor(loaded.attachments)
-    usage:
-      tokens_in:  result.tokens_in
-      tokens_out: result.tokens_out
-      cost_usd:   result.cost_usd
+    usage: providers.formatUsage(result)
     warnings: warnings
   }
 
@@ -192,7 +191,7 @@ export discuss = (ctx, params) ->
     tokens_out: result.tokens_out
     cost_usd:   result.cost_usd
     warnings: assistantWarnings
-    metadata: { finish_reason: result.finish_reason, changed_attachments: changed }
+    metadata: { finish_reason: result.finish_reason, changed_attachments: changed, reasoning_tokens: result.reasoning_tokens, cached_tokens: result.cached_tokens }
   })
 
   fresh = store.findConversation(conv.id)
@@ -205,14 +204,8 @@ export discuss = (ctx, params) ->
     text: result.text
     attachments: att.viewsFor(loaded.attachments)
     changed_attachments: changed
-    usage:
-      tokens_in:  result.tokens_in
-      tokens_out: result.tokens_out
-      cost_usd:   result.cost_usd
-    conversation_usage:
-      tokens_in:  fresh.total_tokens_in
-      tokens_out: fresh.total_tokens_out
-      cost_usd:   fresh.total_cost_usd
+    usage: providers.formatUsage(result)
+    conversation_usage: providers.formatUsage({ tokens_in: fresh.total_tokens_in, tokens_out: fresh.total_tokens_out, cost_usd: fresh.total_cost_usd })
     warnings: assistantWarnings
   }
 
@@ -242,7 +235,7 @@ export panel = (ctx, params) ->
         model: result.model
         ok: true
         text: result.text
-        usage: { tokens_in: result.tokens_in, tokens_out: result.tokens_out, cost_usd: result.cost_usd }
+        usage: providers.formatUsage(result)
         finish_reason: result.finish_reason
         warnings: result.warnings or []
         error: null
@@ -270,10 +263,7 @@ export panel = (ctx, params) ->
     synthesis =
       model: synResult.model
       text:  synResult.text
-      usage:
-        tokens_in:  synResult.tokens_in
-        tokens_out: synResult.tokens_out
-        cost_usd:   synResult.cost_usd
+      usage: providers.formatUsage(synResult)
     total = addUsage(total, synthesis.usage)
 
   warnings = [...loaded.warnings]
@@ -284,7 +274,7 @@ export panel = (ctx, params) ->
     responses: responses
     synthesis: synthesis
     attachments: att.viewsFor(loaded.attachments)
-    usage: total
+    usage: providers.formatUsage(total)
     warnings: warnings
   }
 
@@ -345,10 +335,7 @@ export fresh_review = (ctx, params) ->
     excluded_models: excluded
     text: result.text
     attachments: att.viewsFor(loaded.attachments)
-    usage:
-      tokens_in:  result.tokens_in
-      tokens_out: result.tokens_out
-      cost_usd:   result.cost_usd
+    usage: providers.formatUsage(result)
     warnings: warnings
   }
 

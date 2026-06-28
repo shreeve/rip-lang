@@ -91,12 +91,14 @@ export chat = ({ model, system, messages, attachments, max_tokens }) ->
   raise "Anthropic returned HTTP #{res.status}" unless res.ok
 
   parts = data?.content or []
-  text = parts.filter((p) -> p.type is 'text').map((p) -> p.text).join('')
+  text = parts.filter((part) -> part.type is 'text').map((part) -> part.text).join('')
   usage = data?.usage or {}
   {
     text
     tokens_in:  usage.input_tokens  or 0
     tokens_out: usage.output_tokens or 0
+    reasoning_tokens: 0  # Anthropic folds extended-thinking tokens into output_tokens
+    cached_tokens:    usage.cache_read_input_tokens or 0
     finish_reason: data?.stop_reason or null
     raw: data
   }
