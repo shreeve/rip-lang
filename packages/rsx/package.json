@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/rsx",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Rip Style XML - small, safe XML parser/serializer that yields plain Rip objects",
   "type": "module",
   "main": "rsx.rip",

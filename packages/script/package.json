@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/script",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "description": "Homoiconic interaction engine — automate stateful conversations with remote systems using nested data structures",
   "type": "module",
   "main": "script.rip",

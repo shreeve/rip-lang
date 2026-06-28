@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/x12",
-  "version": "0.2.122",
+  "version": "0.2.123",
   "description": "X12 EDI parser, editor, and query engine - path-based addressing, separator auto-detection, zero dependencies",
   "type": "module",
   "main": "x12.rip",

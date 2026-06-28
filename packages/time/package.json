@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/time",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Rip Time — tiny, immutable, US-English date/time library with timezones and durations, zero dependencies",
   "type": "module",
   "main": "time.rip",
