@@ -13,7 +13,7 @@
 import { Compiler, getStdlibCode } from './compiler.js';
 import { Lexer } from './lexer.js';
 import { STDLIB_TYPE_DECLS } from './stdlib.js';
-import { INTRINSIC_TYPE_DECLS, INTRINSIC_FN_DECL, ARIA_TYPE_DECLS, SIGNAL_INTERFACE, SIGNAL_FN, COMPUTED_INTERFACE, COMPUTED_FN, EFFECT_FN, ripDestructuredNames } from './dts.js';
+import { INTRINSIC_TYPE_DECLS, INTRINSIC_FN_DECL, SIGNAL_INTERFACE, SIGNAL_FN, COMPUTED_INTERFACE, COMPUTED_FN, EFFECT_FN, ripDestructuredNames } from './dts.js';
 import './schema/loader-server.js';   // registers full schema runtime provider
 import { createRequire } from 'module';
 import { readFileSync, existsSync, readdirSync } from 'fs';
@@ -2097,10 +2097,6 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
     headerDts = parts.join('\n') + '\n' + headerDts;
   }
 
-  if (hasTypes && /\bARIA\./.test(code) && !/\bdeclare const ARIA\b/.test(headerDts)) {
-    headerDts = ARIA_TYPE_DECLS.join('\n') + '\n' + headerDts;
-  }
-
   // Inline hoisted `let` declarations at their first assignment in the shadow
   // TS file, then merge DTS header types into the inlined declarations.
   //
@@ -3542,6 +3538,113 @@ export function readProjectConfig(dir) {
   return config;
 }
 
+// Resolve a project's ambient `.d.ts` includes — both explicit and automatic —
+// to a deduped list of absolute paths, added as explicit TS program roots
+// (appended to the language-service host's getScriptFileNames). An explicit
+// root-file `.d.ts` contributes its global `declare`s to every other file in the
+// program regardless of the `types` compiler option (like tsconfig `files`), so
+// this is how a project pulls in a shared ambient contract without a per-file
+// `/// <reference>`. Two mechanisms feed it:
+//
+//   ① explicit  — `package.json#rip.types: ["path/to/x.d.ts", ...]`. The escape
+//      hatch for ad-hoc / non-dependency `.d.ts`; paths resolve relative to the
+//      project root.
+//   ② automatic — every declared `@rip-lang/*` dependency that ships ambient
+//      types (its own `package.json#rip.ambient: ["x.d.ts", ...]`) has those
+//      files auto-included, resolved relative to the dependency's installed
+//      location. So depending on `@rip-lang/app` makes its global `ARIA` contract
+//      "just there" with zero config — "you used the framework, so its types are
+//      present."
+//
+// Deduped by absolute path (an explicit `rip.types` pointing at a file a
+// dependency already provides isn't included twice). Missing/unresolvable
+// entries are warned and skipped, never fatal.
+export function resolveTypeIncludes(ripConfig, rootPath) {
+  const out = [];
+  const seen = new Set();
+  const add = (abs) => { if (abs && !seen.has(abs)) { seen.add(abs); out.push(abs); } };
+
+  // ① explicit rip.types
+  const list = Array.isArray(ripConfig?.types) ? ripConfig.types : [];
+  for (const entry of list) {
+    if (typeof entry !== 'string' || !entry) continue;
+    const abs = resolve(rootPath, entry);
+    if (existsSync(abs)) add(abs);
+    else console.warn(`[rip] rip.types include not found, skipping: ${entry}`);
+  }
+
+  // ② auto-include ambient .d.ts from declared @rip-lang/* dependencies
+  for (const abs of collectDependencyAmbients(rootPath)) add(abs);
+
+  return out;
+}
+
+// Walk the project's declared `@rip-lang/*` dependencies (deps + devDeps +
+// peerDeps + optionalDeps) and collect the ambient `.d.ts` files each one
+// advertises via its own `package.json#rip.ambient`. Each file is resolved
+// relative to the dependency's resolved package directory (handles workspace
+// symlinks and real node_modules alike). Returns absolute paths of files that
+// exist; everything else is skipped — a declared-but-missing ambient file warns,
+// while an unresolvable dependency is silent (its absence surfaces through the
+// undeclared-import / module-resolution paths, not here).
+export function collectDependencyAmbients(rootPath) {
+  const out = [];
+  let projPkg;
+  try {
+    const projPkgPath = resolve(rootPath, 'package.json');
+    if (!existsSync(projPkgPath)) return out;
+    projPkg = JSON.parse(readFileSync(projPkgPath, 'utf8'));
+  } catch (e) {
+    console.warn(`[rip] ambient dep scan: cannot read project package.json: ${e.message}`);
+    return out;
+  }
+  const deps = [...new Set([
+    ...Object.keys(projPkg.dependencies         || {}),
+    ...Object.keys(projPkg.devDependencies      || {}),
+    ...Object.keys(projPkg.peerDependencies     || {}),
+    ...Object.keys(projPkg.optionalDependencies || {}),
+  ])].filter(name => name.startsWith('@rip-lang/'));
+  if (deps.length === 0) return out;
+
+  const req = createRequire(resolve(rootPath, 'package.json'));
+  for (const dep of deps) {
+    const depPkgJson = resolveDepPackageJson(dep, rootPath, req);
+    if (!depPkgJson) continue; // not installed/resolvable — not ours to report
+    let depPkg;
+    try { depPkg = JSON.parse(readFileSync(depPkgJson, 'utf8')); } catch { continue; }
+    const ambient = depPkg?.rip?.ambient;
+    if (!Array.isArray(ambient)) continue;
+    const depDir = dirname(depPkgJson);
+    for (const rel of ambient) {
+      if (typeof rel !== 'string' || !rel) continue;
+      const abs = resolve(depDir, rel);
+      if (existsSync(abs)) out.push(abs);
+      else console.warn(`[rip] ${dep} declares ambient '${rel}' but it was not found, skipping`);
+    }
+  }
+  return out;
+}
+
+// Locate a dependency's package.json. Prefer Node/Bun module resolution
+// (`require.resolve('<dep>/package.json')`); fall back to walking node_modules up
+// from the project root — robust against `exports` maps that don't list
+// `./package.json`, and against either runtime (CLI/Bun or the LSP/Node).
+function resolveDepPackageJson(dep, rootPath, req) {
+  try {
+    const r = req.resolve(`${dep}/package.json`);
+    if (typeof r === 'string' && existsSync(r)) return r;
+  } catch {}
+  let dir = resolve(rootPath);
+  while (true) {
+    const cand = resolve(dir, 'node_modules', dep, 'package.json');
+    if (existsSync(cand)) return cand;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
 // ── CLI batch type-checker ─────────────────────────────────────────
 
 // Convert a simple glob pattern to a RegExp for matching relative paths.
@@ -3621,6 +3724,7 @@ export async function runCheck(targetDir, opts = {}) {
   const checkAll = ripConfig.checkAll === true;
   const excludeGlobs = Array.isArray(ripConfig.exclude) ? ripConfig.exclude : [];
   const excludePatterns = excludeGlobs.map(globToRegex);
+  const typeIncludes = resolveTypeIncludes(ripConfig, rootPath);
 
   const allFiles = findRipFiles(rootPath, [], excludePatterns);
   if (allFiles.length === 0) {
@@ -3894,7 +3998,7 @@ export async function runCheck(targetDir, opts = {}) {
   });
 
   const host = {
-    getScriptFileNames: () => [...compiled.keys()].map(toVirtual),
+    getScriptFileNames: () => [...[...compiled.keys()].map(toVirtual), ...typeIncludes],
     getScriptVersion: () => '1',
     getScriptSnapshot(f) {
       const c = compiled.get(fromVirtual(f));
@@ -4682,6 +4786,7 @@ export async function runAudit(targetDir) {
   }
 
   const { typeRoots, types: ambientTypes } = collectAmbientTypes(rootPath);
+  const typeIncludes = resolveTypeIncludes(pkg.rip, rootPath);
   const settings = createTypeCheckSettings(ts, {
     strict: true,
     ...(typeRoots.length    ? { typeRoots }              : {}),
@@ -4689,7 +4794,7 @@ export async function runAudit(targetDir) {
   });
 
   const host = {
-    getScriptFileNames: () => [...compiled.keys()].map(toVirtual),
+    getScriptFileNames: () => [...[...compiled.keys()].map(toVirtual), ...typeIncludes],
     getScriptVersion:   () => '1',
     getScriptSnapshot(f) {
       const c = compiled.get(fromVirtual(f));

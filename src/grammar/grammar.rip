@@ -973,6 +973,13 @@ grammar =
     o '- Expression'          , '["-", 2]', prec: 'UNARY_MATH'
     o '+ Expression'          , '["+", 2]', prec: 'UNARY_MATH'
 
+    # Postfix `expr as Type` cast. The type rewriter has already collapsed the
+    # `as Type` run into a single CAST marker token whose value is the opaque
+    # type string — the grammar never parses a type. Left-associative (chains
+    # `x as A as B` nest left-to-right) and looser than arithmetic/member/call
+    # but tighter than relational/comparison, matching TS `as` precedence.
+    o 'Expression CAST'       , '["cast", 1, 2]'
+
     # Postfix existence check: expr? → (expr != null)
     o 'Value ?'               , '["?", 1]'
 
@@ -1046,6 +1053,7 @@ operators = """
   left        MATH
   left        + -
   left        SHIFT
+  left        CAST
   left        RELATION
   left        COMPARE
   left        &

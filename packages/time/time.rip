@@ -1108,9 +1108,9 @@ def asTime(x: any): Time
 def toTimeList(args): Time[]
   if Array.isArray(args[0]) then args[0] else args
 
-# A plain module-scope function so Time/Duration methods can call `time(...)`
-# directly; `makeTime()` augments it with the static members.
-def time(input?: TimeInput, opts: TimeOptions = {}): Time
+# The callable, exported by name as `time`. `makeTime()` augments it with the
+# static members and is exported as the package default (the full `TimeFactory`).
+export def time(input?: TimeInput, opts: TimeOptions = {}): Time
   return asTime(input).clone() if isTime(input)
   new Time({ input, utc: !!opts.utc, format: opts.format })
 

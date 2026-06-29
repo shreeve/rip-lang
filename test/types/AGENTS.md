@@ -60,6 +60,7 @@ Each file exercises a specific type feature. Status key:
 | 09-components.rip  | `@prop:: T :=`, `@prop:: T`, default validation             | pass   | Required props, default-vs-type, 4 negative body tests          |
 | 10-validation.rip  | Runtime validation via rip `schema`                         | pass   | Validates the wire via `schema` (4 patterns, incl. `:union` DU) |
 | 11-inference.rip   | Type inference on unannotated variables                     | pass   | Top-level, block-scoped, destructured, inline-let in funcs      |
+| 12-cast.rip        | `expr as Type` cast — runtime-erased, checker-only narrowing | pass   | Narrows for identifier/member carriers; call/index/paren erase-without-narrowing (RFC-12 gap) |
 
 ## Type Safety Gap Analysis
 

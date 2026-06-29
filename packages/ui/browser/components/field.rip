@@ -40,14 +40,14 @@ export Field = component
     div $disabled: @disabled?!, $invalid: @error?!
       if @label
         label id: "#{_id}-label", $label: true
-          @label
+          = @label
           if @required
             span $required: true, aria-hidden: "true"
               " *"
       slot
       if @description and not @error
         div id: "#{_id}-desc", $description: true
-          @description
+          = @description
       if @error
         div id: "#{_id}-err", role: "alert", $error: true
-          @error
+          = @error

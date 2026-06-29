@@ -1,7 +1,7 @@
 # Test: Component System (86 tests)
 # Covers every code path in src/components.js — render blocks, conditional/loop
-# codegen, block factories, attributes, events, auto-wired event handlers (on*
-# convention), two-way binding (<=>), dynamic classes (__clsx), child component
+# codegen, block factories, attributes, events, bare @event shorthand (binds
+# on<Event> to the element it sits on), two-way binding (<=>), dynamic classes (__clsx), child component
 # prop passing, slot projection (@children), lifecycle hooks, context API, SVG
 # rendering, hyphenated attributes, DOM properties, expression-as-text,
 # computed/effect block bodies, and edge cases.
@@ -1392,7 +1392,8 @@ test "tag-named local passed as a child component prop compiles", '''
     @label?: string := ""
     @code?: string := ""
     render
-      pre @code
+      pre
+        = @code
   A = component
     examples := [{label: "x", body: "console.log(1)"}]
     render
@@ -1759,7 +1760,87 @@ code "indented inline @event handler binds a listener", '''
 # Auto-wired Event Handlers (on* convention)
 # ==============================================================================
 
-code "auto-wire onClick to root element", '''
+code "bare @click shorthand binds onClick to its element", '''
+  export A = component
+    onClick: -> p "clicked"
+    render
+      button @click, "Click me"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    onClick() { return p("clicked"); }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._el0.addEventListener('click', (e) => __batch(() => (this.onClick)(e)));
+      this._t0 = document.createTextNode("Click me");
+      this._el0.appendChild(this._t0);
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "bare shorthand resolves @keydown to onKeydown, multiple per element", '''
+  export A = component
+    onClick: -> p "click"
+    onKeydown: (e) -> p e.key
+    render
+      button @click, @keydown, "Press"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    onClick() { return p("click"); }
+    onKeydown(e) { return p(e.key); }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._el0.addEventListener('click', (e) => __batch(() => (this.onClick)(e)));
+      this._el0.addEventListener('keydown', (e) => __batch(() => (this.onKeydown)(e)));
+      this._t0 = document.createTextNode("Press");
+      this._el0.appendChild(this._t0);
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "bare shorthand scopes the listener to the element it sits on, not the root", '''
+  export A = component
+    onClick: -> p "clicked"
+    render
+      div
+        button @click, "inner"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    onClick() { return p("clicked"); }
+    _create() {
+      this._el0 = document.createElement('div');
+      this._el1 = document.createElement('button');
+      this._el1.addEventListener('click', (e) => __batch(() => (this.onClick)(e)));
+      this._t0 = document.createTextNode("inner");
+      this._el1.appendChild(this._t0);
+      this._el0.appendChild(this._el1);
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "explicit @event: handler binds to the element", '''
+  export A = component
+    toggle: -> p "explicit"
+    render
+      button @click: toggle
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    toggle() { return p("explicit"); }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._el0.addEventListener('click', (e) => __batch(() => this.toggle(e)));
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "defining onClick alone attaches no listener (no name-based magic)", '''
   export A = component
     onClick: -> p "clicked"
     render
@@ -1772,76 +1853,12 @@ code "auto-wire onClick to root element", '''
       this._el0 = document.createElement('button');
       this._t0 = document.createTextNode("Click me");
       this._el0.appendChild(this._t0);
-      this._el0.addEventListener('click', (e) => __batch(() => this.onClick(e)));
       return this._el0;
     }
   }
   ''', opts
 
-code "auto-wire multiple on* methods", '''
-  export A = component
-    onClick: -> p "click"
-    onKeydown: (e) -> p e.key
-    render
-      button "Press"
-  ''', '''
-  export const A = class extends __Component {
-    _init(props) {}
-    onClick() { return p("click"); }
-    onKeydown(e) { return p(e.key); }
-    _create() {
-      this._el0 = document.createElement('button');
-      this._t0 = document.createTextNode("Press");
-      this._el0.appendChild(this._t0);
-      this._el0.addEventListener('click', (e) => __batch(() => this.onClick(e)));
-      this._el0.addEventListener('keydown', (e) => __batch(() => this.onKeydown(e)));
-      return this._el0;
-    }
-  }
-  ''', opts
-
-code "explicit event on root overrides auto-wire", '''
-  export A = component
-    onClick: -> p "auto"
-    toggle: -> p "explicit"
-    render
-      button @click: toggle
-  ''', '''
-  export const A = class extends __Component {
-    _init(props) {}
-    onClick() { return p("auto"); }
-    toggle() { return p("explicit"); }
-    _create() {
-      this._el0 = document.createElement('button');
-      this._el0.addEventListener('click', (e) => __batch(() => this.toggle(e)));
-      return this._el0;
-    }
-  }
-  ''', opts
-
-code "partial override — one overridden, one auto-wired", '''
-  export A = component
-    onClick: -> p "auto-click"
-    onKeydown: -> p "auto-key"
-    ring: -> p "ring"
-    render
-      button @keydown: ring
-  ''', '''
-  export const A = class extends __Component {
-    _init(props) {}
-    onClick() { return p("auto-click"); }
-    onKeydown() { return p("auto-key"); }
-    ring() { return p("ring"); }
-    _create() {
-      this._el0 = document.createElement('button');
-      this._el0.addEventListener('keydown', (e) => __batch(() => this.ring(e)));
-      this._el0.addEventListener('click', (e) => __batch(() => this.onClick(e)));
-      return this._el0;
-    }
-  }
-  ''', opts
-
-code "onError is not auto-wired (lifecycle hook)", '''
+code "onError is a lifecycle hook, never a DOM listener", '''
   export A = component
     onError: (e) -> p e.message
     render
@@ -1859,45 +1876,33 @@ code "onError is not auto-wired (lifecycle hook)", '''
   }
   ''', opts
 
-code "no auto-wire for non-on* methods", '''
+code "value: @event is a member read, not an event binding", '''
   export A = component
-    handleClick: -> p "hi"
     render
-      button "Go"
+      input value: @click
   ''', '''
   export const A = class extends __Component {
     _init(props) {}
-    handleClick() { return p("hi"); }
     _create() {
-      this._el0 = document.createElement('button');
-      this._t0 = document.createTextNode("Go");
-      this._el0.appendChild(this._t0);
+      this._el0 = document.createElement('input');
+      this._el0.setAttribute('value', this.click);
       return this._el0;
     }
   }
   ''', opts
 
-code "auto-wire with nested children", '''
+fail "bare @click without an onClick method is a compile error", '''
   export A = component
-    onClick: -> p "clicked"
     render
-      div
-        span "inner"
-  ''', '''
-  export const A = class extends __Component {
-    _init(props) {}
-    onClick() { return p("clicked"); }
-    _create() {
-      this._el0 = document.createElement('div');
-      this._el1 = document.createElement('span');
-      this._t0 = document.createTextNode("inner");
-      this._el1.appendChild(this._t0);
-      this._el0.appendChild(this._el1);
-      this._el0.addEventListener('click', (e) => __batch(() => this.onClick(e)));
-      return this._el0;
-    }
-  }
-  ''', opts
+      button @click
+''', "requires a component method"
+
+fail "bare @error is rejected (onError lifecycle clash)", '''
+  export A = component
+    onError: (e) -> p e.message
+    render
+      img @error
+''', "ambiguous with the onError"
 
 # ==============================================================================
 # Ref
@@ -3760,7 +3765,7 @@ code "@children slot rendering", '''
     @children =! null
     render
       div
-        @children
+        slot
   ''', '''
   export const A = class extends __Component {
     _init(props) {
@@ -3779,7 +3784,8 @@ code "@prop rendered as text (readonly)", '''
   export A = component
     @name =! "anon"
     render
-      span @name
+      span
+        = @name
   ''', '''
   export const A = class extends __Component {
     _init(props) {
@@ -3787,8 +3793,8 @@ code "@prop rendered as text (readonly)", '''
     }
     _create() {
       this._el0 = document.createElement('span');
-      this._slot1 = this.name instanceof Node ? this.name : (this.name != null ? document.createTextNode(String(this.name)) : document.createComment(''));
-      this._el0.appendChild(this._slot1);
+      this._t0 = document.createTextNode(String(this.name));
+      this._el0.appendChild(this._t0);
       return this._el0;
     }
   }

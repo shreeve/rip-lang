@@ -82,6 +82,7 @@ export EditableValue = component
 
   render
     div ref: "_root", $editing: editing?!, $disabled: @disabled?!, $saving: saving?!
+      @keydown
       slot
       unless editing
         button $edit-trigger: true, aria-label: "Edit", @click: @_onEdit

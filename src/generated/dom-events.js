@@ -1,5 +1,5 @@
 // Generated from TypeScript's lib.dom.d.ts
-// Source: /Users/shreeve/Data/Code/rip-lang/node_modules/.bun/typescript@5.9.3/node_modules/typescript/lib/lib.dom.d.ts
+// Source: /Users/shreeve/Data/Code/rip-lang/node_modules/.bun/typescript@6.0.3/node_modules/typescript/lib/lib.dom.d.ts
 // Run: bun scripts/gen-dom.js
 
 export const DOM_EVENT_NAMES = [
@@ -19,6 +19,7 @@ export const DOM_EVENT_NAMES = [
   'change',
   'click',
   'close',
+  'command',
   'compositionend',
   'compositionstart',
   'compositionupdate',

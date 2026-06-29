@@ -30,4 +30,5 @@ export Checkbox = component
       $checked: @checked?!
       $indeterminate: @indeterminate?!
       $disabled: @disabled?!
+      @click
       slot

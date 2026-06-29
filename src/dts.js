@@ -12,7 +12,7 @@ import { emitTsParam, ripToTs } from "./params.js";
 //   emitTypes(tokens, sexpr, source) — generates .d.ts from annotated
 //     tokens and the parsed s-expression tree.
 //
-//   INTRINSIC_TYPE_DECLS / INTRINSIC_FN_DECL / ARIA_TYPE_DECLS /
+//   INTRINSIC_TYPE_DECLS / INTRINSIC_FN_DECL /
 //   SIGNAL_*, COMPUTED_*, EFFECT_* — declaration tables consumed by
 //     emitTypes() and by typecheck.js when building the virtual TS
 //     file. Browser code never references these.
@@ -48,26 +48,6 @@ export const INTRINSIC_TYPE_DECLS = [
 ];
 
 export const INTRINSIC_FN_DECL = 'declare function __ripEl<K extends __RipTag>(tag: K, props?: __RipProps<K>): void;\ndeclare function __ripSvgEl<K extends keyof Omit<SVGElementTagNameMap, keyof HTMLElementTagNameMap>>(tag: K, props?: __RipProps<K> & __RipSvgAttrs): void;\ndeclare function __ripRoute<const T extends string>(s: T): T;';
-
-export const ARIA_TYPE_DECLS = [
-  'type __RipAriaNavHandlers = { next?: () => void; prev?: () => void; first?: () => void; last?: () => void; select?: () => void; dismiss?: () => void; tab?: () => void; char?: () => void; };',
-  "declare const ARIA: {",
-  "  bindPopover(open: boolean, popover: () => Element | null | undefined, setOpen: (isOpen: boolean) => void, source?: (() => Element | null | undefined) | null): void;",
-  "  bindDialog(open: boolean, dialog: () => Element | null | undefined, setOpen: (isOpen: boolean) => void, dismissable?: boolean): void;",
-  "  popupDismiss(open: boolean, popup: () => Element | null | undefined, close: () => void, els?: Array<() => Element | null | undefined>, repos?: (() => void) | null): void;",
-  "  popupGuard(delay?: number): any;",
-  "  listNav(event: KeyboardEvent, handlers: __RipAriaNavHandlers): void;",
-  "  rovingNav(event: KeyboardEvent, handlers: __RipAriaNavHandlers, orientation?: 'vertical' | 'horizontal' | 'both'): void;",
-  "  positionBelow(trigger: Element | null | undefined, popup: Element | null | undefined, gap?: number, setVisible?: boolean): void;",
-  "  position(trigger: Element | null | undefined, floating: Element | null | undefined, opts?: any): void;",
-  "  trapFocus(panel: Element | null | undefined): void;",
-  "  wireAria(panel: Element, id: string): void;",
-  "  lockScroll(instance: any): void;",
-  "  unlockScroll(instance: any): void;",
-  "  hasAnchor: boolean;",
-  "  [key: string]: any;",
-  "};",
-];
 
 export const SIGNAL_INTERFACE = 'interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }';
 export const SIGNAL_FN = 'declare function __state<T>(value: T | Signal<T>): Signal<T>;';
@@ -909,9 +889,6 @@ export function emitTypes(tokens, sexpr = null, source = '', schemaBehavior = nu
   let preamble = [];
   if (usesRipIntrinsicProps) {
     preamble.push(...INTRINSIC_TYPE_DECLS);
-  }
-  if (/\bARIA\./.test(source)) {
-    preamble.push(...ARIA_TYPE_DECLS);
   }
   if (usesSignal) {
     preamble.push(SIGNAL_INTERFACE);

@@ -404,6 +404,7 @@ rip -cm example.rip
 | symbol literal        | `:redo`          | interned symbol via `Symbol.for('redo')`   |
 | optional prop / param | `name?: T`      | `?` before `:` marks the name optional (params, type fields, props) |
 | boolean prop shorthand | `Btn outline, link` | JSX-style `{outline: true, link: true}` for child components in `render` |
+| type cast             | `x as Type`      | type-checker-only assertion, **erased at runtime** — narrows for ALL expression forms (identifier, member, call/index/paren result); grammar reduces an opaque-string marker to `['cast', expr, typeStr]` (never parses a type). TS precedence: looser than arithmetic/member/call, tighter than relational; left-assoc chains |
 
 ### Kept
 
@@ -436,6 +437,7 @@ rip -cm example.rip
 | `=~`        | Match            | `str =~ /pat/`               |
 | `.new()`    | Constructor      | `User.new()`                 |
 | `::`        | Prototype        | `String::trim`               |
+| `as`        | Type cast        | `x as Foo` (runtime-erased)  |
 | `if...else` | Postfix ternary  | `"a" if cond else "b"`       |
 | `[-n]`      | Negative index   | `arr[-1]`                    |
 | `*`         | String repeat    | `"-" * 40`                   |

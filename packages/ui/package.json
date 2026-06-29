@@ -27,6 +27,9 @@
     "tailwindcss": "^4",
     "css-tree": "^3"
   },
+  "peerDependencies": {
+    "@rip-lang/app": "workspace:^"
+  },
   "devDependencies": {
     "@axe-core/playwright": "4.11.1",
     "@rip-lang/server": "workspace:^",

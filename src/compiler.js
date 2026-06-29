@@ -282,6 +282,9 @@ export class CodeEmitter {
 
     // Symbol literals
     'symbol': 'emitSymbol',
+
+    // `expr as Type` cast — runtime-erased, narrows in the check path
+    'cast': 'emitCast',
   };
 
   constructor(options = {}) {
@@ -932,8 +935,28 @@ export class CodeEmitter {
   // Main dispatch
   // ---------------------------------------------------------------------------
 
+  // `expr as Type` cast wrap. At runtime the cast is fully erased, so this only
+  // fires in the shadow-TS check path (`inlineTypes`), where it re-materializes
+  // a real TS assertion `(code as Type)`. `typeStr` is the opaque type string
+  // collapsed by the type rewriter onto the CAST marker token.
+  castWrap(code, typeStr) {
+    if (!typeStr || !this.options.inlineTypes) return code;
+    return `(${code} as ${typeStr})`;
+  }
+
+  // `['cast', expr, typeStr]` — postfix type assertion. Emit just the inner
+  // expression on the runtime path (the cast leaves zero trace); in the check
+  // path wrap it as a real TS assertion so it narrows for the checker. Covers
+  // every carrier (identifier, member, call/index/paren result) because the
+  // grammar reduces this AFTER the full postfix expression is built. Chains
+  // nest (`['cast',['cast',x,'A'],'B']`) and re-wrap recursively.
+  emitCast(head, rest) {
+    let [expr, typeStr] = rest;
+    return this.castWrap(this.emit(expr, 'value'), typeStr);
+  }
+
   emit(sexpr, context = 'statement') {
-    // String object with metadata (quote, bang, optional, heregex, etc.)
+    // String object with metadata (quote, bang, optional, heregex, cast, etc.)
     if (sexpr instanceof String) {
       // Dammit operator (!)
       if (meta(sexpr, 'bang') === true) {

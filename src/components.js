@@ -221,6 +221,11 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     let renderIndentLevel = 0;
     let currentIndent = 0;
     let pendingCallEnds = [];
+    // Indent levels at which an element's attribute/child block is directly
+    // open. A bare `@event` at one of these levels (statement start) is a
+    // continuation directive of that element. Pushed when implicit nesting
+    // opens an element body; popped on OUTDENT past the level.
+    let elementBodyLevels = [];
 
     let isHtmlTag = (name) => {
       let tagPart = name.split('#')[0];
@@ -292,6 +297,53 @@ export function installComponentSupport(CodeEmitter, Lexer) {
          (j === 0 || tokens[j - 1][0] === 'INDENT' || tokens[j - 1][0] === 'TERMINATOR' || tokens[j - 1][0] === 'RENDER'));
     };
 
+    // Net unmatched-opener test: is token `at` nested inside an explicit
+    // ()/[]/{}/CALL/INDEX/interpolation/string group (depth > 0), or directly
+    // at the element-head level (depth 0)? Walks back to the line/block
+    // boundary at the current nesting level.
+    let explicitDepthAt = (tokens, at) => {
+      let depth = 0;
+      for (let k = at - 1; k >= 0; k--) {
+        let t = tokens[k][0];
+        if (t === ')' || t === 'CALL_END' || t === ']' || t === 'INDEX_END' ||
+            t === '}' || t === 'MAP_END' || t === 'INTERPOLATION_END' || t === 'STRING_END') {
+          depth++;
+        } else if (t === '(' || t === 'CALL_START' || t === '[' || t === 'INDEX_START' ||
+                   t === '{' || t === 'MAP_START' || t === 'INTERPOLATION_START' || t === 'STRING_START') {
+          if (depth === 0) return 1;
+          depth--;
+        } else if (t === 'TERMINATOR' || t === 'RENDER' || t === 'INDENT' || t === 'OUTDENT') {
+          break;
+        }
+      }
+      return 0;
+    };
+
+    // Is the `@` token at index `at` a bare event directive — i.e. a directive in
+    // its own right, NOT a `@member` buried inside an attribute value? It fires
+    // only at a genuine argument/attribute boundary, never inside a value
+    // expression. Requires explicit-bracket depth 0, and one of:
+    //   (1) tag-head argument: `@event` is a NEW arg, so its previous token is
+    //       the tag-expression end (IDENTIFIER like `button`/`div#id`, or a
+    //       `.class`/`#id` tail PROPERTY) or a `,` separator — AND startsWithTag
+    //       confirms tag context. A value token before it (`:`, `!`, `?`, an
+    //       operator, `(`, a string/number…) means it's an attribute VALUE
+    //       (e.g. `aria-pressed: !!@pressed`, `value: @x`) — NOT a directive.
+    //   (2) element-body statement start: a line beginning `@click` at the
+    //       direct attribute/child indent of an open element.
+    // Bare `@member` is no longer a text child anywhere — `= @member` renders
+    // text — so a bare `@name` in a directive slot is unconditionally a directive
+    // (the emitter errors if `name` isn't a real DOM event).
+    let isBareEventAttr = (tokens, at) => {
+      let prev = at > 0 ? tokens[at - 1] : null;
+      if (!prev) return false;
+      if (explicitDepthAt(tokens, at) !== 0) return false;
+      let pt = prev[0];
+      if ((pt === ',' || pt === 'IDENTIFIER' || pt === 'PROPERTY') && startsWithTag(tokens, at)) return true;
+      if ((pt === 'INDENT' || pt === 'TERMINATOR') && elementBodyLevels.includes(currentIndent)) return true;
+      return false;
+    };
+
     this.scanTokens(function(token, i, tokens) {
       let tag = token[0];
       let nextToken = i < tokens.length - 1 ? tokens[i + 1] : null;
@@ -311,6 +363,10 @@ export function installComponentSupport(CodeEmitter, Lexer) {
 
       if (tag === 'OUTDENT') {
         currentIndent--;
+
+        while (elementBodyLevels.length > 0 && elementBodyLevels[elementBodyLevels.length - 1] > currentIndent) {
+          elementBodyLevels.pop();
+        }
 
         // Insert pending CALL_END(s) after this OUTDENT
         let inserted = 0;
@@ -467,9 +523,26 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       if (tag === '@') {
         let j = i + 1;
         if (j < tokens.length && tokens[j][0] === 'PROPERTY') {
+          let eventName = String(tokens[j][1]);
           j++;
           while (j + 1 < tokens.length && tokens[j][0] === '.' && tokens[j + 1][0] === 'PROPERTY') {
             j += 2;
+          }
+          let hadChain = j > i + 2;  // a `.PROPERTY` chain — a member path (`@toast.title`) or modifier form
+          // Bare event shorthand: a plain `@click` (no `.` chain, no `: handler`)
+          // in a directive position (tag head or element-body statement) desugars
+          // to `@click: @onClick` — a `this`-member reference, so it resolves only
+          // to a component method, never a local. A `.`-chain is left untouched:
+          // `@toast.title` is a member path (use `= @toast.title` for text), and
+          // `@click.prevent: h` is the explicit modifier form handled below. Not
+          // DOM-gated here: any plain name desugars; the emitter validates it's a
+          // real DOM event (else a clear "use `= @name`" error) and that the
+          // on<Name> method exists. The generated handler name carries a marker.
+          if (!hadChain && (j >= tokens.length || tokens[j][0] !== ':') && isBareEventAttr(tokens, i)) {
+            let handlerName = 'on' + eventName[0].toUpperCase() + eventName.slice(1);
+            let nameObj = new String(handlerName);
+            nameObj.generatedBareEvent = eventName;
+            tokens.splice(j, 0, gen(':', ':', token), gen('@', '@', token), gen('PROPERTY', nameObj, token));
           }
           if (j > i + 2 && j < tokens.length && tokens[j][0] === ':') {
             let openBracket = gen('[', '[', token);
@@ -584,12 +657,14 @@ export function installComponentSupport(CodeEmitter, Lexer) {
             arrowToken.newLine = true;
             tokens.splice(i + 1, 0, callStartToken, arrowToken);
             pendingCallEnds.push(currentIndent + 1);
+            elementBodyLevels.push(currentIndent + 1);
             return 3;
           } else {
             let commaToken = gen(',', ',', token);
             let arrowToken = gen('->', '->', token);
             arrowToken.newLine = true;
             tokens.splice(i + 1, 0, commaToken, arrowToken);
+            elementBodyLevels.push(currentIndent + 1);
             return 3;
           }
         }
@@ -939,15 +1014,6 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       }
     }
 
-    // Auto-event map: onClick → 'click', onKeydown → 'keydown', etc.
-    const autoEventHandlers = new Map();
-    for (const { name } of methods) {
-      if (/^on[A-Z]/.test(name) && !LIFECYCLE_HOOKS.has(name)) {
-        const eventName = name[2].toLowerCase() + name.slice(3);
-        if (DOM_EVENTS.has(eventName)) autoEventHandlers.set(eventName, name);
-      }
-    }
-
     const inheritsTag = rest[0]?.valueOf?.() ?? null;
     const publicPropNames = new Set();
     for (const { name, isPublic } of stateVars) if (isPublic) publicPropNames.add(name);
@@ -964,11 +1030,9 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     // Save and set component context
     const prevComponentMembers = this.componentMembers;
     const prevReactiveMembers = this.reactiveMembers;
-    const prevAutoEventHandlers = this._autoEventHandlers;
     const prevInheritsTag = this._inheritsTag;
     this.componentMembers = memberNames;
     this.reactiveMembers = reactiveMembers;
-    this._autoEventHandlers = autoEventHandlers.size > 0 ? autoEventHandlers : null;
     this._inheritsTag = inheritsTag || null;
 
     // --- Type-check stub: typed member declarations + body expressions, no DOM ---
@@ -1178,9 +1242,6 @@ export function installComponentSupport(CodeEmitter, Lexer) {
 
       // Pre-scan render block for @event: @method bindings to type method params
       const eventMethodTypes = new Map();
-      for (const [eventName, methodName] of autoEventHandlers) {
-        eventMethodTypes.set(methodName, eventName);
-      }
       if (renderBlock) {
         const scanEvents = (node) => {
           if (!Array.isArray(node)) return;
@@ -1854,7 +1915,6 @@ export function installComponentSupport(CodeEmitter, Lexer) {
 
       this.componentMembers = prevComponentMembers;
       this.reactiveMembers = prevReactiveMembers;
-      this._autoEventHandlers = prevAutoEventHandlers;
       this._inheritsTag = prevInheritsTag;
       return sl.join('\n');
     }
@@ -2084,7 +2144,6 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     // Restore context
     this.componentMembers = prevComponentMembers;
     this.reactiveMembers = prevReactiveMembers;
-    this._autoEventHandlers = prevAutoEventHandlers;
     this._inheritsTag = prevInheritsTag;
 
     // If block factories exist, wrap in IIFE so they're in scope
@@ -2148,9 +2207,6 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     this._renderLocalScope = new Set();
     this._renderTopLocals = new Set(); // class-mode (top-level _create) hoisted lets
     this._fragChildren = new Map();
-    this._pendingAutoWire = false;
-    this._autoWireEl = null;
-    this._autoWireExplicit = null;
     this._inheritsTargetBound = false;
 
     const statements = this.is(body, 'block') ? body.slice(1) : [body];
@@ -2171,13 +2227,11 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       rootVar = this.newElementVar('empty');
       this._createLines.push(`${rootVar} = document.createComment('');`);
     } else if (renderableCount === 1) {
-      this._pendingAutoWire = !!this._autoEventHandlers;
       let onlyRenderable = null;
       for (const stmt of statements) {
         const v = this.emitNode(stmt);
         if (v != null) onlyRenderable = v;
       }
-      this._pendingAutoWire = false;
       rootVar = onlyRenderable;
     } else {
       rootVar = this.newElementVar('frag');
@@ -2439,18 +2493,13 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     if (headStr === '.') {
       const [, obj, prop] = sexpr;
 
-      // Property access on this (e.g., @prop, @children)
+      // Property access on this (e.g., @prop) standing alone as a render child.
+      // A bare `@prop` is no longer an implicit text child — `= @prop` renders
+      // text (and `slot` projects children). Directive-position `@event` shorthand
+      // is rewritten to an attribute before reaching here, so anything that lands
+      // here is a bare member in a non-directive child slot: error, never silent.
       if (obj === 'this' && typeof prop === 'string') {
-        const s = this._self;
-        if (this.reactiveMembers && this.reactiveMembers.has(prop)) {
-          const textVar = this.newTextVar();
-          this._createLines.push(`${textVar} = document.createTextNode('');`);
-          this._pushEffect(`${textVar}.data = ${s}.${prop}.value;`);
-          return textVar;
-        }
-        const slotVar = this.newElementVar('slot');
-        this._createLines.push(`${slotVar} = ${s}.${prop} instanceof Node ? ${s}.${prop} : (${s}.${prop} != null ? document.createTextNode(String(${s}.${prop})) : document.createComment(''));`);
-        return slotVar;
+        this.error(`Bare \`@${prop}\` is not rendered as text — use \`= @${prop}\` to render it, or \`slot\` to project children`, sexpr);
       }
 
       // HTML tag with classes (div.class) — skip if base is marked .text by
@@ -2610,29 +2659,6 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     }
   };
 
-  // --------------------------------------------------------------------------
-  // Auto-wire event handlers — claim/emit helpers for on* convention
-  // --------------------------------------------------------------------------
-
-  proto._claimAutoWire = function(elVar) {
-    if (!this._pendingAutoWire || !this._autoEventHandlers?.size) return false;
-    this._pendingAutoWire = false;
-    this._autoWireEl = elVar;
-    this._autoWireExplicit = new Set();
-    return true;
-  };
-
-  proto._emitAutoWire = function(elVar, claimed) {
-    if (!claimed) return;
-    for (const [eventName, methodName] of this._autoEventHandlers) {
-      if (!this._autoWireExplicit.has(eventName)) {
-        this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => __batch(() => ${this._self}.${methodName}(e)));`);
-      }
-    }
-    this._autoWireEl = null;
-    this._autoWireExplicit = null;
-  };
-
   proto._bindInheritedTarget = function(tag, elVar) {
     if (!this._inheritsTag || this._factoryMode || this._inheritsTargetBound) return;
     if (tag !== this._inheritsTag) return;
@@ -2662,8 +2688,6 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     if (this._componentName && this._elementCount === 1 && !this._factoryMode && !this.options.skipDataPart) {
       this._createLines.push(`${elVar}.setAttribute('data-part', '${this._componentName}');`);
     }
-
-    const autoWireClaimed = this._claimAutoWire(elVar);
 
     // Defer class emission when selector classes exist so class: attributes merge
     const prevClassArgs = this._pendingClassArgs;
@@ -2697,8 +2721,6 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       this._pendingClassEl = prevClassEl;
     }
 
-    this._emitAutoWire(elVar, autoWireClaimed);
-
     return elVar;
   };
 
@@ -2715,8 +2737,6 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     }
     if (id) this._createLines.push(`${elVar}.id = '${id}';`);
     this._bindInheritedTarget(tag, elVar);
-
-    const autoWireClaimed = this._claimAutoWire(elVar);
 
     // Defer className emission so class: attributes can merge with .() classes
     const classArgs = [...(staticClassArgs || []), ...classExprs.map(e => this.emitInComponent(e, 'value'))];
@@ -2741,9 +2761,36 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     this._pendingClassArgs = prevClassArgs;
     this._pendingClassEl = prevClassEl;
 
-    this._emitAutoWire(elVar, autoWireClaimed);
-
     return elVar;
+  };
+
+  // --------------------------------------------------------------------------
+  // Bare event shorthand validation
+  //
+  // `button @click` desugars (in rewriteRender) to `button @click: @onClick`,
+  // marking the generated `onClick` so resolution is method-only: it must name
+  // a real component method, never a local. This is the single choke point that
+  // enforces that contract and rejects the `@error`/onError-lifecycle clash.
+  // --------------------------------------------------------------------------
+
+  proto._checkBareEventHandler = function(value, node) {
+    if (!this.is(value, '.') || value[1] !== 'this') return;
+    const handler = value[2];
+    const bareEvent = (handler instanceof String) ? handler.generatedBareEvent : null;
+    if (!bareEvent) return;  // only generated bare shorthand is policed here
+    const ev = String(bareEvent);
+    if (!DOM_EVENTS.has(ev)) {
+      this.error(`\`@${ev}\` is not a DOM event — use \`= @${ev}\` to render text, or \`@${ev}: handler\` for an explicit handler`, node);
+      return;
+    }
+    if (ev === 'error') {
+      this.error('Bare `@error` is ambiguous with the onError lifecycle hook — write `@error: handler` to bind a DOM error listener explicitly', node);
+      return;
+    }
+    const name = String(handler);
+    if (this.componentMembers && !this.componentMembers.has(name)) {
+      this.error(`Bare \`@${ev}\` requires a component method \`${name}\` — define \`${name}\`, or use \`@${ev}: handler\` for an explicit handler`, node);
+    }
   };
 
   // --------------------------------------------------------------------------
@@ -2759,9 +2806,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       // Event handler: @click or (. this eventName)
       if (this.is(key, '.') && key[1] === 'this') {
         const eventName = key[2];
-        if (this._autoWireExplicit && this._autoWireEl === elVar) {
-          this._autoWireExplicit.add(eventName);
-        }
+        this._checkBareEventHandler(value, objExpr[i]);
         if (typeof value === 'string' && this.componentMembers?.has(value)) {
           this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => __batch(() => ${this._self}.${value}(e)));`);
         } else {
@@ -2942,8 +2987,6 @@ export function installComponentSupport(CodeEmitter, Lexer) {
   // --------------------------------------------------------------------------
 
   proto.emitConditional = function(sexpr) {
-    this._pendingAutoWire = false;
-
     // Fold flat else-if chains into nested structure.
     // Parser emits: ['if', c1, t1, ['if', c2, t2], ..., finalElse]
     // We need:      ['if', c1, t1, ['if', c2, t2, [..., finalElse]]]
@@ -3160,7 +3203,6 @@ export function installComponentSupport(CodeEmitter, Lexer) {
   // --------------------------------------------------------------------------
 
   proto.emitTemplateLoop = function(sexpr) {
-    this._pendingAutoWire = false;
     const [head, vars, collection, guard, step, body] = sexpr;
 
     const blockName = this.newBlockVar();
@@ -3291,7 +3333,6 @@ export function installComponentSupport(CodeEmitter, Lexer) {
   // --------------------------------------------------------------------------
 
   proto.emitChildComponent = function(componentName, args) {
-    this._pendingAutoWire = false;
     const instVar = this.newElementVar('inst');
     const elVar = this.newElementVar('el');
     const { propsCode, reactiveProps, eventBindings, childrenSetupLines } = this.buildComponentProps(args);
@@ -3359,6 +3400,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     this._createLines.push(`} finally { __popComponent(__prev); } }`);
 
     for (const { event, value } of eventBindings) {
+      this._checkBareEventHandler(value, value);
       const handlerCode = this.emitInComponent(value, 'value');
       this._createLines.push(`if (${instVar}) ${elVar}.addEventListener('${event}', (e) => __batch(() => (${handlerCode})(e)));`);
     }

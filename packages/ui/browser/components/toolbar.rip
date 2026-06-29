@@ -35,4 +35,5 @@ export Toolbar = component
   render
     div role: "toolbar", aria-label: @label or undefined, aria-orientation: @orientation
       $orientation: @orientation
+      @keydown
       slot
