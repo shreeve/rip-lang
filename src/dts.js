@@ -49,24 +49,35 @@ export const INTRINSIC_TYPE_DECLS = [
 
 export const INTRINSIC_FN_DECL = 'declare function __ripEl<K extends __RipTag>(tag: K, props?: __RipProps<K>): void;\ndeclare function __ripSvgEl<K extends keyof Omit<SVGElementTagNameMap, keyof HTMLElementTagNameMap>>(tag: K, props?: __RipProps<K> & __RipSvgAttrs): void;\ndeclare function __ripRoute<const T extends string>(s: T): T;';
 
+// Ambient type for the global `ARIA` accessibility helpers (globalThis.ARIA),
+// injected into any typed file that references `ARIA.`. This is the consumer
+// contract; it MUST stay in sync with `AriaApi` in packages/app/index.rip (the
+// implementation contract). The pairing is guarded by test/types/14-aria.rip —
+// update both sides and that fixture together. Helper types are `__Rip`-prefixed
+// so they never collide with consumer-defined names.
 export const ARIA_TYPE_DECLS = [
-  'type __RipAriaNavHandlers = { next?: () => void; prev?: () => void; first?: () => void; last?: () => void; select?: () => void; dismiss?: () => void; tab?: () => void; char?: () => void; };',
-  "declare const ARIA: {",
-  "  bindPopover(open: boolean, popover: () => Element | null | undefined, setOpen: (isOpen: boolean) => void, source?: (() => Element | null | undefined) | null): void;",
-  "  bindDialog(open: boolean, dialog: () => Element | null | undefined, setOpen: (isOpen: boolean) => void, dismissable?: boolean): void;",
-  "  popupDismiss(open: boolean, popup: () => Element | null | undefined, close: () => void, els?: Array<() => Element | null | undefined>, repos?: (() => void) | null): void;",
-  "  popupGuard(delay?: number): any;",
-  "  listNav(event: KeyboardEvent, handlers: __RipAriaNavHandlers): void;",
-  "  rovingNav(event: KeyboardEvent, handlers: __RipAriaNavHandlers, orientation?: 'vertical' | 'horizontal' | 'both'): void;",
-  "  positionBelow(trigger: Element | null | undefined, popup: Element | null | undefined, gap?: number, setVisible?: boolean): void;",
-  "  position(trigger: Element | null | undefined, floating: Element | null | undefined, opts?: any): void;",
-  "  trapFocus(panel: Element | null | undefined): void;",
-  "  wireAria(panel: Element, id: string): void;",
-  "  lockScroll(instance: any): void;",
-  "  unlockScroll(instance: any): void;",
-  "  hasAnchor: boolean;",
-  "  [key: string]: any;",
-  "};",
+  'type __RipAriaEl = HTMLElement | null | undefined;',
+  'type __RipAriaElRef = __RipAriaEl | (() => __RipAriaEl);',
+  'type __RipAriaDisposer = () => void;',
+  'type __RipAriaNavHandlers = { next?: () => void; prev?: () => void; first?: () => void; last?: () => void; select?: () => void; dismiss?: () => void; tab?: () => void; char?: (key: string) => void; };',
+  'type __RipAriaPositionOptions = { placement?: string; offset?: number; matchWidth?: boolean; };',
+  'type __RipAriaPopupGuard = { block: (ms?: number) => void; canOpen: () => boolean; };',
+  'declare const ARIA: {',
+  '  listNav(e: KeyboardEvent, h: __RipAriaNavHandlers): void;',
+  "  rovingNav(e: KeyboardEvent, h: __RipAriaNavHandlers, orientation?: 'vertical' | 'horizontal' | 'both'): void;",
+  '  popupDismiss(open: boolean, popup: __RipAriaElRef, close: () => void, els?: __RipAriaElRef[], repos?: (() => void) | null): __RipAriaDisposer | undefined;',
+  '  popupGuard(delay?: number): __RipAriaPopupGuard;',
+  '  bindPopover(open: boolean, popover: __RipAriaElRef, setOpen: (open: boolean) => void, source?: __RipAriaElRef): __RipAriaDisposer | undefined;',
+  '  bindDialog(open: boolean, dialog: __RipAriaElRef, setOpen: (open: boolean) => void, dismissable?: boolean): __RipAriaDisposer | undefined;',
+  '  positionBelow(trigger: __RipAriaEl, popup: __RipAriaEl, gap?: number, setVisible?: boolean): void;',
+  '  trapFocus(panel: Element): __RipAriaDisposer;',
+  '  wireAria(panel: __RipAriaEl, id: string): void;',
+  '  lockScroll(instance: unknown): void;',
+  '  unlockScroll(instance: unknown): void;',
+  '  position(trigger: __RipAriaEl, floating: __RipAriaEl, opts?: __RipAriaPositionOptions): void;',
+  '  hasAnchor(): boolean;',
+  '  combine(...disposers: Array<__RipAriaDisposer | null | undefined>): __RipAriaDisposer;',
+  '};',
 ];
 
 export const SIGNAL_INTERFACE = 'interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }';

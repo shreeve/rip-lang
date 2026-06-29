@@ -1070,6 +1070,61 @@ check('exclude patterns with route-dir brackets/parens are honored', async () =>
   assert(r.ok, 'excluded route-dir files should be skipped:\n' + r.out);
 });
 
+// ── 13. The ambient `ARIA` global is typed (ARIA_TYPE_DECLS ↔ AriaApi) ──
+//
+// `rip check` injects an ambient `declare const ARIA: { ... }` (ARIA_TYPE_DECLS
+// in src/dts.js) into any typed file that references `ARIA.`. That decl is the
+// consumer-facing twin of `AriaApi` in packages/app/index.rip (the impl
+// contract). These pins guard the pairing: good usage checks clean, and the
+// strict signatures (literal orientation, `char(key: string)`, `hasAnchor()` as
+// a method, no index-signature escape hatch) reject misuse. If either side
+// drifts, one of these flips.
+
+check('typed ARIA usage checks clean against the ambient global', async () => {
+  const r = await checkProject({
+    'aria.rip': `export demo = (el: HTMLElement): boolean ->
+  ARIA.listNav new KeyboardEvent('keydown'), { next: (->), char: ((k: string) -> undefined) }
+  ARIA.rovingNav new KeyboardEvent('keydown'), {}, 'both'
+  d = ARIA.popupDismiss true, el, (->), [el], null
+  ARIA.combine(d, (->))()
+  g = ARIA.popupGuard 200
+  g.block 100
+  g.canOpen() and ARIA.hasAnchor()
+`,
+  });
+  assert(r.ok, 'typed ARIA usage should check clean against the ambient global:\n' + r.out);
+});
+
+check('a bad ARIA orientation literal errors', async () => {
+  const r = await checkProject({
+    'aria.rip': `bad = (el: HTMLElement) ->
+  ARIA.rovingNav new KeyboardEvent('keydown'), {}, 'diagonal'
+`,
+  });
+  assert(!r.ok, "'diagonal' is not a valid orientation");
+  assert(/not assignable/.test(r.out), 'unexpected output:\n' + r.out);
+});
+
+check("an ARIA char handler's key is a string, not a number", async () => {
+  const r = await checkProject({
+    'aria.rip': `bad = (el: HTMLElement) ->
+  ARIA.listNav new KeyboardEvent('keydown'), { char: ((k: number) -> undefined) }
+`,
+  });
+  assert(!r.ok, 'char receives a string key, so a number param should error');
+  assert(/not assignable/.test(r.out), 'unexpected output:\n' + r.out);
+});
+
+check('an unknown ARIA method errors (no index-signature escape hatch)', async () => {
+  const r = await checkProject({
+    'aria.rip': `bad = (el: HTMLElement) ->
+  ARIA.bogusMethod()
+`,
+  });
+  assert(!r.ok, 'an unknown ARIA method must error now that [key: string]: any is gone');
+  assert(/bogusMethod/.test(r.out), 'error should name the bogus method:\n' + r.out);
+});
+
 // ── Drain the queued checks with bounded concurrency ──
 // Workers pull from a shared cursor; results are stored by index and printed in
 // definition order afterward, so output is deterministic regardless of which

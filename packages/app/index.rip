@@ -2921,7 +2921,7 @@ export def launch(opts: LaunchOpts = {}): Promise<LaunchResult>
 # import — so `ARIA` is also declared ambiently in the package's .d.ts shim.
 export type AriaEl = HTMLElement | null | undefined
 export type AriaElRef = AriaEl | (() => AriaEl)
-export type AriaOrientation = 'vertical' | 'horizontal'
+export type AriaOrientation = 'vertical' | 'horizontal' | 'both'
 
 # Keyboard handler map for listNav/rovingNav — every key is optional; a handler
 # only runs if provided. `char` receives the printable key for typeahead.
@@ -2946,6 +2946,9 @@ export type AriaPopupGuard =
 
 # The shape of `globalThis.ARIA`. Disposer (= () => void) is declared once near
 # the top of this file and reused here for every cleanup-returning helper.
+# This is the implementation contract; its consumer-facing twin is
+# ARIA_TYPE_DECLS in src/dts.js (the ambient decl `rip check` injects into files
+# that use `ARIA.`). Keep the two in sync — test/check.test.js guards the pair.
 export type AriaApi =
   listNav: (e: KeyboardEvent, h: AriaNavHandlers) => void
   rovingNav: (e: KeyboardEvent, h: AriaNavHandlers, orientation?: AriaOrientation) => void
