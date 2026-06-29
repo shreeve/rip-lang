@@ -1,0 +1,34 @@
+import { test, ok } from './runner.rip'
+import { isBundleExcludedPath } from '../middleware.rip'
+
+# serve()'s package-dependency crawl inlines every `**/*.rip` under a
+# browser-safe @rip-lang/* package into the bundle. Test/example sources must
+# be skipped: they don't belong in a browser bundle, and several packages ship
+# a `test.rip` that compiles to a component named `Test` → collision warning.
+
+test "excludes files under a test/ directory", ->
+  ok isBundleExcludedPath('test/test.rip')
+  ok isBundleExcludedPath('test/helpers.rip')
+  ok isBundleExcludedPath('browser/test/widget.rip')
+
+test "excludes files under a tests/ directory", ->
+  ok isBundleExcludedPath('tests/foo.rip')
+  ok isBundleExcludedPath('src/tests/foo.rip')
+
+test "excludes root test.rip / demo.rip", ->
+  ok isBundleExcludedPath('test.rip')
+  ok isBundleExcludedPath('demo.rip')
+  ok isBundleExcludedPath('examples/demo.rip')
+
+test "excludes *.test.rip and *.spec.rip", ->
+  ok isBundleExcludedPath('foo.test.rip')
+  ok isBundleExcludedPath('foo.spec.rip')
+  ok isBundleExcludedPath('a/b/widget.test.rip')
+
+test "keeps legitimate sources whose names merely contain 'test'", ->
+  ok not isBundleExcludedPath('index.rip')
+  ok not isBundleExcludedPath('latest.rip')
+  ok not isBundleExcludedPath('contest.rip')
+  ok not isBundleExcludedPath('mytest/widget.rip')
+  ok not isBundleExcludedPath('browser/components/badge.rip')
+  ok not isBundleExcludedPath('attestation.rip')

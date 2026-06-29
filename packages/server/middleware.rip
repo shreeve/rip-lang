@@ -175,6 +175,15 @@ resolvePackageDir = (appDir, pkgKey) ->
   catch
     null
 
+# A package-relative path that must never ship in the browser bundle: test
+# and example sources. Matched on the package-relative path (forward-slash
+# separators, as produced by Bun.Glob) so legitimate files whose names merely
+# contain "test" (e.g. `latest.rip`, `mytest/x.rip`) are kept.
+export isBundleExcludedPath = (path: string): boolean ->
+  /(?:^|\/)tests?\//.test(path) or
+  /(?:^|\/)(?:test|demo)\.rip$/.test(path) or
+  /\.(?:test|spec)\.rip$/.test(path)
+
 # Classify a package as browser-shippable or server-only based on its
 # `rip.browser` opt-in field. Returns:
 #   { kind: 'browser', dir, entry }  — bundle .rip files under _lib/<short>/
@@ -1092,6 +1101,9 @@ export serve = (opts: {
           unless pkgPaths.length > 0
             raise "Package '#{pkgKey}' has no .rip source files at #{classified.dir}."
           for path in pkgPaths
+            # Skip test/example sources — they never belong in a browser bundle,
+            # and shared component names (e.g. `Test`) collide across packages.
+            continue if isBundleExcludedPath(path)
             src = readFileSync("#{classified.dir}/#{path}", 'utf8')
             if NODE_BUILTIN_RE.test(src)
               raise "Package '#{pkgKey}' file '#{path}' imports a Node built-in module and cannot be shipped to the browser."
