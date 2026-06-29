@@ -595,6 +595,38 @@ function reclassifyColonTypes(tokens) {
     return atStatementStart(tokens[i - 2]);
   };
 
+  // Is this top-level `=` the assignment of a `type Name [<generics>] =`
+  // declaration? Its RHS is a whole type expression, so we arm `inType` there —
+  // otherwise a braced type literal RHS (`type X = { f: (e: Event) => void }`,
+  // incl. intersections `… & { … }`) reaches the field colon at bracket-depth
+  // ≥ 1, where none of the `:`-reclassify branches (all `stack.length === 0`)
+  // fire, so `inType` is never armed and the function-type's `(e: Event)` param
+  // is wrongly reclassified — putting a synthetic `::` inside a structural type
+  // literal. Mirrors `isDefParamStart`'s backward generic skip. (The indented
+  // `type T =` ⏎ INDENT form is unaffected: it disarms `inType` at the INDENT
+  // and is collected per-field by `collectStructuralType`.)
+  const isTypeDeclEq = (i) => {
+    let j = i - 1;
+    const g0 = tokens[j]?.[0], v0 = tokens[j]?.[1];
+    if ((g0 === 'COMPARE' && v0 === '>') || (g0 === 'SHIFT' && v0 === '>>')) {
+      let depth = g0 === 'SHIFT' ? 2 : 1;
+      j--;
+      while (j >= 0 && depth > 0) {
+        const g = tokens[j][0], v = tokens[j][1];
+        if (g === 'COMPARE' && v === '>') depth++;
+        else if (g === 'SHIFT' && v === '>>') depth += 2;
+        else if (g === 'COMPARE' && v === '<') depth--;
+        else if (g === 'SHIFT' && v === '<<') depth -= 2;
+        j--;
+      }
+    }
+    // tokens[j] is the type name, preceded by the `type` contextual keyword at
+    // a statement boundary (the same shape the `type Name =` collector matches).
+    if (tokens[j]?.[0] !== 'IDENTIFIER') return false;
+    if (!(tokens[j - 1]?.[0] === 'IDENTIFIER' && tokens[j - 1]?.[1] === 'type')) return false;
+    return atStatementStart(tokens[j - 2]);
+  };
+
   // A type expression (opened by any `::` / TYPE_ANNOTATION, or by a `:` we
   // reclassify) must never have its interior touched: a function type like
   // `{ cb: (r: R) => void }` carries single `:` colons that are TS member/param
@@ -659,6 +691,16 @@ function reclassifyColonTypes(tokens) {
 
     // Commit per-line key:value state at statement boundaries (depth 0).
     if (tag === 'TERMINATOR' && stack.length === 0) { prevSiblingKV = curLineKV; curLineKV = false; }
+
+    // Type-alias RHS: `type Name [<generics>] = <type>`. The whole RHS is a
+    // type expression — arm `inType` so its interior colons (a braced literal's
+    // field `:`, a function-type param's `:`) are left as TS separators rather
+    // than reclassified. Disarms at the RHS terminator / on exiting its depth,
+    // like every other `enterType`. A value-position `=` (`x = { a: 1 }`) is not
+    // a type decl, so `isTypeDeclEq` rejects it and object literals stay intact.
+    if (tag === '=' && stack.length === 0 && !inType && isTypeDeclEq(i)) {
+      enterType(); continue;
+    }
 
     if (tag === ':') {
       const prev = tokens[i - 1];
