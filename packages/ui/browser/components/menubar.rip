@@ -15,8 +15,6 @@
 #       div $item: "redo", "Redo"
 
 export Menubar = component
-  rootRef := null
-  slotRef := null
   @disabled := false
 
   activeMenu := null
@@ -25,6 +23,19 @@ export Menubar = component
   _menus ~=
     return [] unless @slotRef
     Array.from(@slotRef.querySelectorAll('[data-menu]') or [])
+
+  ~>
+    if activeMenu
+      onDown   = (e) => @_closeMenu() unless @rootRef?.contains(e.target)
+      onScroll = => @_position(activeMenu)
+      document.addEventListener 'mousedown', onDown
+      window.addEventListener   'scroll',    onScroll, true
+      return ->
+        document.removeEventListener 'mousedown', onDown
+        window.removeEventListener   'scroll',    onScroll, true
+
+  rootRef := null
+  slotRef := null
 
   _menuItemsFor: (menu) ->
     return [] unless menu
@@ -113,16 +124,6 @@ export Menubar = component
         prev = (focused - 1) %% triggers.length
         triggers[prev]?.focus()
         @_openMenu(triggers[prev]?.dataset.menuTrigger)
-
-  ~>
-    if activeMenu
-      onDown   = (e) => @_closeMenu() unless @rootRef?.contains(e.target)
-      onScroll = => @_position(activeMenu)
-      document.addEventListener 'mousedown', onDown
-      window.addEventListener   'scroll',    onScroll, true
-      return ->
-        document.removeEventListener 'mousedown', onDown
-        window.removeEventListener   'scroll',    onScroll, true
 
   render
     div ref: rootRef, role: "menubar", $disabled: @disabled?!

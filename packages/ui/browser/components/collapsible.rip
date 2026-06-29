@@ -11,25 +11,10 @@
 #       p "Hidden content here"
 
 export Collapsible = component
-  rootRef := null
   @open := false
   @disabled := false
 
   _ready := false
-
-  mounted: ->
-    _ready = true
-    trigger = @rootRef?.querySelector('[data-trigger]')
-    return unless trigger
-    trigger.addEventListener 'click', => @toggle() unless @disabled
-    trigger.addEventListener 'keydown', (e) =>
-      if e.key in ['Enter', ' '] and not @disabled
-        e.preventDefault()
-        @toggle()
-
-  toggle: ->
-    @open = not @open
-    @emit 'change', @open
 
   ~>
     return unless _ready
@@ -45,6 +30,22 @@ export Collapsible = component
         rect = content.getBoundingClientRect()
         content.style.setProperty '--collapsible-height', "#{rect.height}px"
         content.style.setProperty '--collapsible-width', "#{rect.width}px"
+
+  rootRef := null
+
+  mounted: ->
+    _ready = true
+    trigger = @rootRef?.querySelector('[data-trigger]')
+    return unless trigger
+    trigger.addEventListener 'click', => @toggle() unless @disabled
+    trigger.addEventListener 'keydown', (e) =>
+      if e.key in ['Enter', ' '] and not @disabled
+        e.preventDefault()
+        @toggle()
+
+  toggle: ->
+    @open = not @open
+    @emit 'change', @open
 
   render
     div ref: rootRef, $open: @open?!, $disabled: @disabled?!

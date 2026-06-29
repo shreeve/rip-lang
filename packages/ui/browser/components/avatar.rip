@@ -15,14 +15,14 @@ export Avatar = component
 
   imgError := false
 
-  _onError: -> imgError = true
-
   _initials ~=
     return @fallback if @fallback
     return '' unless @alt
     parts = @alt.trim().split(/\s+/)
     chars = parts.map (p) -> p[0]?.toUpperCase() or ''
     chars.slice(0, 2).join('')
+
+  _onError: -> imgError = true
 
   render
     span role: "img", aria-label: @alt or 'Avatar'

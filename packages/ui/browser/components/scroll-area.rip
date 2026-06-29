@@ -11,9 +11,6 @@
 MIN_THUMB = 20
 
 export ScrollArea = component
-  scrollbarRef := null
-  thumbRef := null
-  viewportRef := null
   @orientation := "vertical"
 
   hovering := false
@@ -23,6 +20,10 @@ export ScrollArea = component
   _dragScrollStart = 0
   _dragging = false
   _ready := false
+
+  scrollbarRef := null
+  thumbRef := null
+  viewportRef := null
 
   _updateThumb: ->
     vp = @viewportRef

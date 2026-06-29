@@ -18,7 +18,6 @@
 #     div $slide: true, "Slide B"
 
 export Carousel = component
-  contentRef := null
   @orientation := "horizontal"
   @loop := false
   @autoplay := false
@@ -35,6 +34,18 @@ export Carousel = component
     Array.from(@contentRef.querySelectorAll('[data-slide]') or [])
 
   totalSlides ~= _slides.length
+
+  ~>
+    return unless _ready
+    _slides.forEach (el, idx) =>
+      isActive = idx is activeIndex
+      el.hidden = not isActive
+      el.toggleAttribute 'data-active', isActive
+      el.setAttribute 'role', 'tabpanel'
+      el.setAttribute 'aria-roledescription', 'slide'
+      el.setAttribute 'aria-label', "Slide #{idx + 1} of #{totalSlides}"
+
+  contentRef := null
 
   mounted: ->
     _ready = true
@@ -79,16 +90,6 @@ export Carousel = component
       when 'End'
         e.preventDefault()
         @goto(totalSlides - 1)
-
-  ~>
-    return unless _ready
-    _slides.forEach (el, idx) =>
-      isActive = idx is activeIndex
-      el.hidden = not isActive
-      el.toggleAttribute 'data-active', isActive
-      el.setAttribute 'role', 'tabpanel'
-      el.setAttribute 'aria-roledescription', 'slide'
-      el.setAttribute 'aria-label', "Slide #{idx + 1} of #{totalSlides}"
 
   onMouseenter: -> @_stopAutoplay() if @autoplay
   onMouseleave: -> @_startAutoplay() if @autoplay

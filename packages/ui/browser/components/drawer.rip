@@ -10,17 +10,12 @@
 #     p "Panel content here"
 
 export Drawer = component
-  dialogRef := null
   @open := false
   @side := "right"
   @dismissable := true
 
-  _id =! "drw-#{Math.random().toString(36).slice(2, 8)}"
   _focusRaf = null
-
-  beforeUnmount: ->
-    cancelAnimationFrame _focusRaf if _focusRaf
-    _focusRaf = null
+  _id =! "drw-#{Math.random().toString(36).slice(2, 8)}"
 
   ~>
     # Same dedup as Dialog: bindDialog handles cancel/close emission;
@@ -45,6 +40,12 @@ export Drawer = component
         cancelAnimationFrame _focusRaf if _focusRaf
         _focusRaf = null
         ARIA.unlockScroll(this)
+
+  dialogRef := null
+
+  beforeUnmount: ->
+    cancelAnimationFrame _focusRaf if _focusRaf
+    _focusRaf = null
 
   close: ->
     @open = false

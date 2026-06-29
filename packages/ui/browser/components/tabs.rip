@@ -19,14 +19,13 @@
 #       p "Content for tab two"
 
 export Tabs = component
-  contentRef := null
-  tablistRef := null
   @active := null
   @orientation := "horizontal"
   @activation := "automatic"
+
   _ready       := false
-  _id =! "tabs-#{Math.random().toString(36).slice(2, 8)}"
   activationDirection := 'none'
+  _id =! "tabs-#{Math.random().toString(36).slice(2, 8)}"
 
   tabs ~=
     return [] unless _ready
@@ -35,11 +34,6 @@ export Tabs = component
   panels ~=
     return [] unless _ready
     Array.from(@contentRef?.querySelectorAll('[data-panel]') or [])
-
-  mounted: ->
-    _ready = true
-    unless @active
-      @active = tabs[0]?.dataset.tab
 
   ~>
     return unless _ready
@@ -52,6 +46,14 @@ export Tabs = component
       el.setAttribute 'aria-labelledby', "#{_id}-tab-#{id}"
       el.toggleAttribute 'hidden', not isActive
       el.toggleAttribute 'data-active', isActive
+
+  contentRef := null
+  tablistRef := null
+
+  mounted: ->
+    _ready = true
+    unless @active
+      @active = tabs[0]?.dataset.tab
 
   _isDisabled: (el) -> el?.hasAttribute('data-disabled')
 

@@ -12,8 +12,6 @@
 #     div $item: "paste", "Paste"
 
 export ContextMenu = component
-  listRef := null
-  slotRef := null
   @disabled := false
 
   open := false
@@ -28,6 +26,11 @@ export ContextMenu = component
   _triggerEl ~=
     return null unless @slotRef
     @slotRef.querySelector('[data-trigger]')
+
+  ~> ARIA.popupDismiss open, (=> @listRef), (=> @close())
+
+  listRef := null
+  slotRef := null
 
   _onContextMenu: (e) ->
     return if @disabled
@@ -65,8 +68,6 @@ export ContextMenu = component
       select:  => @selectIndex(highlightedIndex)
       dismiss: => @close()
       tab:     => @close()
-
-  ~> ARIA.popupDismiss open, (=> @listRef), (=> @close())
 
   render
     . @contextmenu: @_onContextMenu

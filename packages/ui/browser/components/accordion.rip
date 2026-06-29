@@ -16,23 +16,11 @@
 #         p "Content B"
 
 export Accordion = component
-  contentRef := null
   @multiple := false
 
   openItems := new Set()
   _ready    := false
   _id =! "acc-#{Math.random().toString(36).slice(2, 8)}"
-
-  mounted: ->
-    _ready = true
-    @contentRef?.querySelectorAll('[data-trigger]').forEach (trigger) =>
-      item = trigger.closest('[data-item]')
-      return unless item
-      id = item.dataset.item
-      trigger.addEventListener 'click', =>
-        return if item.hasAttribute('data-disabled')
-        @toggle(id)
-      trigger.addEventListener 'keydown', (e) => @onTriggerKeydown(e, id)
 
   ~>
     return unless _ready
@@ -60,6 +48,19 @@ export Accordion = component
           rect = content.getBoundingClientRect()
           content.style.setProperty '--accordion-panel-height', "#{rect.height}px"
           content.style.setProperty '--accordion-panel-width', "#{rect.width}px"
+
+  contentRef := null
+
+  mounted: ->
+    _ready = true
+    @contentRef?.querySelectorAll('[data-trigger]').forEach (trigger) =>
+      item = trigger.closest('[data-item]')
+      return unless item
+      id = item.dataset.item
+      trigger.addEventListener 'click', =>
+        return if item.hasAttribute('data-disabled')
+        @toggle(id)
+      trigger.addEventListener 'keydown', (e) => @onTriggerKeydown(e, id)
 
   toggle: (id) ->
     if openItems.has(id)

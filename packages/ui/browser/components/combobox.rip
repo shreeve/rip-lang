@@ -10,9 +10,6 @@
 #   Combobox query <=> searchText, items: fruits, @select: handleSelect, @filter: filterFn
 
 export Combobox = component
-  contentRef := null
-  inputRef := null
-  listRef := null
   @query := ""
   @items := []
   @placeholder := "Search..."
@@ -24,6 +21,23 @@ export Combobox = component
   _ready := false
   _popupGuard =! ARIA.popupGuard()
   _listId =! "cb-#{Math.random().toString(36).slice(2, 8)}"
+
+  ~>
+    return unless _ready
+    if @listRef
+      @_applyPlacement()
+    # ARIA.combine: both helpers register listeners that need cleanup.
+    # Without combine, only the LAST expression's value is taken as the
+    # effect's cleanup, so the bindPopover `toggle` listener leaked on
+    # every effect re-run.
+    ARIA.combine(
+      ARIA.bindPopover  open, (=> @listRef), ((isOpen) => open = isOpen), (=> @inputRef)
+      ARIA.popupDismiss open, (=> @listRef), (=> @close(false, true)), [=> @inputRef, => @contentRef]
+    )
+
+  contentRef := null
+  inputRef := null
+  listRef := null
 
   getItems: ->
     return [] unless @listRef
@@ -102,19 +116,6 @@ export Combobox = component
       select:  => if highlightedIndex >= 0 then @selectIndex(highlightedIndex) else if len is 1 then @selectIndex(0)
       dismiss: => if open then @close() else @query = ''
       tab:     => @close(false, true)
-
-  ~>
-    return unless _ready
-    if @listRef
-      @_applyPlacement()
-    # ARIA.combine: both helpers register listeners that need cleanup.
-    # Without combine, only the LAST expression's value is taken as the
-    # effect's cleanup, so the bindPopover `toggle` listener leaked on
-    # every effect re-run.
-    ARIA.combine(
-      ARIA.bindPopover  open, (=> @listRef), ((isOpen) => open = isOpen), (=> @inputRef)
-      ARIA.popupDismiss open, (=> @listRef), (=> @close(false, true)), [=> @inputRef, => @contentRef]
-    )
 
   render
     . ref: contentRef, $open: open?!, @focusin, @focusout

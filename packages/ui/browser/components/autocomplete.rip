@@ -10,8 +10,6 @@
 acCollator = new Intl.Collator(undefined, { sensitivity: 'base' })
 
 export Autocomplete = component
-  inputRef := null
-  listRef := null
   @value := ""
   @items := []
   @placeholder := "Type to search..."
@@ -20,6 +18,7 @@ export Autocomplete = component
   open := false
   _ready := false
   _popupGuard =! ARIA.popupGuard()
+  _listId =! "ac-list-#{Math.random().toString(36).slice(2, 8)}"
 
   filteredItems ~=
     q = @value.trim()
@@ -28,7 +27,15 @@ export Autocomplete = component
       label = if typeof item is 'string' then item else (item.label or item.name or String(item))
       acCollator.compare(label.slice(0, q.length), q) is 0
 
-  _listId =! "ac-list-#{Math.random().toString(36).slice(2, 8)}"
+  ~>
+    return unless _ready
+    if @listRef
+      @_applyPlacement()
+    ARIA.bindPopover open, (=> @listRef), ((isOpen) => open = isOpen), (=> @inputRef)
+    ARIA.popupDismiss open, (=> @listRef), (=> @close(false, true)), [=> @inputRef]
+
+  inputRef := null
+  listRef := null
 
   _getItems: ->
     return [] unless @listRef
@@ -89,13 +96,6 @@ export Autocomplete = component
       select:  => @selectIndex(@_hlIdx) if @_hlIdx >= 0
       dismiss: => @close()
       tab:     => @close(false, true)
-
-  ~>
-    return unless _ready
-    if @listRef
-      @_applyPlacement()
-    ARIA.bindPopover open, (=> @listRef), ((isOpen) => open = isOpen), (=> @inputRef)
-    ARIA.popupDismiss open, (=> @listRef), (=> @close(false, true)), [=> @inputRef]
 
   mounted: ->
     _ready = true

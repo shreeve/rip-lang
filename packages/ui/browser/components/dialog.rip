@@ -13,17 +13,12 @@
 #     button @click: (=> showDialog = false), "Close"
 
 export Dialog = component
-  dialogRef := null
   @open := false
   @dismissable := true
   @initialFocus := null
 
-  _id =! "dlg-#{Math.random().toString(36).slice(2, 8)}"
   _focusRaf = null
-
-  beforeUnmount: ->
-    cancelAnimationFrame _focusRaf if _focusRaf
-    _focusRaf = null
+  _id =! "dlg-#{Math.random().toString(36).slice(2, 8)}"
 
   ~>
     # ARIA.bindDialog handles the native cancel/close events and toggles
@@ -57,6 +52,12 @@ export Dialog = component
         cancelAnimationFrame _focusRaf if _focusRaf
         _focusRaf = null
         ARIA.unlockScroll(this)
+
+  dialogRef := null
+
+  beforeUnmount: ->
+    cancelAnimationFrame _focusRaf if _focusRaf
+    _focusRaf = null
 
   close: ->
     @open = false

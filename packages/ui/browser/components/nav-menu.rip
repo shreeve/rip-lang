@@ -13,8 +13,6 @@
 #     a $link: true, href: "/about", "About"
 
 export NavigationMenu = component
-  rootRef := null
-  slotRef := null
   @orientation := "horizontal"
   @hoverDelay := 200
   @hoverCloseDelay := 300
@@ -28,6 +26,20 @@ export NavigationMenu = component
     return [] unless @slotRef
     Array.from(@slotRef.children).filter (el) ->
       el.dataset?.link? or el.dataset?.trigger?
+
+  ~>
+    return unless _ready
+    if activePanel
+      onDown   = (e) => @_closePanel() unless @rootRef?.contains(e.target)
+      onScroll = => @_position(activePanel)
+      document.addEventListener 'mousedown', onDown
+      window.addEventListener   'scroll',    onScroll, true
+      return ->
+        document.removeEventListener 'mousedown', onDown
+        window.removeEventListener   'scroll',    onScroll, true
+
+  rootRef := null
+  slotRef := null
 
   mounted: -> _ready = true
 
@@ -79,17 +91,6 @@ export NavigationMenu = component
           @rootRef?.querySelector("[data-nav-panel=\"#{triggerId}\"] a, [data-nav-panel=\"#{triggerId}\"] button")?.focus()
       when 'Escape'
         @_closePanel()
-
-  ~>
-    return unless _ready
-    if activePanel
-      onDown   = (e) => @_closePanel() unless @rootRef?.contains(e.target)
-      onScroll = => @_position(activePanel)
-      document.addEventListener 'mousedown', onDown
-      window.addEventListener   'scroll',    onScroll, true
-      return ->
-        document.removeEventListener 'mousedown', onDown
-        window.removeEventListener   'scroll',    onScroll, true
 
   render
     nav ref: rootRef, role: "navigation", aria-orientation: @orientation

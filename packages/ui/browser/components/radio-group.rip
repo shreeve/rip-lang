@@ -10,8 +10,6 @@
 #     div $value: "lg", "Large"
 
 export RadioGroup = component
-  rootRef := null
-  slotRef := null
   @value := null
   @disabled := false
   @orientation := "vertical"
@@ -20,6 +18,9 @@ export RadioGroup = component
   _options ~=
     return [] unless @slotRef
     Array.from(@slotRef.querySelectorAll('[data-value]') or [])
+
+  rootRef := null
+  slotRef := null
 
   _select: (val) ->
     return if @disabled

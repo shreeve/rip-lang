@@ -12,9 +12,6 @@
 #     div $item: "archive", "Archive"
 
 export Menu = component
-  listRef := null
-  slotRef := null
-  triggerRef := null
   @disabled := false
 
   open := false
@@ -32,6 +29,20 @@ export Menu = component
     return '' unless @slotRef
     el = @slotRef.querySelector(':not([data-item])')
     el?.textContent?.trim() or ''
+
+  ~>
+    return unless _ready
+    if @listRef
+      @listRef.id = _id
+      @listRef.setAttribute 'popover', 'auto'
+      @_applyPlacement()
+    if @triggerRef
+      @triggerRef.setAttribute 'aria-controls', _id
+    ARIA.bindPopover open, (=> @listRef), ((isOpen) => open = isOpen), (=> @triggerRef)
+
+  listRef := null
+  slotRef := null
+  triggerRef := null
 
   toggle: ->
     return if @disabled
@@ -104,16 +115,6 @@ export Menu = component
       dismiss: => @close()
       tab:     => @close()
       char:    => @_typeahead(e.key)
-
-  ~>
-    return unless _ready
-    if @listRef
-      @listRef.id = _id
-      @listRef.setAttribute 'popover', 'auto'
-      @_applyPlacement()
-    if @triggerRef
-      @triggerRef.setAttribute 'aria-controls', _id
-    ARIA.bindPopover open, (=> @listRef), ((isOpen) => open = isOpen), (=> @triggerRef)
 
   render
     .

@@ -11,8 +11,6 @@
 #     div $value: "lettuce", "Lettuce"
 
 export CheckboxGroup = component
-  rootRef := null
-  slotRef := null
   @value := []
   @disabled := false
   @orientation := "vertical"
@@ -21,6 +19,11 @@ export CheckboxGroup = component
   _options ~=
     return [] unless @slotRef
     Array.from(@slotRef.querySelectorAll('[data-value]') or [])
+
+  ~> @_syncTabStops()
+
+  rootRef := null
+  slotRef := null
 
   _toggle: (val) ->
     return if @disabled
@@ -71,8 +74,6 @@ export CheckboxGroup = component
 
   mounted: ->
     requestAnimationFrame => @_syncTabStops()
-
-  ~> @_syncTabStops()
 
   render
     div ref: rootRef, role: "group", aria-label: @label or undefined, aria-orientation: @orientation

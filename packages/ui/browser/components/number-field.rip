@@ -12,7 +12,6 @@ START_DELAY = 400
 TICK_DELAY  = 60
 
 export NumberField = component
-  inputRef := null
   @value := 0
   @min := null
   @max := null
@@ -25,7 +24,14 @@ export NumberField = component
 
   _timer = null
   _interval = null
+  _ready := false
   _id =! "nf-#{Math.random().toString(36).slice(2, 8)}"
+
+  ~>
+    return unless _ready
+    @inputRef?.value = String(@value)
+
+  inputRef := null
 
   _clamp: (v) ->
     v = Math.max(@min, v) if @min?
@@ -125,13 +131,7 @@ export NumberField = component
       @value = @_clamp(@_roundToStep(val))
     @emit 'change', @value
 
-  _ready := false
-
   mounted: -> _ready = true
-
-  ~>
-    return unless _ready
-    @inputRef?.value = String(@value)
 
   beforeUnmount: -> @_stopRepeat()
 

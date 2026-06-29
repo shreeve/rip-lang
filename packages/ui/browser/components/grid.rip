@@ -20,9 +20,6 @@
 #     @afterEdit: (row, col, oldVal, newVal) -> null
 
 export Grid = component
-  bodyRef := null
-  containerRef := null
-
   @data := []
   @columns := []
   @rowHeight := 32
@@ -33,32 +30,7 @@ export Grid = component
   @afterEdit := null
 
   formatRegistry = []
-
-  registerFormat = (code, formatFn, parseFn) ->
-    id = formatRegistry.length
-    formatRegistry.push({ code, format: formatFn, parse: parseFn })
-    id
-
   formatMap := new Map()
-
-  _resolveCol = (ci) ->
-    fid = formatMap.get("0,#{ci + 1}")
-    if fid isnt undefined then return formatRegistry[fid]
-    gid = formatMap.get("0,0")
-    if gid isnt undefined then formatRegistry[gid] else null
-
-  colFormatCache ~=
-    cache = []
-    ci = 0
-    while ci < @columns.length
-      cache.push(_resolveCol(ci))
-      ci++
-    cache
-
-  cellFormat = (row, col) ->
-    fid = formatMap.get("#{row + 1},#{col + 1}")
-    if fid isnt undefined then formatRegistry[fid] else colFormatCache[col]
-
   _ready          := false
   scrollTop       := 0
   containerHeight := 0
@@ -72,8 +44,18 @@ export Grid = component
   _enterCommit    = false
   dataVersion     := 0
   sortKeys        := []
+  _trPool = []
+  _topSpacer = null
+  _botSpacer = null
+  _selBorder = null
 
-  cmp = (a, b) -> (a > b) - (a < b)
+  colFormatCache ~=
+    cache = []
+    ci = 0
+    while ci < @columns.length
+      cache.push(_resolveCol(ci))
+      ci++
+    cache
 
   sortIndex ~=
     dataVersion
@@ -113,45 +95,6 @@ export Grid = component
   endRow      ~= Math.min(totalRows - 1, Math.ceil((scrollTop + containerHeight) / @rowHeight) + @overscan)
   offsetY     ~= startRow * @rowHeight
   bottomSpace ~= Math.max(0, (totalRows - endRow - 1) * @rowHeight)
-
-  # --------------------------------------------------------------------------
-  # DOM Recycling — pooled <tr>/<td> elements, imperative updates on scroll
-  # --------------------------------------------------------------------------
-  #
-  # Instead of letting the reactive render loop recreate row components on
-  # every scroll frame, we maintain a fixed pool of <tr> elements and update
-  # cell textContent directly. This eliminates DOM allocation and GC pressure
-  # during fast scrolling — the most performance-critical path in the grid.
-
-  _trPool = []
-  _topSpacer = null
-  _botSpacer = null
-  _selBorder = null
-
-  _createSpacer: ->
-    tr = document.createElement('tr')
-    tr.className = 'spacer'
-    td = document.createElement('td')
-    td.style.padding = '0'
-    td.style.border = 'none'
-    td.style.lineHeight = '0'
-    td.style.fontSize = '0'
-    tr.appendChild(td)
-    tr
-
-  _ensurePool: (needed, numCols) ->
-    while _trPool.length < needed
-      tr = document.createElement('tr')
-      ci = 0
-      while ci < numCols
-        td = document.createElement('td')
-        tr.appendChild(td)
-        ci++
-      _trPool.push(tr)
-    # Add cells if column count grew
-    for tr in _trPool
-      while tr.children.length < numCols
-        tr.appendChild(document.createElement('td'))
 
   # Effect: update tbody rows from pool on every viewport/data change
   ~>
@@ -294,6 +237,60 @@ export Grid = component
         td = tr.children[cursorCol]
         if td
           td.dataset.active = ''
+
+  bodyRef := null
+  containerRef := null
+
+  registerFormat = (code, formatFn, parseFn) ->
+    id = formatRegistry.length
+    formatRegistry.push({ code, format: formatFn, parse: parseFn })
+    id
+
+  _resolveCol = (ci) ->
+    fid = formatMap.get("0,#{ci + 1}")
+    if fid isnt undefined then return formatRegistry[fid]
+    gid = formatMap.get("0,0")
+    if gid isnt undefined then formatRegistry[gid] else null
+
+  cellFormat = (row, col) ->
+    fid = formatMap.get("#{row + 1},#{col + 1}")
+    if fid isnt undefined then formatRegistry[fid] else colFormatCache[col]
+
+  cmp = (a, b) -> (a > b) - (a < b)
+
+  # --------------------------------------------------------------------------
+  # DOM Recycling — pooled <tr>/<td> elements, imperative updates on scroll
+  # --------------------------------------------------------------------------
+  #
+  # Instead of letting the reactive render loop recreate row components on
+  # every scroll frame, we maintain a fixed pool of <tr> elements and update
+  # cell textContent directly. This eliminates DOM allocation and GC pressure
+  # during fast scrolling — the most performance-critical path in the grid.
+
+  _createSpacer: ->
+    tr = document.createElement('tr')
+    tr.className = 'spacer'
+    td = document.createElement('td')
+    td.style.padding = '0'
+    td.style.border = 'none'
+    td.style.lineHeight = '0'
+    td.style.fontSize = '0'
+    tr.appendChild(td)
+    tr
+
+  _ensurePool: (needed, numCols) ->
+    while _trPool.length < needed
+      tr = document.createElement('tr')
+      ci = 0
+      while ci < numCols
+        td = document.createElement('td')
+        tr.appendChild(td)
+        ci++
+      _trPool.push(tr)
+    # Add cells if column count grew
+    for tr in _trPool
+      while tr.children.length < numCols
+        tr.appendChild(document.createElement('td'))
 
   _removeEditor: ->
     @containerRef.querySelector('.rip-grid-editor')?.remove()

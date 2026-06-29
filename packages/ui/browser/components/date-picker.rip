@@ -37,8 +37,6 @@ dpInRange = (day, from, to) ->
   t >= lo and t <= hi
 
 export DatePicker = component
-  calRef := null
-  triggerRef := null
   @value := null
   @placeholder := "mm/dd/yyyy"
   @disabled := false
@@ -51,8 +49,8 @@ export DatePicker = component
   _hoveredDay := null
   _focusedDay := null     # currently keyboard-focused day in the grid
   _id =! "dp-#{Math.random().toString(36).slice(2, 8)}"
-
   _BASE_DAY_NAMES =! ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+  _today =! new Date()
 
   # Headers rotate with @firstDayOfWeek so the column labels match the
   # grid layout. Previously the grid shifted but the labels stayed
@@ -60,16 +58,6 @@ export DatePicker = component
   _dayNames ~=
     f = (+@firstDayOfWeek) %% 7
     [..._BASE_DAY_NAMES.slice(f), ..._BASE_DAY_NAMES.slice(0, f)]
-
-  # Coerce value to a Date if it's a serialized string (from JSON
-  # persistence). The original code crashed in dpFmt(@value) when
-  # @value was a string after rehydration.
-  _coerceDate = (v) ->
-    return null unless v
-    return v if v instanceof Date
-    d = new Date(v)
-    return null if isNaN(d.getTime())
-    d
 
   _value ~=
     if @range
@@ -122,7 +110,26 @@ export DatePicker = component
   _monthLabel ~=
     viewMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
 
-  _today =! new Date()
+  ~>
+    if open
+      onDown = (e) =>
+        unless @triggerRef?.contains(e.target) or @calRef?.contains(e.target)
+          @close()
+      document.addEventListener 'mousedown', onDown
+      return -> document.removeEventListener 'mousedown', onDown
+
+  calRef := null
+  triggerRef := null
+
+  # Coerce value to a Date if it's a serialized string (from JSON
+  # persistence). The original code crashed in dpFmt(@value) when
+  # @value was a string after rehydration.
+  _coerceDate = (v) ->
+    return null unless v
+    return v if v instanceof Date
+    d = new Date(v)
+    return null if isNaN(d.getTime())
+    d
 
   _prevMonth: ->
     viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1)
@@ -244,14 +251,6 @@ export DatePicker = component
         e.preventDefault()
         @close()
         @triggerRef?.focus()
-
-  ~>
-    if open
-      onDown = (e) =>
-        unless @triggerRef?.contains(e.target) or @calRef?.contains(e.target)
-          @close()
-      document.addEventListener 'mousedown', onDown
-      return -> document.removeEventListener 'mousedown', onDown
 
   render
     . $open: open?!, $disabled: @disabled?!, $range: @range?!

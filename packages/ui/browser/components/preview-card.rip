@@ -11,7 +11,6 @@
 #       p "User details here..."
 
 export PreviewCard = component
-  rootRef := null
   @delay := 400
   @closeDelay := 200
 
@@ -20,6 +19,28 @@ export PreviewCard = component
   _openTimer := null
   _closeTimer := null
   _id =! "pc-#{Math.random().toString(36).slice(2, 8)}"
+
+  ~>
+    return unless _ready
+    trigger = @rootRef?.querySelector('[data-trigger]')
+    floating = @rootRef?.querySelector('[data-content]')
+    return unless floating and trigger
+    trigger.setAttribute 'aria-expanded', !!open
+    floating.hidden = not open
+    if open then floating.removeAttribute 'aria-hidden' else floating.setAttribute 'aria-hidden', 'true'
+    @_applyPlacement()
+    if open then floating.setAttribute('data-open', '') else floating.removeAttribute('data-open')
+    ARIA.bindPopover open, (=> floating), ((isOpen) => open = isOpen), (=> trigger)
+    if open
+      onEnter = => clearTimeout _closeTimer if _closeTimer
+      onLeave = => _closeTimer = setTimeout (=> open = false), @closeDelay
+      floating.addEventListener 'mouseenter', onEnter
+      floating.addEventListener 'mouseleave', onLeave
+      return ->
+        floating.removeEventListener 'mouseenter', onEnter
+        floating.removeEventListener 'mouseleave', onLeave
+
+  rootRef := null
 
   beforeUnmount: ->
     clearTimeout _openTimer if _openTimer
@@ -52,26 +73,6 @@ export PreviewCard = component
     trigger = @rootRef?.querySelector('[data-trigger]')
     floating = @rootRef?.querySelector('[data-content]')
     ARIA.position trigger, floating, placement: 'bottom start', offset: 4
-
-  ~>
-    return unless _ready
-    trigger = @rootRef?.querySelector('[data-trigger]')
-    floating = @rootRef?.querySelector('[data-content]')
-    return unless floating and trigger
-    trigger.setAttribute 'aria-expanded', !!open
-    floating.hidden = not open
-    if open then floating.removeAttribute 'aria-hidden' else floating.setAttribute 'aria-hidden', 'true'
-    @_applyPlacement()
-    if open then floating.setAttribute('data-open', '') else floating.removeAttribute('data-open')
-    ARIA.bindPopover open, (=> floating), ((isOpen) => open = isOpen), (=> trigger)
-    if open
-      onEnter = => clearTimeout _closeTimer if _closeTimer
-      onLeave = => _closeTimer = setTimeout (=> open = false), @closeDelay
-      floating.addEventListener 'mouseenter', onEnter
-      floating.addEventListener 'mouseleave', onLeave
-      return ->
-        floating.removeEventListener 'mouseenter', onEnter
-        floating.removeEventListener 'mouseleave', onLeave
 
   render
     div ref: rootRef

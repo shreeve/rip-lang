@@ -19,7 +19,6 @@
 #     div $panel: true, "Bottom"
 
 export Resizable = component
-  rootRef := null
   @orientation := "horizontal"
   @minSize := 10
   @maxSize := 90
@@ -29,6 +28,18 @@ export Resizable = component
   _startPos = 0
   _startSizes = []
   sizes := []
+
+  ~>
+    return unless _ready
+    @_panels().forEach (el, idx) =>
+      pct = sizes[idx] or 0
+      el.style.setProperty '--panel-size', "#{pct}%"
+      el.style.flexBasis = "#{pct}%"
+    @_handles().forEach (handle, idx) =>
+      handle.setAttribute 'aria-valuenow', Math.round(sizes[idx] or 0)
+      handle.setAttribute 'aria-orientation', @orientation
+
+  rootRef := null
 
   _panels: ->
     return [] unless @rootRef
@@ -105,16 +116,6 @@ export Resizable = component
     e.preventDefault()
     @_applyResize(handleIdx, sizes[handleIdx] + delta, sizes[handleIdx + 1] - delta)
     @emit 'resize', sizes
-
-  ~>
-    return unless _ready
-    @_panels().forEach (el, idx) =>
-      pct = sizes[idx] or 0
-      el.style.setProperty '--panel-size', "#{pct}%"
-      el.style.flexBasis = "#{pct}%"
-    @_handles().forEach (handle, idx) =>
-      handle.setAttribute 'aria-valuenow', Math.round(sizes[idx] or 0)
-      handle.setAttribute 'aria-orientation', @orientation
 
   render
     div ref: rootRef, $orientation: @orientation

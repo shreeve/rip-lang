@@ -12,8 +12,6 @@ lastCloseTime = 0
 GROUP_TIMEOUT = 400
 
 export Tooltip = component
-  tipRef := null
-  triggerRef := null
   @text := ""
   @placement := "top"
   @delay := 300
@@ -27,6 +25,17 @@ export Tooltip = component
   _hideTimer := null
   _ready := false
   _id =! "tip-#{Math.random().toString(36).slice(2, 8)}"
+
+  ~>
+    return unless _ready
+    if @tipRef
+      @tipRef.setAttribute 'popover', 'hint'
+      @_applyPlacement()
+      if open then @tipRef.setAttribute('data-open', '') else @tipRef.removeAttribute('data-open')
+      ARIA.bindPopover open, (=> @tipRef), ((isOpen) => open = isOpen), (=> @triggerRef)
+
+  tipRef := null
+  triggerRef := null
 
   _applyPlacement: ->
     [side, align] = @placement.split('-')
@@ -76,14 +85,6 @@ export Tooltip = component
 
   mounted: ->
     _ready = true
-
-  ~>
-    return unless _ready
-    if @tipRef
-      @tipRef.setAttribute 'popover', 'hint'
-      @_applyPlacement()
-      if open then @tipRef.setAttribute('data-open', '') else @tipRef.removeAttribute('data-open')
-      ARIA.bindPopover open, (=> @tipRef), ((isOpen) => open = isOpen), (=> @triggerRef)
 
   render
     .

@@ -17,15 +17,6 @@ export Field = component
 
   _id =! "fld-#{Math.random().toString(36).slice(2, 8)}"
 
-  mounted: ->
-    ctrl = @_root?.querySelector('input, select, textarea, button, [role]')
-    if ctrl
-      ctrl.setAttribute 'aria-labelledby', "#{_id}-label" if @label
-      ctrl.setAttribute 'aria-describedby', "#{_id}-desc" if @description
-      ctrl.setAttribute 'aria-errormessage', "#{_id}-err" if @error
-      ctrl.setAttribute 'aria-invalid', true if @error
-      ctrl.setAttribute 'aria-required', true if @required
-
   ~>
     ctrl = @_root?.querySelector('input, select, textarea, button, [role]')
     return unless ctrl
@@ -35,6 +26,15 @@ export Field = component
     else
       ctrl.removeAttribute 'aria-invalid'
       ctrl.removeAttribute 'aria-errormessage'
+
+  mounted: ->
+    ctrl = @_root?.querySelector('input, select, textarea, button, [role]')
+    if ctrl
+      ctrl.setAttribute 'aria-labelledby', "#{_id}-label" if @label
+      ctrl.setAttribute 'aria-describedby', "#{_id}-desc" if @description
+      ctrl.setAttribute 'aria-errormessage', "#{_id}-err" if @error
+      ctrl.setAttribute 'aria-invalid', true if @error
+      ctrl.setAttribute 'aria-required', true if @required
 
   render
     div $disabled: @disabled?!, $invalid: @error?!

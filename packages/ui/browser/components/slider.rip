@@ -10,7 +10,6 @@
 #   Slider value <=> range, min: 0, max: 100   (pass array for range mode)
 
 export Slider = component
-  trackRef := null
   @value := 0                                    # number | number[] (range mode)
   @min := 0
   @max := 100
@@ -25,10 +24,11 @@ export Slider = component
   activeThumb := -1
   _thumbOffset = 0
   _id =! "sld-#{Math.random().toString(36).slice(2, 8)}"
-
   isRange ~= Array.isArray(@value)
   values  ~= if isRange then @value else [@value]
   horiz   ~= @orientation is 'horizontal'
+
+  trackRef := null
 
   _clamp: (v) -> Math.min(@max, Math.max(@min, v))
 

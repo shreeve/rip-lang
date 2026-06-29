@@ -13,16 +13,11 @@
 #     button @click: handleDelete, "Delete"
 
 export AlertDialog = component
-  dialogRef := null
   @open := false
   @initialFocus := null
 
-  _id =! "adlg-#{Math.random().toString(36).slice(2, 8)}"
   _focusRaf = null
-
-  beforeUnmount: ->
-    cancelAnimationFrame _focusRaf if _focusRaf
-    _focusRaf = null
+  _id =! "adlg-#{Math.random().toString(36).slice(2, 8)}"
 
   ~>
     # bindDialog handles focus restoration via its own restoreEl
@@ -52,6 +47,12 @@ export AlertDialog = component
         cancelAnimationFrame _focusRaf if _focusRaf
         _focusRaf = null
         ARIA.unlockScroll(this)
+
+  dialogRef := null
+
+  beforeUnmount: ->
+    cancelAnimationFrame _focusRaf if _focusRaf
+    _focusRaf = null
 
   close: ->
     @open = false

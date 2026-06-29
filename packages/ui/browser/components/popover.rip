@@ -10,7 +10,6 @@
 #       p "Popover content"
 
 export Popover = component
-  contentRef := null
   @placement := "bottom-start"
   @offset := 4
   @disabled := false
@@ -23,6 +22,26 @@ export Popover = component
   _hoverTimer := null
   _hoverCloseTimer := null
   _id =! "pop-#{Math.random().toString(36).slice(2, 8)}"
+
+  ~>
+    return unless _ready
+    trigger = @contentRef?.querySelector('[data-trigger]')
+    floating = @contentRef?.querySelector('[data-content]')
+    if trigger
+      trigger.setAttribute 'aria-expanded', !!open
+    if floating
+      floating.hidden = not open
+      if open then floating.removeAttribute 'aria-hidden' else floating.setAttribute 'aria-hidden', 'true'
+      floating.setAttribute 'data-placement', @placement
+      if open then floating.setAttribute 'data-open', '' else floating.removeAttribute 'data-open'
+      ARIA.wireAria floating, _id
+      @_applyPlacement()
+
+  ~>
+    return unless _ready
+    ARIA.bindPopover open, (=> @contentRef?.querySelector('[data-content]')), ((isOpen) => open = isOpen), (=> @contentRef?.querySelector('[data-trigger]'))
+
+  contentRef := null
 
   _applyPlacement: ->
     trigger = @contentRef?.querySelector('[data-trigger]')
@@ -82,24 +101,6 @@ export Popover = component
 
   close: ->
     open = false
-
-  ~>
-    return unless _ready
-    trigger = @contentRef?.querySelector('[data-trigger]')
-    floating = @contentRef?.querySelector('[data-content]')
-    if trigger
-      trigger.setAttribute 'aria-expanded', !!open
-    if floating
-      floating.hidden = not open
-      if open then floating.removeAttribute 'aria-hidden' else floating.setAttribute 'aria-hidden', 'true'
-      floating.setAttribute 'data-placement', @placement
-      if open then floating.setAttribute 'data-open', '' else floating.removeAttribute 'data-open'
-      ARIA.wireAria floating, _id
-      @_applyPlacement()
-
-  ~>
-    return unless _ready
-    ARIA.bindPopover open, (=> @contentRef?.querySelector('[data-content]')), ((isOpen) => open = isOpen), (=> @contentRef?.querySelector('[data-trigger]'))
 
   onKeydown: (e) ->
     if e.key is 'Escape' and open

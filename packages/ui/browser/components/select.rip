@@ -16,9 +16,6 @@
 #     option value: "b", "Option B"
 
 export Select = component
-  listRef := null
-  slotRef := null
-  triggerRef := null
   @value := null
   @placeholder := "Select..."
   @disabled := false
@@ -34,17 +31,28 @@ export Select = component
   _popupGuard =! ARIA.popupGuard()
   _listId =! "sel-#{Math.random().toString(36).slice(2, 8)}"
 
-  getOpt: (o) -> o.dataset.value ?? o.value
-
-  _readOptions: ->
-    options = Array.from(@slotRef?.querySelectorAll('[data-value], option[value]') or [])
-
   selectedLabel ~=
     if @value?
       el = options.find (o) -> @getOpt(o) is String(@value)
       el?.textContent?.trim() or String(@value)
     else
       @placeholder
+
+  ~>
+    return unless _ready
+    if @listRef
+      @_applyPlacement()
+    ARIA.bindPopover open, (=> @listRef), ((isOpen) => open = isOpen), (=> @triggerRef)
+    ARIA.popupDismiss open, (=> @listRef), (=> @close(false, true)), [=> @triggerRef]
+
+  listRef := null
+  slotRef := null
+  triggerRef := null
+
+  getOpt: (o) -> o.dataset.value ?? o.value
+
+  _readOptions: ->
+    options = Array.from(@slotRef?.querySelectorAll('[data-value], option[value]') or [])
 
   openMenu: ->
     return unless _popupGuard.canOpen()
@@ -154,13 +162,6 @@ export Select = component
   mounted: ->
     _ready = true
     requestAnimationFrame => @_readOptions()
-
-  ~>
-    return unless _ready
-    if @listRef
-      @_applyPlacement()
-    ARIA.bindPopover open, (=> @listRef), ((isOpen) => open = isOpen), (=> @triggerRef)
-    ARIA.popupDismiss open, (=> @listRef), (=> @close(false, true)), [=> @triggerRef]
 
   render
     .
