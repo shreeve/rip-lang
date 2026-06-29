@@ -622,7 +622,8 @@ Configure via the `"rip"` key in `package.json`:
 {
   "strict": true,
   "checkAll": true,
-  "exclude": ["vendor/**", "legacy/**"]
+  "exclude": ["vendor/**", "legacy/**"],
+  "types": ["node_modules/@rip-lang/app/aria.d.ts"]
 }
 ```
 
@@ -631,6 +632,7 @@ Configure via the `"rip"` key in `package.json`:
 | `strict` | Enable TS strict family for `rip check` (default: `false`) |
 | `checkAll` | Type-check every non-`@nocheck` `.rip` file, not just annotated ones (default: `false`) |
 | `exclude` | Glob patterns for files to skip during `rip check` |
+| `types` | Hand-written ambient `.d.ts` files to include as explicit program roots (paths relative to the project root). Their global `declare`s become visible to every `.rip` file in the project — like tsconfig's `files`. Use it to pull in a shared ambient contract (e.g. `@rip-lang/app/aria.d.ts` for the global `ARIA` helpers). A missing path is warned and skipped, not fatal. |
 
 ### File Level
 

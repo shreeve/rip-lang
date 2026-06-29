@@ -51,6 +51,14 @@ The current model is:
 - `ARIA` / `__aria` owns shared primitives such as popup dismissal, popover binding, dialog binding, positioning, roving/list navigation, and short reopen-suppression after pointer-driven closes
 - individual components own only the semantics that make that widget unique
 
+**ARIA typing is opt-in.** `ARIA` is a runtime global from `@rip-lang/app`, so
+this package declares it as a `peerDependency` and pulls in its ambient contract
+(`@rip-lang/app/aria.d.ts`) via `package.json#rip.types` so the widgets'
+`ARIA.` calls type-check. If you split this package or add a new one that uses
+`ARIA.`, copy that `rip.types` line (and the peerDep) — without it, `ARIA` is
+undeclared at check time (the contract is no longer auto-injected). See
+`packages/app/AGENTS.md` → "The ambient `ARIA` type contract".
+
 ## Reference Component
 
 `browser/components/multi-select.rip` is the reference example for a "hard" composite widget in this package.
