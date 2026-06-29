@@ -9472,9 +9472,16 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                   if (!Array.isArray(pair) || pair.length < 2)
                     continue;
                   const [, key, value] = pair;
-                  if (Array.isArray(key) && key[0] === "." && key[1] === "this" && Array.isArray(value) && value[0] === "." && value[1] === "this") {
+                  if (Array.isArray(key) && key[0] === "." && key[1] === "this") {
                     const eventName = typeof key[2] === "string" ? key[2] : key[2]?.valueOf?.();
-                    const methodName = typeof value[2] === "string" ? value[2] : value[2]?.valueOf?.();
+                    let methodName = null;
+                    if (Array.isArray(value) && value[0] === "." && value[1] === "this") {
+                      methodName = typeof value[2] === "string" ? value[2] : value[2]?.valueOf?.();
+                    } else {
+                      const ident = typeof value === "string" ? value : value instanceof String ? value.valueOf() : null;
+                      if (ident && this.componentMembers?.has(ident))
+                        methodName = ident;
+                    }
                     if (eventName && methodName && !eventMethodTypes.has(methodName)) {
                       eventMethodTypes.set(methodName, eventName);
                     }
@@ -17077,7 +17084,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.17.4";
-  var BUILD_DATE = "2026-06-29@09:22:52GMT";
+  var BUILD_DATE = "2026-06-29@14:13:05GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -20735,7 +20742,7 @@ ${indented}`);
         anchor = document.createElement("div");
         floating = document.createElement("div");
         anchor.style.cssText = "position:fixed;top:100px;left:100px;width:10px;height:10px;anchor-name:--probe";
-        floating.style.cssText = "position:fixed;inset:auto;margin:0;position-anchor:--probe;position-area:bottom start;width:10px;height:10px";
+        floating.style.cssText = "position:fixed;inset:auto;margin:0;position-anchor:--probe;position-area:bottom span-right;width:10px;height:10px";
         document.body.appendChild(anchor);
         document.body.appendChild(floating);
         rect = floating.getBoundingClientRect();
@@ -20750,7 +20757,7 @@ ${indented}`);
       }
     })();
   };
-  _ARIA_POSITION_OWNED = ["position", "inset", "top", "right", "bottom", "left", "margin", "marginTop", "marginRight", "marginBottom", "marginLeft", "transform", "minWidth", "positionAnchor", "positionArea", "positionTry", "positionVisibility"];
+  _ARIA_POSITION_OWNED = ["position", "inset", "top", "right", "bottom", "left", "margin", "marginTop", "marginRight", "marginBottom", "marginLeft", "transform", "minWidth", "justifySelf", "alignSelf", "positionAnchor", "positionArea", "positionTry", "positionVisibility"];
   _ariaResetPositionStyles = function(el) {
     let style;
     style = el.style;
@@ -20761,14 +20768,29 @@ ${indented}`);
     return _result;
   };
   _ariaPosition = function(trigger, floating, opts = {}) {
-    let align, fl, matchWidth, name, offset, placement, prevTrigger, rect, side;
+    let align, areaAlign, canAnchor, fl, matchWidth, name, offset, placement, positionArea, prevTrigger, rect, side, vertical;
     if (!(trigger && floating))
       return;
     placement = opts.placement ?? "bottom start";
     offset = opts.offset ?? 4;
     matchWidth = opts.matchWidth ?? false;
     _ariaResetPositionStyles(floating);
-    if (_ariaHasAnchor()) {
+    [side, align] = placement.split(" ");
+    align ??= "start";
+    vertical = side === "bottom" || side === "top";
+    areaAlign = (() => {
+      switch (align) {
+        case "center":
+          return "center";
+        case "end":
+          return vertical ? "span-left" : "span-top";
+        default:
+          return vertical ? "span-right" : "span-bottom";
+      }
+    })();
+    positionArea = `${side} ${areaAlign}`;
+    canAnchor = _ariaHasAnchor() && typeof CSS !== "undefined" && CSS.supports("position-area", positionArea);
+    if (canAnchor) {
       name = `--anchor-${floating.id || Math.random().toString(36).slice(2, 8)}`;
       fl = floating;
       prevTrigger = fl.__ariaPrevTrigger;
@@ -20783,10 +20805,14 @@ ${indented}`);
       floating.style.position = "fixed";
       floating.style.inset = "auto";
       floating.style.margin = "0";
-      floating.style.positionArea = placement;
+      floating.style.positionArea = positionArea;
+      if (vertical) {
+        floating.style.justifySelf = align;
+      } else {
+        floating.style.alignSelf = align;
+      }
       floating.style.positionTry = "flip-block, flip-inline, flip-block flip-inline";
       floating.style.positionVisibility = "anchors-visible";
-      [side] = placement.split(" ");
       switch (side) {
         case "bottom":
           floating.style.marginTop = `${offset}px`;
@@ -20807,8 +20833,6 @@ ${indented}`);
       floating.style.position = "fixed";
       floating.style.inset = "auto";
       floating.style.margin = "0";
-      [side, align] = placement.split(" ");
-      align ??= "start";
       switch (side) {
         case "bottom":
           floating.style.top = `${rect.bottom + offset}px`;

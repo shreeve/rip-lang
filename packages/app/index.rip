@@ -3317,7 +3317,11 @@ _ariaHasAnchor = (): boolean ->
     anchor = document.createElement('div')
     floating = document.createElement('div')
     anchor.style.cssText = 'position:fixed;top:100px;left:100px;width:10px;height:10px;anchor-name:--probe'
-    floating.style.cssText = 'position:fixed;inset:auto;margin:0;position-anchor:--probe;position-area:bottom start;width:10px;height:10px'
+    # Probe with a VALID `position-area` grid keyword (`bottom span-right`).
+    # `bottom start` is NOT a valid value, so an anchor-capable browser would
+    # ignore it and the floating probe would stay at the top of the viewport —
+    # making this detection report `false` even where anchoring works.
+    floating.style.cssText = 'position:fixed;inset:auto;margin:0;position-anchor:--probe;position-area:bottom span-right;width:10px;height:10px'
     document.body.appendChild(anchor)
     document.body.appendChild(floating)
     rect = floating.getBoundingClientRect()
@@ -3335,7 +3339,7 @@ _ariaHasAnchor = (): boolean ->
 # through when we switch placement (e.g. to `bottom start`).
 _ARIA_POSITION_OWNED = ['position', 'inset', 'top', 'right', 'bottom', 'left',
   'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
-  'transform', 'minWidth',
+  'transform', 'minWidth', 'justifySelf', 'alignSelf',
   'positionAnchor', 'positionArea', 'positionTry', 'positionVisibility']
 
 _ariaResetPositionStyles = (el: HTMLElement) ->
@@ -3352,7 +3356,26 @@ _ariaPosition = (trigger: AriaEl, floating: AriaEl, opts: AriaPositionOptions = 
   offset = opts.offset ?? 4
   matchWidth = opts.matchWidth ?? false
   _ariaResetPositionStyles(floating)
-  if _ariaHasAnchor()
+  [side, align] = placement.split(' ')
+  align ??= 'start'
+  # Translate the friendly `<side> <align>` placement into a VALID CSS
+  # `position-area` grid keyword plus the matching self-alignment. The grid
+  # keywords are span-based — `bottom start`/`bottom end` are not valid values
+  # (the browser ignores them and the element falls to a default spot), so we
+  # map align→span and pin the cross-axis edge with justify-self/align-self.
+  # For bottom/top the cross axis is horizontal (justify-self); for left/right
+  # it is vertical (align-self).
+  vertical = side is 'bottom' or side is 'top'
+  areaAlign = switch align
+    when 'center' then 'center'
+    when 'end' then (if vertical then 'span-left' else 'span-top')
+    else (if vertical then 'span-right' else 'span-bottom')
+  positionArea = "#{side} #{areaAlign}"
+  # Only take the anchor path when the browser both supports anchor
+  # positioning AND accepts the translated `position-area` value; otherwise
+  # fall through to the manual `getBoundingClientRect` placement below.
+  canAnchor = _ariaHasAnchor() and typeof CSS isnt 'undefined' and CSS.supports('position-area', positionArea)
+  if canAnchor
     name = "--anchor-#{floating.id or Math.random().toString(36).slice(2, 8)}"
     # If this floating element was previously paired with a different
     # trigger, clear the OLD trigger's anchor-name so we don't leave a
@@ -3372,10 +3395,10 @@ _ariaPosition = (trigger: AriaEl, floating: AriaEl, opts: AriaPositionOptions = 
     floating.style.position = 'fixed'
     floating.style.inset = 'auto'
     floating.style.margin = '0'
-    floating.style.positionArea = placement
+    floating.style.positionArea = positionArea
+    if vertical then floating.style.justifySelf = align else floating.style.alignSelf = align
     floating.style.positionTry = 'flip-block, flip-inline, flip-block flip-inline'
     floating.style.positionVisibility = 'anchors-visible'
-    [side] = placement.split(' ')
     switch side
       when 'bottom' then floating.style.marginTop = "#{offset}px"
       when 'top' then floating.style.marginBottom = "#{offset}px"
@@ -3387,8 +3410,6 @@ _ariaPosition = (trigger: AriaEl, floating: AriaEl, opts: AriaPositionOptions = 
     floating.style.position = 'fixed'
     floating.style.inset = 'auto'
     floating.style.margin = '0'
-    [side, align] = placement.split(' ')
-    align ??= 'start'
     switch side
       when 'bottom'
         floating.style.top = "#{rect.bottom + offset}px"
