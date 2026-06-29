@@ -32,5 +32,6 @@ export Input = component extends input
       $disabled: @disabled?!
       $focused: focused?!
       $touched: touched?!
+      @input
       @focusin: @onFocus
       @focusout: @onBlur

@@ -21,4 +21,5 @@ export Toggle = component
       aria-disabled: @disabled?!
       $pressed: @pressed?!
       $disabled: @disabled?!
+      @click
       slot

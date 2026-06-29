@@ -88,6 +88,8 @@ export ToggleGroup = component
     div ref: "_root", role: "group", aria-orientation: @orientation
       $orientation: @orientation
       $disabled: @disabled?!
+      @keydown
+      @focusin
 
       . ref: "_slot", style: "display:none"
         slot

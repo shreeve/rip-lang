@@ -106,4 +106,4 @@ export Tooltip = component
         $placement: @placement
         @mouseenter: (=> @_cancelHide() if @hoverable)
         @mouseleave: (=> @hide() if @hoverable)
-        @text
+        = @text

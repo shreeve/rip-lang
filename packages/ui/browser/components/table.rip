@@ -23,5 +23,5 @@ export Table = component
     div $striped: @striped?!
       table
         if @caption
-          caption @caption
+          caption "#{@caption}"
         slot

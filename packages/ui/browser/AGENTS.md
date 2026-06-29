@@ -7,8 +7,9 @@ Accessible headless widgets written in Rip. They expose `$` attributes for styli
 - use `ref: "_name"` for DOM refs; never `div._name`
 - common ref names: `_trigger`, `_list`, `_content`
 - use `_slot` with `style: "display:none"` to read child definitions
-- auto-wired root handlers use `onKeydown`, `onScroll`, etc.
-- child element handlers use underscore names like `_headerClick`
+- events bind where declared: a bare `@click`/`@keydown` on an element is shorthand for `@click: @onClick` (resolves to the `on<Event>` method), valid on the tag-head line or an element-body statement line. Defining `onClick` alone attaches nothing — put `@click` on the element it should fire from
+- handlers whose name doesn't match the event (or that take args) bind explicitly: `@keydown: @_onTriggerKeydown`, `@click: (=> @select(id))`
+- child element handlers use underscore names like `_headerClick`, bound explicitly
 - public methods do not use `_`
 - prefer `=!` for constants and `:=` only for state that should trigger updates
 - click-outside should use document `mousedown` cleanup, not backdrop divs
@@ -119,7 +120,9 @@ Method references (`@methodName`) always compile correctly in template attribute
 
 ### ARIA.listNav — popup list keyboard navigation
 
-For Select, Menu, Combobox, Autocomplete, and similar popup lists:
+For Select, Menu, Combobox, Autocomplete, and similar popup lists. The method
+name doesn't match the event, so bind it explicitly on the list element:
+`@keydown: @onListKeydown`.
 
 ```coffee
 onListKeydown: (e) ->
@@ -136,7 +139,8 @@ onListKeydown: (e) ->
 
 ### ARIA.rovingNav — inline composite keyboard navigation
 
-For RadioGroup, Tabs, Toolbar, CheckboxGroup, ToggleGroup, Accordion:
+For RadioGroup, Tabs, Toolbar, CheckboxGroup, ToggleGroup, Accordion. Since the
+method is named `onKeydown`, bind it with a bare `@keydown` on the container:
 
 ```coffee
 onKeydown: (e) ->
@@ -177,7 +181,8 @@ For any popup component. Pass lazy getters `(=> @_list)` — NOT the current val
 - `offer` and `accept` only become keywords inside components
 - use `$open`, `$selected`, etc. for data attributes
 - bare `slot` projects `this.children`; it does not create Shadow DOM
-- `@event:` on child components binds listeners to the child root element
+- a bare `@member` is no longer a text child: use `= @member` or `"#{@member}"` for text, `slot` for children
+- `@event:` (and bare `@event`) on a child component binds the listener to the child's root element
 - every component has `emit(name, detail)` which dispatches a bubbling `CustomEvent`
 - `_root` must be set on child components for `emit()` to work
 
