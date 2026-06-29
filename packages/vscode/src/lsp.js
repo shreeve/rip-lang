@@ -1212,6 +1212,7 @@ function createService(projectRoot) {
   const config = (projectRoot && tc.readProjectConfig?.(projectRoot)) || {};
   const strict = config.strict === true;
   const { typeRoots, types: ambientTypes } = tc.collectAmbientTypes(cfgDir);
+  const typeIncludes = tc.resolveTypeIncludes?.(config, cfgDir) || [];
   const settings = tc.createTypeCheckSettings(ts, {
     ...(strict ? { strict: true } : {}),
     ...(typeRoots.length ? { typeRoots } : {}),
@@ -1219,7 +1220,7 @@ function createService(projectRoot) {
   });
 
   const host = {
-    getScriptFileNames: () => [...compiled.keys()].map(toVirtual),
+    getScriptFileNames: () => [...[...compiled.keys()].map(toVirtual), ...typeIncludes],
     getScriptVersion: (f) => String(compiled.get(fromVirtual(f))?.version || 0),
     getScriptSnapshot(f) {
       const c = compiled.get(fromVirtual(f));

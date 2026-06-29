@@ -2955,9 +2955,10 @@ export type AriaPopupGuard =
 
 # The shape of `globalThis.ARIA`. Disposer (= () => void) is declared once near
 # the top of this file and reused here for every cleanup-returning helper.
-# This is the implementation contract; its consumer-facing twin is
-# ARIA_TYPE_DECLS in src/dts.js (the ambient decl `rip check` injects into files
-# that use `ARIA.`). Keep the two in sync — test/check.test.js guards the pair.
+# This is the implementation contract; its consumer-facing twin is the shipped
+# ambient `aria.d.ts` next to this file (the `declare const ARIA` a project pulls
+# in via `package.json#rip.types`). Keep the two in sync — test/check.test.js
+# guards the pair.
 export type AriaApi =
   listNav: (e: KeyboardEvent, h: AriaNavHandlers) => void
   rovingNav: (e: KeyboardEvent, h: AriaNavHandlers, orientation?: AriaOrientation) => void

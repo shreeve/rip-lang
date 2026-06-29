@@ -55,6 +55,42 @@ uses Rip the language but skips the framework can omit `index.rip`
 from its bundle entirely; the compiler doesn't care whether it's
 present.
 
+## The ambient `ARIA` type contract (`aria.d.ts`)
+
+The `ARIA` helpers are exposed as a runtime global (`globalThis.ARIA`), so
+consumers reach them with no import. Their type contract is single-sourced:
+
+- **Impl side:** `AriaApi` (+ `_aria`) in `index.rip` — the actual shapes.
+- **Consumer side:** `aria.d.ts` next to it — a hand-written ambient
+  `declare const ARIA: { ... }` shipped in the package's `files`.
+
+The two are written in different syntaxes (Rip type alias vs TS `declare`) and
+use differently-prefixed helper-type names, but every method's signature must
+match. `test/check.test.js` guards the pair both ways: a behavioral pin (real
+`rip check` over ARIA usage) **and** a textual drift guard that normalizes both
+and compares method-by-method. Edit one side → edit the other, or the guard bites.
+
+**How a consumer gets ARIA typing (zero-config).** `aria.d.ts` is advertised in
+this package's `package.json` via `rip.ambient`:
+
+```json
+{ "rip": { "ambient": ["aria.d.ts"] }, "files": ["index.rip", "aria.d.ts"] }
+```
+
+`rip check` auto-includes the ambient `.d.ts` of every declared `@rip-lang/*`
+dependency, so **just depending on `@rip-lang/app` makes `ARIA.` typed — no
+config**. It's loaded as an explicit program root (visible to every `.rip` file,
+not suppressed by the `types` compiler option). `@rip-lang/ui` gets ARIA typing
+purely through its `@rip-lang/app` peerDependency; it carries no `rip.types` line.
+
+This replaced the old behavior where the contract was regex-injected into any
+file that referenced `ARIA.` from a table buried in the compiler (`src/dts.js`).
+The win: one shipped file co-located with its impl, auto-included by dependency.
+**Residual trade-off:** a project that uses `ARIA.` but does *not* depend on
+`@rip-lang/app` (and sets no `rip.types`) gets no typing — `ARIA` is simply
+undeclared. The explicit `rip.types` escape hatch (see `docs/RIP-TYPES.md`)
+covers ad-hoc cases; both feeds dedupe by absolute path.
+
 ## How it gets into rip.min.js
 
 `scripts/build.js` reads `packages/app/index.rip`, compiles it, and

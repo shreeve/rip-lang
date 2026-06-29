@@ -168,6 +168,9 @@
         "@rip-lang/server": "workspace:^",
         "playwright": "1.58.2",
       },
+      "peerDependencies": {
+        "@rip-lang/app": "workspace:^",
+      },
     },
     "packages/validate": {
       "name": "@rip-lang/validate",
