@@ -1013,7 +1013,7 @@ def applyDuration(date, dur, sign)
 
 # ==[ Factory ]==
 
-time = (input, opts = {}) ->
+time = (input, opts = {}): Time ->
   return input.clone() if isTime(input)
   new Time({ input, utc: !!opts.utc, format: opts.format })
 
@@ -1081,4 +1081,4 @@ export age = (dob, asOf?) ->
   years
 
 export default time
-export { Time, Duration, isTime, isDuration }
+export { time, Time, Duration, isTime, isDuration }
