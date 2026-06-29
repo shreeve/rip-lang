@@ -33,7 +33,7 @@ The browser bundle (`docs/dist/rip.min.js`) is built from `src/browser.js` plus 
 | `src/error.js` | yes | runtime error formatting |
 | `src/sourcemaps.js` | yes | inline source-map generation |
 | `src/generated/dom-tags.js` | yes | HTML/SVG tag set for render-block tag detection |
-| `src/generated/dom-events.js` | yes | event-name set for `onClick`/`onKeydown` auto-wire |
+| `src/generated/dom-events.js` | yes | DOM event-name set the bare `@event` shorthand validates against |
 | `src/dts.js` | **no** | `.d.ts` emitter + intrinsic decl tables for the type system — CLI / typecheck only |
 | `src/schema/dts.js` | **no** | `.d.ts` emitter for schema declarations — CLI / typecheck only |
 | `src/typecheck.js` | **no** | TypeScript LSP integration — CLI only |
@@ -446,15 +446,30 @@ Block factories need locals and `ctx.member` references instead of `this._elN` a
 
 Factory mode is entered in `emitConditionBranch` and `emitTemplateLoop` via save/restore of `[_createLines, _setupLines, _factoryMode, _factoryVars]`.
 
-### Auto-Wired Event Handlers
+### Event Directives
 
-Methods named `onClick`, `onKeydown`, `onMouseenter`, etc. automatically bind to the root DOM element.
+Events bind where they're declared in `render`, never by method name. A bare
+`@click` is shorthand for `@click: @onClick` — a `this`-member handler that
+resolves only to a component method (never a local) — bound to the element it
+sits on. Defining `onClick` alone attaches nothing.
 
-- detection: methods matching `/^on[A-Z]/` that are not lifecycle hooks
-- event names come from the generated `src/generated/dom-events.js` list, sourced from TypeScript's `HTMLElementEventMap`
-- root only: the first generated HTML tag can claim auto-wiring
-- explicit override: `@click: handler` on the root suppresses auto-wire for that event
-- lifecycle exclusion: `onError` is not auto-wired
+- positions: a tag-head argument (`button @click`, `button x: 1, @click`) or an
+  element-body statement line (`@click` on its own line under the element). Both
+  desugar in `rewriteRender` (`isBareEventAttr` + `elementBodyLevels`); a `:`
+  before it (`value: @click`) or being nested in `()`/`[]`/`{}` excludes it.
+- name resolution: `@<event>` → `on<Event>`, capitalizing only the first letter
+  (`@keydown` → `onKeydown`, `@pointerdown` → `onPointerdown`) — not React-style
+- validation (in the emitter choke point `_checkBareEventHandler`): the name must
+  be in the generated `src/generated/dom-events.js` set, else a compile error
+  steering to `= @name`; bare `@error` is rejected (clashes with the `onError`
+  lifecycle hook — bind a DOM error listener with `@error: handler`); a missing
+  `on<Event>` method is a compile error
+- a `.`-chain (`@toast.title`) is a member path, never a bare event
+- explicit `@event: handler` takes any expression (locals, `obj.method`, inline
+  arrows) and works in any attribute position; `@event.modifier: handler` wraps
+  to a computed key
+- a bare `@member` standing as a render child (not a directive) is a compile
+  error — `= @member` / `"#{@member}"` render text, `slot` projects children
 - after bumping `typescript`, refresh the generated DOM metadata with `bun run gen:dom`
 
 ### Inherited Props (`extends <tag>`)
@@ -479,6 +494,8 @@ export Checkbox = component
     @onClick() if e.key in ['Enter', ' ']
   render
     button role: 'checkbox', aria-checked: !!@checked
+      @click
+      @keydown
       slot
 ```
 

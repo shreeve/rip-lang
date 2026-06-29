@@ -1630,9 +1630,12 @@ App = component
         "Click me"
 ```
 
-**Auto-Wired Event Handlers:**
+**Event Directives:**
 
-Methods named `on` + capitalized event name are automatically bound to the component's root element:
+Events bind on the element where you declare them — never by method name alone.
+A bare `@click` is shorthand for `@click: @onClick`: it resolves to a component
+method named `on` + the capitalized event (`@click` → `onClick`, `@keydown` →
+`onKeydown`), bound to that element:
 
 ```coffee
 Checkbox = component
@@ -1644,10 +1647,27 @@ Checkbox = component
       @onClick()
   render
     button role: 'checkbox', aria-checked: !!@checked
+      @click          # binds onClick to this button
+      @keydown        # binds onKeydown
       slot
 ```
 
-The compiler wires `addEventListener('click', ...)` and `addEventListener('keydown', ...)` to the root `button`. To override for a specific event, write an explicit binding on the root: `button @click: someOtherHandler`. Lifecycle hooks (`onError`) are not auto-wired.
+The bare form works on the tag-head line (`button @click`) or on its own line in
+the element's body. For a handler whose name doesn't match the event — or any
+inline/expression handler — use the explicit form, which accepts any expression:
+
+```coffee
+button @click: someOtherHandler
+button @keydown: @onTriggerKeydown
+button @click: (e) -> e.stopPropagation()
+```
+
+Defining `onClick` alone attaches nothing — the listener exists only where the
+template declares `@click`, so it's always visible exactly where it fires. A bare
+`@<name>` that isn't a real DOM event is a compile error (use `= @name` or
+`"#{@name}"` to render a member as text); bare `@error` is rejected because it
+collides with the `onError` lifecycle hook (write `@error: handler` for a DOM
+error listener).
 
 **Conditional Rendering:**
 
