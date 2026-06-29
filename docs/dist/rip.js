@@ -16953,7 +16953,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.17.4";
-  var BUILD_DATE = "2026-06-29@04:01:14GMT";
+  var BUILD_DATE = "2026-06-29@04:02:40GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -17389,6 +17389,7 @@ ${indented}`);
   var __effect;
   var __ripCtx;
   var __state;
+  var _aria;
   var _ariaAnchorChecked;
   var _ariaAnchorSupported;
   var _ariaBindDialog;
@@ -20740,7 +20741,8 @@ ${indented}`);
       return _result;
     };
   };
-  globalThis.__aria ??= { listNav: _ariaListNav, rovingNav: _ariaRovingNav, popupDismiss: _ariaPopupDismiss, popupGuard: _ariaPopupGuard, bindPopover: _ariaBindPopover, bindDialog: _ariaBindDialog, positionBelow: _ariaPositionBelow, trapFocus: _ariaTrapFocus, wireAria: _ariaWireAria, lockScroll: _ariaLockScroll, unlockScroll: _ariaUnlockScroll, position: _ariaPosition, hasAnchor: _ariaHasAnchor, combine: _ariaCombine };
+  _aria = { listNav: _ariaListNav, rovingNav: _ariaRovingNav, popupDismiss: _ariaPopupDismiss, popupGuard: _ariaPopupGuard, bindPopover: _ariaBindPopover, bindDialog: _ariaBindDialog, positionBelow: _ariaPositionBelow, trapFocus: _ariaTrapFocus, wireAria: _ariaWireAria, lockScroll: _ariaLockScroll, unlockScroll: _ariaUnlockScroll, position: _ariaPosition, hasAnchor: _ariaHasAnchor, combine: _ariaCombine };
+  globalThis.__aria ??= _aria;
   globalThis.ARIA ??= globalThis.__aria;
 
   // docs/dist/_entry.js
