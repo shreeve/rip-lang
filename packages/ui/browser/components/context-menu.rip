@@ -12,6 +12,8 @@
 #     div $item: "paste", "Paste"
 
 export ContextMenu = component
+  _list := null
+  _slot := null
   @disabled := false
 
   open := false
@@ -69,14 +71,14 @@ export ContextMenu = component
   render
     . @contextmenu: @_onContextMenu
 
-      . ref: "_slot", style: "display:none"
+      . ref: _slot, style: "display:none"
         slot
 
       if _triggerEl
         . innerHTML: _triggerEl.innerHTML
 
       if open
-        div ref: "_list", role: "menu", $open: true, @keydown: @_onKeydown
+        div ref: _list, role: "menu", $open: true, @keydown: @_onKeydown
           style: "position:fixed;left:#{posX}px;top:#{posY}px;z-index:50"
           for item, idx in _menuItems
             div role: "menuitem", tabIndex: -1

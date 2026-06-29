@@ -13,6 +13,8 @@
 #     a $link: true, href: "/about", "About"
 
 export NavigationMenu = component
+  _root := null
+  _slot := null
   @orientation := "horizontal"
   @hoverDelay := 200
   @hoverCloseDelay := 300
@@ -90,10 +92,10 @@ export NavigationMenu = component
         window.removeEventListener   'scroll',    onScroll, true
 
   render
-    nav ref: "_root", role: "navigation", aria-orientation: @orientation
+    nav ref: _root, role: "navigation", aria-orientation: @orientation
       $orientation: @orientation
 
-      . ref: "_slot", style: "display:none"
+      . ref: _slot, style: "display:none"
         slot
 
       for navItem, nIdx in _navItems

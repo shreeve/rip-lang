@@ -12,6 +12,7 @@ START_DELAY = 400
 TICK_DELAY  = 60
 
 export NumberField = component
+  _input := null
   @value := 0
   @min := null
   @max := null
@@ -142,7 +143,7 @@ export NumberField = component
         disabled: @disabled or (@min? and @value <= @min)
         @pointerdown: @_onDecDown
 
-      input ref: "_input", id: _id, type: "text", inputmode: "numeric"
+      input ref: _input, id: _id, type: "text", inputmode: "numeric"
         name: @name?!
         aria-roledescription: "Number field"
         aria-valuenow: @value

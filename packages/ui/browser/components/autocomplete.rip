@@ -10,6 +10,8 @@
 acCollator = new Intl.Collator(undefined, { sensitivity: 'base' })
 
 export Autocomplete = component
+  _input := null
+  _list := null
   @value := ""
   @items := []
   @placeholder := "Type to search..."
@@ -103,7 +105,7 @@ export Autocomplete = component
   render
     . $open: open?!
 
-      input ref: "_input", role: "combobox", type: "text"
+      input ref: _input, role: "combobox", type: "text"
         autocomplete: "off"
         aria-expanded: !!open
         aria-haspopup: "listbox"
@@ -115,7 +117,7 @@ export Autocomplete = component
         @input: @onInput
         @keydown: @onKeydown
 
-      div ref: "_list"
+      div ref: _list
         id: _listId
         role: "listbox"
         popover: "auto"

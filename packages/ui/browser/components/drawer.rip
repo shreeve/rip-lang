@@ -10,6 +10,7 @@
 #     p "Panel content here"
 
 export Drawer = component
+  _dialog := null
   @open := false
   @side := "right"
   @dismissable := true
@@ -59,7 +60,7 @@ export Drawer = component
 
   render
     # $side written once (was duplicated).
-    dialog ref: "_dialog"
+    dialog ref: _dialog
       hidden: not @open
       aria-hidden: (@open ? undefined : "true")
       $open: @open?!

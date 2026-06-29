@@ -8,6 +8,9 @@
 #   MultiSelect value <=> selectedColors, items: colors, placeholder: "Choose colors..."
 
 export MultiSelect = component
+  _content := null
+  _input := null
+  _list := null
   @value := []
   @items := []
   @placeholder := "Select..."
@@ -179,7 +182,7 @@ export MultiSelect = component
     )
 
   render
-    . ref: "_content", $open: open?!, $disabled: @disabled?!, @focusin, @focusout
+    . ref: _content, $open: open?!, $disabled: @disabled?!, @focusin, @focusout
 
       # Chip area + input
       . $chips: true, @click: @_onChipsClick
@@ -188,7 +191,7 @@ export MultiSelect = component
             "#{@_chipLabel(chip)}"
             button type: "button", $remove: true, aria-label: "Remove #{@_chipLabel(chip)}", @mousedown: @_onRemoveMousedown, @click: (=> @_removeChip(chip))
               "✕"
-        input ref: "_input", type: "text", autocomplete: "off"
+        input ref: _input, type: "text", autocomplete: "off"
           role: "combobox"
           aria-expanded: !!open
           aria-haspopup: "listbox"
@@ -204,7 +207,7 @@ export MultiSelect = component
           @keydown: @_onKeydown
 
       # Dropdown
-      div ref: "_list"
+      div ref: _list
         id: _listId
         role: "listbox"
         popover: "manual"

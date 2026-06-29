@@ -11,6 +11,7 @@
 #       p "User details here..."
 
 export PreviewCard = component
+  _root := null
   @delay := 400
   @closeDelay := 200
 
@@ -73,5 +74,5 @@ export PreviewCard = component
         floating.removeEventListener 'mouseleave', onLeave
 
   render
-    div ref: "_root"
+    div ref: _root
       slot

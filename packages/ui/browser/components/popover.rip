@@ -10,6 +10,7 @@
 #       p "Popover content"
 
 export Popover = component
+  _content := null
   @placement := "bottom-start"
   @offset := 4
   @disabled := false
@@ -106,6 +107,6 @@ export Popover = component
       @close()
 
   render
-    div ref: "_content"
+    div ref: _content
       @keydown
       slot

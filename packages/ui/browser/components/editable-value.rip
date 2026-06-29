@@ -11,6 +11,7 @@
 #       input type: "text", value: name, @input: (e) => name = e.target.value
 
 export EditableValue = component
+  _root := null
   @disabled := false
 
   editing := false
@@ -81,7 +82,7 @@ export EditableValue = component
       @_onSave()
 
   render
-    div ref: "_root", $editing: editing?!, $disabled: @disabled?!, $saving: saving?!
+    div ref: _root, $editing: editing?!, $disabled: @disabled?!, $saving: saving?!
       @keydown
       slot
       unless editing

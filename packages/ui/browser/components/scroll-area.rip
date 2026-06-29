@@ -11,6 +11,9 @@
 MIN_THUMB = 20
 
 export ScrollArea = component
+  _scrollbar := null
+  _thumb := null
+  _viewport := null
   @orientation := "vertical"
 
   hovering := false
@@ -132,14 +135,14 @@ export ScrollArea = component
       @mouseenter: (=> hovering = true)
       @mouseleave: (=> hovering = false)
 
-      div ref: "_viewport", $viewport: true
+      div ref: _viewport, $viewport: true
         style: "overflow:scroll;scrollbar-width:none"
         @scroll: @_onScroll
         slot
 
-      div ref: "_scrollbar", $scrollbar: true
+      div ref: _scrollbar, $scrollbar: true
         @click: @_onTrackClick
-        div ref: "_thumb", $thumb: true
+        div ref: _thumb, $thumb: true
           @pointerdown: @_onThumbDown
           @pointermove: @_onThumbMove
           @pointerup: @_onThumbUp

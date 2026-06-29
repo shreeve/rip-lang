@@ -19,6 +19,8 @@
 #       p "Content for tab two"
 
 export Tabs = component
+  _content := null
+  _tablist := null
   @active := null
   @orientation := "horizontal"
   @activation := "automatic"
@@ -100,7 +102,7 @@ export Tabs = component
 
   render
     .
-      div ref: "_tablist", role: "tablist", aria-orientation: @orientation, data-activation-direction: activationDirection, @keydown: @onKeydown
+      div ref: _tablist, role: "tablist", aria-orientation: @orientation, data-activation-direction: activationDirection, @keydown: @onKeydown
         for tab in tabs
           button role: "tab"
             data-tab: tab.dataset.tab
@@ -114,5 +116,5 @@ export Tabs = component
             @click: (=> @select(tab.dataset.tab) unless @_isDisabled(tab))
             = tab.textContent
 
-      . ref: "_content"
+      . ref: _content
         slot

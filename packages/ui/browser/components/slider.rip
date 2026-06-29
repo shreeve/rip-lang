@@ -10,6 +10,7 @@
 #   Slider value <=> range, min: 0, max: 100   (pass array for range mode)
 
 export Slider = component
+  _track := null
   @value := 0                                    # number | number[] (range mode)
   @min := 0
   @max := 100
@@ -166,7 +167,7 @@ export Slider = component
       style: "--slider-min: #{@min}; --slider-max: #{@max}"
 
       # Track
-      div ref: "_track", $track: true
+      div ref: _track, $track: true
         style: "position:relative"
         @pointerdown: @_onPointerDown
         @pointermove: @_onPointerMove

@@ -18,6 +18,7 @@
 #     div $slide: true, "Slide B"
 
 export Carousel = component
+  _content := null
   @orientation := "horizontal"
   @loop := false
   @autoplay := false
@@ -102,7 +103,7 @@ export Carousel = component
         disabled: not @loop and activeIndex <= 0
         $disabled: (not @loop and activeIndex <= 0)?!
         @click: (=> @prev())
-      div ref: "_content"
+      div ref: _content
         slot
       button $next: true, aria-label: "Next slide"
         disabled: not @loop and activeIndex >= totalSlides - 1

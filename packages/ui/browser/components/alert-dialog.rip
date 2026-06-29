@@ -13,6 +13,7 @@
 #     button @click: handleDelete, "Delete"
 
 export AlertDialog = component
+  _dialog := null
   @open := false
   @initialFocus := null
 
@@ -58,7 +59,7 @@ export AlertDialog = component
   render
     # role="alertdialog" set statically (was previously set after RAF —
     # accessibility timing gap on first paint).
-    dialog ref: "_dialog", role: "alertdialog"
+    dialog ref: _dialog, role: "alertdialog"
       hidden: not @open
       aria-hidden: (@open ? undefined : "true")
       $open: @open?!

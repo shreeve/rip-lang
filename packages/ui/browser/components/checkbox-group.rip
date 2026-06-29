@@ -11,6 +11,8 @@
 #     div $value: "lettuce", "Lettuce"
 
 export CheckboxGroup = component
+  _root := null
+  _slot := null
   @value := []
   @disabled := false
   @orientation := "vertical"
@@ -73,13 +75,13 @@ export CheckboxGroup = component
   ~> @_syncTabStops()
 
   render
-    div ref: "_root", role: "group", aria-label: @label or undefined, aria-orientation: @orientation
+    div ref: _root, role: "group", aria-label: @label or undefined, aria-orientation: @orientation
       $orientation: @orientation
       $disabled: @disabled?!
       @keydown
       @focusin
 
-      . ref: "_slot", style: "display:none"
+      . ref: _slot, style: "display:none"
         slot
 
       for opt, idx in _options

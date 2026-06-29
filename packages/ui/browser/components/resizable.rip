@@ -19,6 +19,7 @@
 #     div $panel: true, "Bottom"
 
 export Resizable = component
+  _root := null
   @orientation := "horizontal"
   @minSize := 10
   @maxSize := 90
@@ -116,7 +117,7 @@ export Resizable = component
       handle.setAttribute 'aria-orientation', @orientation
 
   render
-    div ref: "_root", $orientation: @orientation
+    div ref: _root, $orientation: @orientation
       @pointermove: @_onPointerMove
       @pointerup: @_onPointerUp
       style: "display:flex; flex-direction:#{if @orientation is 'horizontal' then 'row' else 'column'}"

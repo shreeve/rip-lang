@@ -20,6 +20,8 @@
 #     @afterEdit: (row, col, oldVal, newVal) -> null
 
 export Grid = component
+  _body := null
+  _container := null
 
   @data := []
   @columns := []
@@ -879,7 +881,7 @@ export Grid = component
       @_resizeObs.disconnect()
 
   render
-    div.grid-container ref: "_container", role: "grid", tabIndex: 0
+    div.grid-container ref: _container, role: "grid", tabIndex: 0
       $editing: editing?!
       $selecting: selecting?!
       @dblclick
@@ -904,4 +906,4 @@ export Grid = component
                   span.sort-badge
                     "#{sortInfo.ranks[ci]}"
                 span.resize-handle @mousedown: @_resizeStart
-        tbody ref: "_body"
+        tbody ref: _body

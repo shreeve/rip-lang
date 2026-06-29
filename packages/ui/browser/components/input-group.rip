@@ -13,6 +13,7 @@
 #     button $suffix: true, @click: doSearch, "Go"
 
 export InputGroup = component
+  _root := null
   @disabled := false
 
   focused := false
@@ -24,5 +25,5 @@ export InputGroup = component
     ctrl.addEventListener 'focusout', => focused = false
 
   render
-    div ref: "_root", $disabled: @disabled?!, $focused: focused?!
+    div ref: _root, $disabled: @disabled?!, $focused: focused?!
       slot

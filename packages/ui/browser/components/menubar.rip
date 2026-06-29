@@ -15,6 +15,8 @@
 #       div $item: "redo", "Redo"
 
 export Menubar = component
+  _root := null
+  _slot := null
   @disabled := false
 
   activeMenu := null
@@ -123,9 +125,9 @@ export Menubar = component
         window.removeEventListener   'scroll',    onScroll, true
 
   render
-    div ref: "_root", role: "menubar", $disabled: @disabled?!
+    div ref: _root, role: "menubar", $disabled: @disabled?!
 
-      . ref: "_slot", style: "display:none"
+      . ref: _slot, style: "display:none"
         slot
 
       for menu in _menus

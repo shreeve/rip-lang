@@ -12,6 +12,9 @@
 #     div $item: "archive", "Archive"
 
 export Menu = component
+  _list := null
+  _slot := null
+  _trigger := null
   @disabled := false
 
   open := false
@@ -114,7 +117,7 @@ export Menu = component
 
   render
     .
-      button ref: "_trigger"
+      button ref: _trigger
         aria-haspopup: "menu"
         aria-expanded: !!open
         aria-controls: _id
@@ -125,10 +128,10 @@ export Menu = component
         @keydown: @onTriggerKeydown
         triggerLabel
 
-      . ref: "_slot", style: "display:none"
+      . ref: _slot, style: "display:none"
         slot
 
-      div ref: "_list"
+      div ref: _list
         id: _id
         role: "menu"
         popover: "auto"

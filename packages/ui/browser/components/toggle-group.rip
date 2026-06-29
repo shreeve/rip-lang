@@ -11,6 +11,8 @@
 #     div $value: "right", "Right"
 
 export ToggleGroup = component
+  _root := null
+  _slot := null
   @value := null
   @disabled := false
   @multiple := false
@@ -85,13 +87,13 @@ export ToggleGroup = component
   ~> @_syncTabStops()
 
   render
-    div ref: "_root", role: "group", aria-orientation: @orientation
+    div ref: _root, role: "group", aria-orientation: @orientation
       $orientation: @orientation
       $disabled: @disabled?!
       @keydown
       @focusin
 
-      . ref: "_slot", style: "display:none"
+      . ref: _slot, style: "display:none"
         slot
 
       for item, idx in _items

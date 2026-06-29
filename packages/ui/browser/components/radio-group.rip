@@ -10,6 +10,8 @@
 #     div $value: "lg", "Large"
 
 export RadioGroup = component
+  _root := null
+  _slot := null
   @value := null
   @disabled := false
   @orientation := "vertical"
@@ -39,12 +41,12 @@ export RadioGroup = component
     }, 'both'
 
   render
-    div ref: "_root", role: "radiogroup", aria-orientation: @orientation
+    div ref: _root, role: "radiogroup", aria-orientation: @orientation
       $orientation: @orientation
       $disabled: @disabled?!
       @keydown
 
-      . ref: "_slot", style: "display:none"
+      . ref: _slot, style: "display:none"
         slot
 
       for opt, idx in _options

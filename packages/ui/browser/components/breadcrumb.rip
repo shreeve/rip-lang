@@ -15,6 +15,7 @@
 #     span $item: true, "Settings"
 
 export Breadcrumb = component
+  _content := null
   @separator := "/"
   @label := "Breadcrumb"
 
@@ -43,5 +44,5 @@ export Breadcrumb = component
 
   render
     nav aria-label: @label
-      ol ref: "_content"
+      ol ref: _content
         slot

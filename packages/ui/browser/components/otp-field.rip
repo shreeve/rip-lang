@@ -7,6 +7,7 @@
 #   OTPField length: 6, value <=> code, @complete: handleVerify
 
 export OTPField = component
+  _root := null
   @length := 6
   @value := ""
   @disabled := false
@@ -71,7 +72,7 @@ export OTPField = component
   _onFocus: (e) -> e.target.select()
 
   render
-    div ref: "_root", role: "group", aria-label: "One-time password"
+    div ref: _root, role: "group", aria-label: "One-time password"
       $disabled: @disabled?!
       $complete: (@value.length is @length)?!
       for idx in [0...@length]

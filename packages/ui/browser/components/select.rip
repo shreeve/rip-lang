@@ -16,6 +16,9 @@
 #     option value: "b", "Option B"
 
 export Select = component
+  _list := null
+  _slot := null
+  _trigger := null
   @value := null
   @placeholder := "Select..."
   @disabled := false
@@ -163,7 +166,7 @@ export Select = component
     .
 
       # Button
-      button ref: "_trigger", role: "combobox"
+      button ref: _trigger, role: "combobox"
         aria-expanded: !!open
         aria-haspopup: "listbox"
         aria-controls: open ? _listId : undefined
@@ -177,11 +180,11 @@ export Select = component
         span selectedLabel
 
       # Hidden slot for reading option definitions
-      . ref: "_slot", style: "display:none"
+      . ref: _slot, style: "display:none"
         slot
 
       # Dropdown listbox
-      div ref: "_list"
+      div ref: _list
         id: _listId
         role: "listbox"
         popover: "manual"

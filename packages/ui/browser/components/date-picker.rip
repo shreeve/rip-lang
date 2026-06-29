@@ -37,6 +37,8 @@ dpInRange = (day, from, to) ->
   t >= lo and t <= hi
 
 export DatePicker = component
+  _cal := null
+  _trigger := null
   @value := null
   @placeholder := "mm/dd/yyyy"
   @disabled := false
@@ -255,7 +257,7 @@ export DatePicker = component
     . $open: open?!, $disabled: @disabled?!, $range: @range?!
 
       # Trigger
-      button type: "button", ref: "_trigger", $trigger: true
+      button type: "button", ref: _trigger, $trigger: true
         aria-haspopup: "dialog"
         aria-expanded: !!open
         disabled: @disabled
@@ -265,7 +267,7 @@ export DatePicker = component
 
       # Calendar dropdown
       if open
-        div ref: "_cal", role: "dialog", aria-label: "Date picker", $calendar: true
+        div ref: _cal, role: "dialog", aria-label: "Date picker", $calendar: true
           style: "position:fixed;z-index:50"
           @keydown: @_onGridKeydown
 

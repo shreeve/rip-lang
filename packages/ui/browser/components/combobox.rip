@@ -10,6 +10,9 @@
 #   Combobox query <=> searchText, items: fruits, @select: handleSelect, @filter: filterFn
 
 export Combobox = component
+  _content := null
+  _input := null
+  _list := null
   @query := ""
   @items := []
   @placeholder := "Search..."
@@ -114,11 +117,11 @@ export Combobox = component
     )
 
   render
-    . ref: "_content", $open: open?!, @focusin, @focusout
+    . ref: _content, $open: open?!, @focusin, @focusout
 
       # Text input
       . style: "position:relative;display:inline-flex;align-items:center"
-        input ref: "_input", role: "combobox"
+        input ref: _input, role: "combobox"
           type: "text"
           autocomplete: "off"
           aria-expanded: !!open
@@ -138,7 +141,7 @@ export Combobox = component
             "✕"
 
       # Listbox
-      div ref: "_list"
+      div ref: _list
         id: _listId
         role: "listbox"
         popover: "auto"

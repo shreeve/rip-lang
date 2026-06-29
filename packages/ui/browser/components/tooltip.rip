@@ -12,6 +12,8 @@ lastCloseTime = 0
 GROUP_TIMEOUT = 400
 
 export Tooltip = component
+  _tip := null
+  _trigger := null
   @text := ""
   @placement := "top"
   @delay := 300
@@ -85,7 +87,7 @@ export Tooltip = component
 
   render
     .
-      div ref: "_trigger"
+      div ref: _trigger
         aria-describedby: open ? _id : undefined
         @mouseenter: @show
         @mouseleave: @hide
@@ -93,7 +95,7 @@ export Tooltip = component
         @focusout: @hide
         slot
 
-      div ref: "_tip"
+      div ref: _tip
         id: _id
         role: "tooltip"
         popover: "hint"

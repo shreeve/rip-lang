@@ -1908,20 +1908,149 @@ fail "bare @error is rejected (onError lifecycle clash)", '''
 # Ref
 # ==============================================================================
 
-code "element ref", '''
+code "static element ref writes the state cell + registers compare-and-clear", '''
   export A = component
+    canvas := null
     render
-      canvas ref: "canvas"
+      canvas ref: canvas
   ''', '''
   export const A = class extends __Component {
-    _init(props) {}
+    _init(props) {
+      this.canvas = __state(null);
+    }
     _create() {
       this._el0 = document.createElement('canvas');
-      this.canvas = this._el0;
+      this.canvas.value = this._el0;
+      (this._refCleanups ??= []).push(() => __detachRef(this.canvas, this._el0));
       return this._el0;
     }
   }
   ''', opts
+
+fail "string-name ref is rejected (state-cell refs only)", '''
+  export A = component
+    render
+      canvas ref: "canvas"
+''', "expects a state cell"
+
+fail "ref to a computed (~=) is rejected", '''
+  export A = component
+    el ~= null
+    render
+      div ref: el
+''', "not a writable state cell"
+
+fail "ref to a readonly (=!) is rejected", '''
+  export A = component
+    el =! null
+    render
+      div ref: el
+''', "must be a state cell"
+
+# Runtime ref behavior — mount with a faithful in-memory DOM. `mkDoc`
+# builds nodes tracking parentNode/childNodes/nextSibling and an
+# isConnected getter (true when an ancestor is flagged _connected), so we
+# can assert the element is BOTH non-null and connected by mounted()/effect
+# time, and nulled after unmount/detach.
+
+REF_DOM = '''
+  mkDoc = ->
+    mk = (tag) ->
+      n = { tag, childNodes: [], parentNode: null, nodeType: (if tag is '#comment' then 8 else 1), _connected: false }
+      n.appendChild = (c) ->
+        c.parentNode.removeChild(c) if c.parentNode
+        c.parentNode = n
+        n.childNodes.push c
+        c
+      n.insertBefore = (c, ref) ->
+        c.parentNode.removeChild(c) if c.parentNode
+        c.parentNode = n
+        i = if ref? then n.childNodes.indexOf(ref) else -1
+        if i >= 0 then n.childNodes.splice(i, 0, c) else n.childNodes.push c
+        c
+      n.removeChild = (c) ->
+        i = n.childNodes.indexOf c
+        n.childNodes.splice(i, 1) if i >= 0
+        c.parentNode = null
+        c
+      n.remove = -> n.parentNode.removeChild(n) if n.parentNode
+      n.setAttribute = (k, v) -> n.attrs = (n.attrs or {}); n.attrs[k] = v
+      n.removeAttribute = (k) -> delete n.attrs[k] if n.attrs
+      n.toggleAttribute = (k, on_) -> n.setAttribute(k, '')
+      Object.defineProperty n, 'nextSibling',
+        get: ->
+          p = n.parentNode
+          return null unless p
+          i = p.childNodes.indexOf n
+          if i >= 0 and i + 1 < p.childNodes.length then p.childNodes[i + 1] else null
+      Object.defineProperty n, 'isConnected',
+        get: ->
+          x = n
+          while x
+            return true if x._connected
+            x = x.parentNode
+          false
+      n
+    { createElement: mk, createComment: (-> mk('#comment')), createTextNode: (-> mk('#text')) }
+  globalThis.document = mkDoc()
+'''
+
+test "static ref: connected element at mount, nulled on unmount", REF_DOM + "\n\n" + '''
+  result = {}
+  C = component
+    el := null
+    mounted: ->
+      result.set = @el?
+      result.connected = @el?.isConnected
+    render
+      input ref: el
+  root = document.createElement('root')
+  root._connected = true
+  inst = C.new()
+  inst.mount(root)
+  atMount = "#{result.set}/#{result.connected}"
+  inst.unmount()
+  "#{atMount}/#{inst.el.value == null}"
+''', "true/true/true"
+
+test "forwarded ref: child element fills parent-owned cell, nulled on child unmount", REF_DOM + "\n\n" + '''
+  Child = component
+    @slot := null
+    render
+      input ref: slot
+  Parent = component
+    cell := null
+    render
+      Child
+        slot <=> cell
+  root = document.createElement('root')
+  root._connected = true
+  inst = Parent.new()
+  inst.mount(root)
+  filled = inst.cell.value?.isConnected
+  inst.unmount()
+  "#{filled}/#{inst.cell.value == null}"
+''', "true/true"
+
+test "dynamic ref (if): cell filled when shown, nulled when hidden", REF_DOM + "\n\n" + '''
+  C = component
+    open := false
+    panel := null
+    render
+      div
+        if open
+          section ref: panel
+  root = document.createElement('root')
+  root._connected = true
+  inst = C.new()
+  inst.mount(root)
+  before = inst.panel.value == null
+  inst.open.value = true
+  shown = inst.panel.value?.isConnected
+  inst.open.value = false
+  after = inst.panel.value == null
+  "#{before}/#{shown}/#{after}"
+''', "true/true/true"
 
 # ==============================================================================
 # Component Runtime Behavior — test execution (no DOM needed)

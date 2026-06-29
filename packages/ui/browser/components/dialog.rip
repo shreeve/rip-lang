@@ -13,6 +13,7 @@
 #     button @click: (=> showDialog = false), "Close"
 
 export Dialog = component
+  _dialog := null
   @open := false
   @dismissable := true
   @initialFocus := null
@@ -72,7 +73,7 @@ export Dialog = component
       @_dialog?.close()
 
   render
-    dialog ref: "_dialog"
+    dialog ref: _dialog
       hidden: not @open
       aria-hidden: (@open ? undefined : "true")
       @click: @onBackdropClick

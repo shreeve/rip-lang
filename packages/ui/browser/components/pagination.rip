@@ -8,6 +8,7 @@
 #   Pagination page <=> currentPage, total: 500, perPage: 20, siblingCount: 2
 
 export Pagination = component
+  _nav := null
   @page := 1
   @total := 0
   @perPage := 10
@@ -111,7 +112,7 @@ export Pagination = component
     @_syncActive inner
 
   render
-    nav ref: "_nav", aria-label: "Pagination", @keydown: @onKeydown
+    nav ref: _nav, aria-label: "Pagination", @keydown: @onKeydown
       button $prev: true, aria-label: "Previous page"
         disabled: @page <= 1
         $disabled: (@page <= 1)?!
