@@ -5652,6 +5652,31 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         return atStatementStart(tokens[i - 3]);
       return atStatementStart(tokens[i - 2]);
     };
+    const isTypeDeclEq = (i) => {
+      let j = i - 1;
+      const g0 = tokens[j]?.[0], v0 = tokens[j]?.[1];
+      if (g0 === "COMPARE" && v0 === ">" || g0 === "SHIFT" && v0 === ">>") {
+        let depth = g0 === "SHIFT" ? 2 : 1;
+        j--;
+        while (j >= 0 && depth > 0) {
+          const g = tokens[j][0], v = tokens[j][1];
+          if (g === "COMPARE" && v === ">")
+            depth++;
+          else if (g === "SHIFT" && v === ">>")
+            depth += 2;
+          else if (g === "COMPARE" && v === "<")
+            depth--;
+          else if (g === "SHIFT" && v === "<<")
+            depth -= 2;
+          j--;
+        }
+      }
+      if (tokens[j]?.[0] !== "IDENTIFIER")
+        return false;
+      if (!(tokens[j - 1]?.[0] === "IDENTIFIER" && tokens[j - 1]?.[1] === "type"))
+        return false;
+      return atStatementStart(tokens[j - 2]);
+    };
     let inType = false, typeStartDepth = 0;
     const enterType = () => {
       inType = true;
@@ -5715,6 +5740,10 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       if (tag === "TERMINATOR" && stack.length === 0) {
         prevSiblingKV = curLineKV;
         curLineKV = false;
+      }
+      if (tag === "=" && stack.length === 0 && !inType && isTypeDeclEq(i)) {
+        enterType();
+        continue;
       }
       if (tag === ":") {
         const prev = tokens[i - 1];
@@ -17048,7 +17077,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.17.4";
-  var BUILD_DATE = "2026-06-29@07:24:29GMT";
+  var BUILD_DATE = "2026-06-29@08:31:23GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

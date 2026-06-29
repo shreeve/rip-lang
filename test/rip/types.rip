@@ -612,3 +612,24 @@ code "single-colon generic function-type-valued decl", "watchers: Set<(e: string
 code "single-colon bare typed decl (assigned later)", "r: R\nr = fn()", "let r;\nr;\nr = fn();"
 # `name: value` with no later assignment stays an object expression (not a decl).
 code "bare name: value stays an object", "mode: cfg", "({mode: cfg});"
+
+# Rip 3.17 — single-line braced structural type literal with an inline
+# function-type field. The function-type's `(e: Event)` params are PARAM-tagged
+# because `=>` follows; inside a `{ … }` on a `type X =` RHS they must NOT be
+# reclassified — a synthetic `::` landing inside the literal threw a spurious
+# "structural type literal" error. Arming `inType` across the type-decl RHS
+# leaves them as TS `:` separators. Completes commit 899becf5's type-context
+# guard (the indented `type T =` ⏎ field form was already immune).
+code "braced inline fn-type field erased", "type X = { f: (e: Event) => void }", ""
+code "braced optional fn-type field in intersection erased", "type X = HTMLElement & { f?: (e: Event) => void }", ""
+type "braced inline fn-type field dts", "type X = { f: (e: Event) => void }", """
+  type X = {
+    f :(e: Event) => void;
+  };
+  """
+# Non-regression: a value-position `=` is not a type-decl `=`, so object
+# literals (incl. ones with arrow values) are untouched — `inType` stays off.
+code "value object literal not armed", "x = { a: 1 }", "let x;\nx = {a: 1};"
+code "arrow-valued object literal not armed", "obj = { f: (e) -> e }", "obj = {f(e) { return e; }};"
+# A genuine `::` inside a braced type literal still errors (no over-suppression).
+fail "double-colon inside braced type literal", "type X = { f:: (e: Event) => void }", "single ':'"
