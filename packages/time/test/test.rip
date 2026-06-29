@@ -3,10 +3,12 @@
 # ==============================================================================
 
 import time, { Duration, age } from '../time.rip'
-import ref   from 'dayjs'
+import ref, { OpUnitType }   from 'dayjs'
 
 pass = 0
 fail = 0
+
+UNITS: OpUnitType[] = ['year', 'month', 'week', 'day', 'hour', 'minute', 'second']
 
 def test(name, fn)
   try
@@ -219,7 +221,7 @@ test "add with string unit", ->
 
 console.log "\nstartOf / endOf"
 
-for unit in ['year', 'month', 'week', 'day', 'hour', 'minute', 'second']
+for unit in UNITS
   u = unit
   test "startOf(#{u})", ->
     eq time('2026-04-19T14:30:45.123').startOf(u).format('YYYY-MM-DD HH:mm:ss.SSS'),
@@ -238,7 +240,7 @@ test "endOf month for February non-leap", ->
 
 console.log "\ndiff"
 
-for unit in ['year', 'month', 'week', 'day', 'hour', 'minute', 'second']
+for unit in UNITS
   u = unit
   test "diff(#{u})", ->
     a = '2026-04-19T10:30:00'
@@ -468,16 +470,16 @@ test "weekday() getter equals day() in US", ->
 test "weekday(1) moves to Monday", ->
   # From Sunday 2026-04-19 → Monday 2026-04-20
   d = time('2026-04-19')
-  eq d.weekday(1).format('YYYY-MM-DD'), '2026-04-20'
+  eq time(d.weekday(1)).format('YYYY-MM-DD'), '2026-04-20'
 
 test "weekday(6) moves to Saturday (same week)", ->
   # From Wednesday → Saturday of same week
   d = time('2026-04-22')   # Wed
-  eq d.weekday(6).format('YYYY-MM-DD'), '2026-04-25'
+  eq time(d.weekday(6)).format('YYYY-MM-DD'), '2026-04-25'
 
 test "weekday(0) moves to Sunday (start of week)", ->
   d = time('2026-04-22')   # Wed
-  eq d.weekday(0).format('YYYY-MM-DD'), '2026-04-19'
+  eq time(d.weekday(0)).format('YYYY-MM-DD'), '2026-04-19'
 
 # ==[ calendar ]==
 
@@ -622,11 +624,9 @@ test "time.tz.guess()", ->
 
 test "aliases resolve consistently", ->
   for short in ['ET', 'EST', 'EDT']
-    u = short
-    eq time.utc(INSTANT).tz(u).timezone(), 'America/New_York'
+    eq time.utc(INSTANT).tz(short).timezone(), 'America/New_York'
   for short in ['HT', 'HST', 'HAST']
-    u = short
-    eq time.utc(INSTANT).tz(u).timezone(), 'Pacific/Honolulu'
+    eq time.utc(INSTANT).tz(short).timezone(), 'Pacific/Honolulu'
 
 test "format tokens use zoned fields", ->
   d = time.utc(INSTANT).tz('HT')
