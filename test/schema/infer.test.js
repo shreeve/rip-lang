@@ -65,7 +65,7 @@ function tscOnShadow(tail) {
   const file = resolve(typesDir, '_infer_tmp.ts');
   writeFileSync(file, `${shadow}\n${tail}\n`);
   try {
-    execSync('bunx tsc --strict --noEmit --skipLibCheck _infer_tmp.ts', { cwd: typesDir, stdio: 'pipe' });
+    execSync('bunx tsc --ignoreConfig --strict --noEmit --skipLibCheck _infer_tmp.ts', { cwd: typesDir, stdio: 'pipe' });
     return { ok: true, out: '' };
   } catch (e) {
     return { ok: false, out: (e.stdout?.toString() || '') + (e.stderr?.toString() || '') };

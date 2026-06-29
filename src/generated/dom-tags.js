@@ -1,5 +1,5 @@
 // Generated from TypeScript's lib.dom.d.ts
-// Source: /Users/shreeve/Data/Code/rip-lang/node_modules/.bun/typescript@5.9.3/node_modules/typescript/lib/lib.dom.d.ts
+// Source: /Users/shreeve/Data/Code/rip-lang/node_modules/.bun/typescript@6.0.3/node_modules/typescript/lib/lib.dom.d.ts
 // Run: bun scripts/gen-dom.js
 
 export const HTML_TAG_NAMES = [
@@ -184,6 +184,7 @@ export const SVG_TAG_NAMES = [
 ];
 
 export const MATHML_TAG_NAMES = [
+  'a',
   'annotation',
   'annotation-xml',
   'maction',

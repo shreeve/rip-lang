@@ -8110,6 +8110,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     "change",
     "click",
     "close",
+    "command",
     "compositionend",
     "compositionstart",
     "compositionupdate",
@@ -16953,7 +16954,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.17.4";
-  var BUILD_DATE = "2026-06-29@04:02:40GMT";
+  var BUILD_DATE = "2026-06-29@05:33:13GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
