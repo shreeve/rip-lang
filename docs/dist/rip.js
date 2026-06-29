@@ -8543,6 +8543,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       let renderIndentLevel = 0;
       let currentIndent = 0;
       let pendingCallEnds = [];
+      let elementBodyLevels = [];
       let isHtmlTag = (name) => {
         let tagPart = name.split("#")[0];
         return TEMPLATE_TAGS.has(tagPart);
@@ -8607,6 +8608,34 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         }
         return tokens[j] && tokens[j][0] === "IDENTIFIER" && (isTemplateTag(tokens[j][1]) || (j === 0 || tokens[j - 1][0] === "INDENT" || tokens[j - 1][0] === "TERMINATOR" || tokens[j - 1][0] === "RENDER"));
       };
+      let explicitDepthAt = (tokens, at) => {
+        let depth = 0;
+        for (let k = at - 1;k >= 0; k--) {
+          let t = tokens[k][0];
+          if (t === ")" || t === "CALL_END" || t === "]" || t === "INDEX_END" || t === "}" || t === "MAP_END" || t === "INTERPOLATION_END" || t === "STRING_END") {
+            depth++;
+          } else if (t === "(" || t === "CALL_START" || t === "[" || t === "INDEX_START" || t === "{" || t === "MAP_START" || t === "INTERPOLATION_START" || t === "STRING_START") {
+            if (depth === 0)
+              return 1;
+            depth--;
+          } else if (t === "TERMINATOR" || t === "RENDER" || t === "INDENT" || t === "OUTDENT") {
+            break;
+          }
+        }
+        return 0;
+      };
+      let isBareEventAttr = (tokens, at) => {
+        let prev = at > 0 ? tokens[at - 1] : null;
+        if (!prev || prev[0] === ":")
+          return false;
+        if (explicitDepthAt(tokens, at) !== 0)
+          return false;
+        if (startsWithTag(tokens, at))
+          return true;
+        if ((prev[0] === "INDENT" || prev[0] === "TERMINATOR") && elementBodyLevels.includes(currentIndent))
+          return true;
+        return false;
+      };
       this.scanTokens(function(token, i, tokens) {
         let tag = token[0];
         let nextToken = i < tokens.length - 1 ? tokens[i + 1] : null;
@@ -8621,6 +8650,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         }
         if (tag === "OUTDENT") {
           currentIndent--;
+          while (elementBodyLevels.length > 0 && elementBodyLevels[elementBodyLevels.length - 1] > currentIndent) {
+            elementBodyLevels.pop();
+          }
           let inserted = 0;
           while (pendingCallEnds.length > 0 && pendingCallEnds[pendingCallEnds.length - 1] > currentIndent) {
             let callEndToken = gen2("CALL_END", ")", token);
@@ -8726,9 +8758,17 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         if (tag === "@") {
           let j = i + 1;
           if (j < tokens.length && tokens[j][0] === "PROPERTY") {
+            let eventName = String(tokens[j][1]);
             j++;
             while (j + 1 < tokens.length && tokens[j][0] === "." && tokens[j + 1][0] === "PROPERTY") {
               j += 2;
+            }
+            let hadChain = j > i + 2;
+            if (!hadChain && (j >= tokens.length || tokens[j][0] !== ":") && isBareEventAttr(tokens, i)) {
+              let handlerName = "on" + eventName[0].toUpperCase() + eventName.slice(1);
+              let nameObj = new String(handlerName);
+              nameObj.generatedBareEvent = eventName;
+              tokens.splice(j, 0, gen2(":", ":", token), gen2("@", "@", token), gen2("PROPERTY", nameObj, token));
             }
             if (j > i + 2 && j < tokens.length && tokens[j][0] === ":") {
               let openBracket = gen2("[", "[", token);
@@ -8822,12 +8862,14 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
               arrowToken.newLine = true;
               tokens.splice(i + 1, 0, callStartToken, arrowToken);
               pendingCallEnds.push(currentIndent + 1);
+              elementBodyLevels.push(currentIndent + 1);
               return 3;
             } else {
               let commaToken = gen2(",", ",", token);
               let arrowToken = gen2("->", "->", token);
               arrowToken.newLine = true;
               tokens.splice(i + 1, 0, commaToken, arrowToken);
+              elementBodyLevels.push(currentIndent + 1);
               return 3;
             }
           }
@@ -9120,14 +9162,6 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           this._gateDecls.push({ path, keyed: !!key, line: (srcLine ?? 0) + 1 });
         }
       }
-      const autoEventHandlers = new Map;
-      for (const { name } of methods) {
-        if (/^on[A-Z]/.test(name) && !LIFECYCLE_HOOKS.has(name)) {
-          const eventName = name[2].toLowerCase() + name.slice(3);
-          if (DOM_EVENTS.has(eventName))
-            autoEventHandlers.set(eventName, name);
-        }
-      }
       const inheritsTag = rest[0]?.valueOf?.() ?? null;
       const publicPropNames = new Set;
       for (const { name, isPublic } of stateVars)
@@ -9142,11 +9176,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       }
       const prevComponentMembers = this.componentMembers;
       const prevReactiveMembers = this.reactiveMembers;
-      const prevAutoEventHandlers = this._autoEventHandlers;
       const prevInheritsTag = this._inheritsTag;
       this.componentMembers = memberNames;
       this.reactiveMembers = reactiveMembers;
-      this._autoEventHandlers = autoEventHandlers.size > 0 ? autoEventHandlers : null;
       this._inheritsTag = inheritsTag || null;
       if (this.options.stubComponents) {
         const expandType = (t) => t ? t.replace(/::/g, ":") : null;
@@ -9301,9 +9333,6 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         }
         sl.push("  }");
         const eventMethodTypes = new Map;
-        for (const [eventName, methodName] of autoEventHandlers) {
-          eventMethodTypes.set(methodName, eventName);
-        }
         if (renderBlock) {
           const scanEvents = (node) => {
             if (!Array.isArray(node))
@@ -9836,7 +9865,6 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         sl.push("}");
         this.componentMembers = prevComponentMembers;
         this.reactiveMembers = prevReactiveMembers;
-        this._autoEventHandlers = prevAutoEventHandlers;
         this._inheritsTag = prevInheritsTag;
         return sl.join(`
 `);
@@ -10020,7 +10048,6 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       lines.push("}");
       this.componentMembers = prevComponentMembers;
       this.reactiveMembers = prevReactiveMembers;
-      this._autoEventHandlers = prevAutoEventHandlers;
       this._inheritsTag = prevInheritsTag;
       if (blockFactoriesCode) {
         return `(() => {
@@ -10066,9 +10093,6 @@ ${blockFactoriesCode}return ${lines.join(`
       this._renderLocalScope = new Set;
       this._renderTopLocals = new Set;
       this._fragChildren = new Map;
-      this._pendingAutoWire = false;
-      this._autoWireEl = null;
-      this._autoWireExplicit = null;
       this._inheritsTargetBound = false;
       const statements = this.is(body, "block") ? body.slice(1) : [body];
       const renderableCount = statements.reduce((n, s) => n + (this._isRenderBinding(s) ? 0 : 1), 0);
@@ -10081,14 +10105,12 @@ ${blockFactoriesCode}return ${lines.join(`
         rootVar = this.newElementVar("empty");
         this._createLines.push(`${rootVar} = document.createComment('');`);
       } else if (renderableCount === 1) {
-        this._pendingAutoWire = !!this._autoEventHandlers;
         let onlyRenderable = null;
         for (const stmt of statements) {
           const v = this.emitNode(stmt);
           if (v != null)
             onlyRenderable = v;
         }
-        this._pendingAutoWire = false;
         rootVar = onlyRenderable;
       } else {
         rootVar = this.newElementVar("frag");
@@ -10283,16 +10305,7 @@ ${blockFactoriesCode}return ${lines.join(`
       if (headStr === ".") {
         const [, obj, prop] = sexpr;
         if (obj === "this" && typeof prop === "string") {
-          const s = this._self;
-          if (this.reactiveMembers && this.reactiveMembers.has(prop)) {
-            const textVar3 = this.newTextVar();
-            this._createLines.push(`${textVar3} = document.createTextNode('');`);
-            this._pushEffect(`${textVar3}.data = ${s}.${prop}.value;`);
-            return textVar3;
-          }
-          const slotVar = this.newElementVar("slot");
-          this._createLines.push(`${slotVar} = ${s}.${prop} instanceof Node ? ${s}.${prop} : (${s}.${prop} != null ? document.createTextNode(String(${s}.${prop})) : document.createComment(''));`);
-          return slotVar;
+          this.error(`Bare \`@${prop}\` is not rendered as text — use \`= @${prop}\` to render it, or \`slot\` to project children`, sexpr);
         }
         const { tag, classes, id, base } = this.collectTemplateClasses(sexpr);
         if (!meta(base, "text") && tag && this.isHtmlTag(tag) && !this._isRenderLocal(tag)) {
@@ -10411,25 +10424,6 @@ ${blockFactoriesCode}return ${lines.join(`
         }
       }
     };
-    proto._claimAutoWire = function(elVar) {
-      if (!this._pendingAutoWire || !this._autoEventHandlers?.size)
-        return false;
-      this._pendingAutoWire = false;
-      this._autoWireEl = elVar;
-      this._autoWireExplicit = new Set;
-      return true;
-    };
-    proto._emitAutoWire = function(elVar, claimed) {
-      if (!claimed)
-        return;
-      for (const [eventName, methodName] of this._autoEventHandlers) {
-        if (!this._autoWireExplicit.has(eventName)) {
-          this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => __batch(() => ${this._self}.${methodName}(e)));`);
-        }
-      }
-      this._autoWireEl = null;
-      this._autoWireExplicit = null;
-    };
     proto._bindInheritedTarget = function(tag, elVar) {
       if (!this._inheritsTag || this._factoryMode || this._inheritsTargetBound)
         return;
@@ -10454,7 +10448,6 @@ ${blockFactoriesCode}return ${lines.join(`
       if (this._componentName && this._elementCount === 1 && !this._factoryMode && !this.options.skipDataPart) {
         this._createLines.push(`${elVar}.setAttribute('data-part', '${this._componentName}');`);
       }
-      const autoWireClaimed = this._claimAutoWire(elVar);
       const prevClassArgs = this._pendingClassArgs;
       const prevClassEl = this._pendingClassEl;
       if (classes.length > 0) {
@@ -10484,7 +10477,6 @@ ${blockFactoriesCode}return ${lines.join(`
         this._pendingClassArgs = prevClassArgs;
         this._pendingClassEl = prevClassEl;
       }
-      this._emitAutoWire(elVar, autoWireClaimed);
       return elVar;
     };
     proto.emitDynamicTag = function(tag, classExprs, children, staticClassArgs, id) {
@@ -10497,7 +10489,6 @@ ${blockFactoriesCode}return ${lines.join(`
       if (id)
         this._createLines.push(`${elVar}.id = '${id}';`);
       this._bindInheritedTarget(tag, elVar);
-      const autoWireClaimed = this._claimAutoWire(elVar);
       const classArgs = [...staticClassArgs || [], ...classExprs.map((e) => this.emitInComponent(e, "value"))];
       const prevClassArgs = this._pendingClassArgs;
       const prevClassEl = this._pendingClassEl;
@@ -10519,8 +10510,28 @@ ${blockFactoriesCode}return ${lines.join(`
       }
       this._pendingClassArgs = prevClassArgs;
       this._pendingClassEl = prevClassEl;
-      this._emitAutoWire(elVar, autoWireClaimed);
       return elVar;
+    };
+    proto._checkBareEventHandler = function(value, node) {
+      if (!this.is(value, ".") || value[1] !== "this")
+        return;
+      const handler = value[2];
+      const bareEvent = handler instanceof String ? handler.generatedBareEvent : null;
+      if (!bareEvent)
+        return;
+      const ev = String(bareEvent);
+      if (!DOM_EVENTS.has(ev)) {
+        this.error(`\`@${ev}\` is not a DOM event — use \`= @${ev}\` to render text, or \`@${ev}: handler\` for an explicit handler`, node);
+        return;
+      }
+      if (ev === "error") {
+        this.error("Bare `@error` is ambiguous with the onError lifecycle hook — write `@error: handler` to bind a DOM error listener explicitly", node);
+        return;
+      }
+      const name = String(handler);
+      if (this.componentMembers && !this.componentMembers.has(name)) {
+        this.error(`Bare \`@${ev}\` requires a component method \`${name}\` — define \`${name}\`, or use \`@${ev}: handler\` for an explicit handler`, node);
+      }
     };
     proto.emitAttributes = function(elVar, objExpr) {
       const inputType = extractInputType(objExpr.slice(1));
@@ -10528,9 +10539,7 @@ ${blockFactoriesCode}return ${lines.join(`
         let [, key, value] = objExpr[i];
         if (this.is(key, ".") && key[1] === "this") {
           const eventName = key[2];
-          if (this._autoWireExplicit && this._autoWireEl === elVar) {
-            this._autoWireExplicit.add(eventName);
-          }
+          this._checkBareEventHandler(value, objExpr[i]);
           if (typeof value === "string" && this.componentMembers?.has(value)) {
             this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => __batch(() => ${this._self}.${value}(e)));`);
           } else {
@@ -10672,7 +10681,6 @@ ${blockFactoriesCode}return ${lines.join(`
       return fragVar;
     };
     proto.emitConditional = function(sexpr) {
-      this._pendingAutoWire = false;
       if (sexpr.length > 4) {
         let chain = sexpr[sexpr.length - 1];
         for (let i = sexpr.length - 2;i >= 3; i--) {
@@ -10818,7 +10826,6 @@ ${blockFactoriesCode}return ${lines.join(`
 `));
     };
     proto.emitTemplateLoop = function(sexpr) {
-      this._pendingAutoWire = false;
       const [head, vars, collection, guard, step, body] = sexpr;
       const blockName = this.newBlockVar();
       const anchorVar = this.newElementVar("anchor");
@@ -10900,7 +10907,6 @@ ${blockFactoriesCode}return ${lines.join(`
       return anchorVar;
     };
     proto.emitChildComponent = function(componentName, args) {
-      this._pendingAutoWire = false;
       const instVar = this.newElementVar("inst");
       const elVar = this.newElementVar("el");
       const { propsCode, reactiveProps, eventBindings, childrenSetupLines } = this.buildComponentProps(args);
@@ -10930,6 +10936,7 @@ ${blockFactoriesCode}return ${lines.join(`
       this._createLines.push(`}`);
       this._createLines.push(`} finally { __popComponent(__prev); } }`);
       for (const { event, value } of eventBindings) {
+        this._checkBareEventHandler(value, value);
         const handlerCode = this.emitInComponent(value, "value");
         this._createLines.push(`if (${instVar}) ${elVar}.addEventListener('${event}', (e) => __batch(() => (${handlerCode})(e)));`);
       }
@@ -16945,7 +16952,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.17.4";
-  var BUILD_DATE = "2026-06-28@05:09:42GMT";
+  var BUILD_DATE = "2026-06-29@00:35:50GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

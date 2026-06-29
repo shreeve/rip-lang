@@ -18,5 +18,5 @@ export Fieldset = component
     fieldset disabled: @disabled, $disabled: @disabled?!
       if @legend
         legend $legend: true
-          @legend
+          = @legend
       slot

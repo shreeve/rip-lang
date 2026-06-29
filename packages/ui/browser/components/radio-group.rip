@@ -42,6 +42,7 @@ export RadioGroup = component
     div ref: "_root", role: "radiogroup", aria-orientation: @orientation
       $orientation: @orientation
       $disabled: @disabled?!
+      @keydown
 
       . ref: "_slot", style: "display:none"
         slot

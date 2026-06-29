@@ -114,7 +114,7 @@ export Combobox = component
     )
 
   render
-    . ref: "_content", $open: open?!
+    . ref: "_content", $open: open?!, @focusin, @focusout
 
       # Text input
       . style: "position:relative;display:inline-flex;align-items:center"
