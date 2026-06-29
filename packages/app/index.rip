@@ -2916,7 +2916,56 @@ export def launch(opts: LaunchOpts = {}): Promise<LaunchResult>
 # ARIA: https://www.w3.org/WAI/ARIA/apg/practices/keyboard-interface/
 # ==============================================================================
 
-_ariaNAV = (e, fn) ->
+# Public contract for the globalThis.ARIA helper surface (registered at the end
+# of this section). Consumers reach these through the global `ARIA` object — no
+# import — so `ARIA` is also declared ambiently in the package's .d.ts shim.
+export type AriaEl = HTMLElement | null | undefined
+export type AriaElRef = AriaEl | (() => AriaEl)
+export type AriaOrientation = 'vertical' | 'horizontal' | 'both'
+
+# Keyboard handler map for listNav/rovingNav — every key is optional; a handler
+# only runs if provided. `char` receives the printable key for typeahead.
+export type AriaNavHandlers =
+  next?: () => void
+  prev?: () => void
+  first?: () => void
+  last?: () => void
+  select?: () => void
+  dismiss?: () => void
+  tab?: () => void
+  char?: (key: string) => void
+
+export type AriaPositionOptions =
+  placement?: string
+  offset?: number
+  matchWidth?: boolean
+
+export type AriaPopupGuard =
+  block: (ms?: number) => void
+  canOpen: () => boolean
+
+# The shape of `globalThis.ARIA`. Disposer (= () => void) is declared once near
+# the top of this file and reused here for every cleanup-returning helper.
+# This is the implementation contract; its consumer-facing twin is
+# ARIA_TYPE_DECLS in src/dts.js (the ambient decl `rip check` injects into files
+# that use `ARIA.`). Keep the two in sync — test/check.test.js guards the pair.
+export type AriaApi =
+  listNav: (e: KeyboardEvent, h: AriaNavHandlers) => void
+  rovingNav: (e: KeyboardEvent, h: AriaNavHandlers, orientation?: AriaOrientation) => void
+  popupDismiss: (open: boolean, popup: AriaElRef, close: () => void, els?: AriaElRef[], repos?: (() => void) | null) => Disposer | undefined
+  popupGuard: (delay?: number) => AriaPopupGuard
+  bindPopover: (open: boolean, popover: AriaElRef, setOpen: (open: boolean) => void, source?: AriaElRef) => Disposer | undefined
+  bindDialog: (open: boolean, dialog: AriaElRef, setOpen: (open: boolean) => void, dismissable?: boolean) => Disposer | undefined
+  positionBelow: (trigger: AriaEl, popup: AriaEl, gap?: number, setVisible?: boolean) => void
+  trapFocus: (panel: Element) => Disposer
+  wireAria: (panel: AriaEl, id: string) => void
+  lockScroll: (instance: unknown) => void
+  unlockScroll: (instance: unknown) => void
+  position: (trigger: AriaEl, floating: AriaEl, opts?: AriaPositionOptions) => void
+  hasAnchor: () => boolean
+  combine: (...disposers: Array<Disposer | null | undefined>) => Disposer
+
+_ariaNAV = (e: Event, fn: (() => void) | undefined): void ->
   return unless fn
   e.preventDefault()
   e.stopPropagation()
@@ -2927,7 +2976,7 @@ if typeof document isnt 'undefined' and not globalThis.__ariaFocusTrackerBound
   document.addEventListener 'focusin', (e) -> globalThis.__ariaLastFocusedEl = e.target, true
   globalThis.__ariaFocusTrackerBound = true
 
-_ariaListNav = (e, h) ->
+_ariaListNav = (e: KeyboardEvent, h: AriaNavHandlers) ->
   return if e.isComposing               # IME guard: ignore events during CJK composition
   switch e.key
     when 'ArrowDown'          then _ariaNAV e, h.next
@@ -2957,8 +3006,8 @@ _ariaListNav = (e, h) ->
 #    a SECOND pair on top of them. Now: the first thing every call does
 #    is tear down whatever was stored on the popup, then conditionally
 #    re-attach.
-_ariaPopupDismiss = (open, popup, close, els = [], repos = null) ->
-  get = (x) -> if typeof x is 'function' then x() else x
+_ariaPopupDismiss = (open: boolean, popup: AriaElRef, close: () => void, els: AriaElRef[] = [], repos: (() => void) | null = null): Disposer | undefined ->
+  get = (x: AriaElRef): any -> if typeof x is 'function' then x() else x
   pop = get(popup)
   if pop and pop.__ariaPopupDismiss
     pop.__ariaPopupDismiss()
@@ -2979,7 +3028,7 @@ _ariaPopupDismiss = (open, popup, close, els = [], repos = null) ->
 # popupGuard — per-component reopen suppression for pointer-driven popup closes.
 # Use when the same gesture that closes a popup can otherwise refocus/reclick a
 # trigger and reopen it immediately on the tail end of that sequence.
-_ariaPopupGuard = (delay = 250) ->
+_ariaPopupGuard = (delay: number = 250): AriaPopupGuard ->
   blockedUntil = 0
   {
     block: (ms = delay) ->
@@ -2993,8 +3042,8 @@ _ariaPopupGuard = (delay = 250) ->
 # popover: element or lazy getter (=> el)
 # setOpen: callback that receives actual native open state (true/false)
 # source: optional control element or lazy getter used as popover invoker
-_ariaBindPopover = (open, popover, setOpen, source = null) ->
-  get = (x) -> if typeof x is 'function' then x() else x
+_ariaBindPopover = (open: boolean, popover: AriaElRef, setOpen: (open: boolean) => void, source: AriaElRef = null): Disposer | undefined ->
+  get = (x: AriaElRef): any -> if typeof x is 'function' then x() else x
   currentFocus = ->
     active = document.activeElement
     return active if active and active isnt document.body
@@ -3078,8 +3127,8 @@ _ariaBindPopover = (open, popover, setOpen, source = null) ->
 # dialog: dialog element or lazy getter (=> el)
 # setOpen: callback invoked when native state changes
 # dismissable: false prevents Esc/cancel close
-_ariaBindDialog = (open, dialog, setOpen, dismissable = true) ->
-  get = (x) -> if typeof x is 'function' then x() else x
+_ariaBindDialog = (open: boolean, dialog: AriaElRef, setOpen: (open: boolean) => void, dismissable: boolean = true): Disposer | undefined ->
+  get = (x: AriaElRef): any -> if typeof x is 'function' then x() else x
   currentFocus = ->
     active = document.activeElement
     return active if active and active isnt document.body
@@ -3153,7 +3202,7 @@ _ariaBindDialog = (open, dialog, setOpen, dismissable = true) ->
     el.removeEventListener 'close', onClose
     el.__ariaBindDialog = null if el.__ariaBindDialog?[0] is onCancel
 
-_ariaRovingNav = (e, h, orientation = 'vertical') ->
+_ariaRovingNav = (e: KeyboardEvent, h: AriaNavHandlers, orientation: AriaOrientation = 'vertical') ->
   return if e.isComposing               # IME guard
   vert = orientation isnt 'horizontal'
   horz = orientation isnt 'vertical'
@@ -3171,7 +3220,7 @@ _ariaRovingNav = (e, h, orientation = 'vertical') ->
 # positionBelow — position a fixed popup below its trigger with viewport flip
 # gap: pixels between trigger bottom and popup top (default 4)
 # setVisible: call visibility:visible after positioning (default true)
-_ariaPositionBelow = (trigger, popup, gap = 4, setVisible = true) ->
+_ariaPositionBelow = (trigger: AriaEl, popup: AriaEl, gap: number = 4, setVisible: boolean = true) ->
   return unless trigger and popup
   tr = trigger.getBoundingClientRect()
   popup.style.position = 'fixed'
@@ -3186,7 +3235,7 @@ _ariaPositionBelow = (trigger, popup, gap = 4, setVisible = true) ->
 # trapFocus — trap Tab key inside a panel (focus wraps first↔last)
 # Returns a cleanup function; call it when the panel closes
 _FOCUSABLE =! 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
-_ariaTrapFocus = (panel) ->
+_ariaTrapFocus = (panel: Element): Disposer ->
   handler = (e) ->
     return unless e.key is 'Tab'
     nodes: NodeListOf<HTMLElement> = panel.querySelectorAll(_FOCUSABLE)
@@ -3201,7 +3250,7 @@ _ariaTrapFocus = (panel) ->
   -> panel.removeEventListener 'keydown', handler
 
 # wireAria — auto-label a panel from its first heading and first paragraph
-_ariaWireAria = (panel, id) ->
+_ariaWireAria = (panel: AriaEl, id: string) ->
   return unless panel
   heading = panel.querySelector('h1,h2,h3,h4,h5,h6')
   if heading
@@ -3216,7 +3265,7 @@ _ariaWireAria = (panel, id) ->
 # lockScroll(instance): locks body scroll
 # unlockScroll(instance): removes from stack, restores scroll if stack empty
 _ariaModalStack: Array<{instance: unknown, scrollY: number}> = []
-_ariaLockScroll = (instance) ->
+_ariaLockScroll = (instance: unknown) ->
   scrollY = window.scrollY
   _ariaModalStack.push { instance, scrollY }
   if _ariaModalStack.length is 1
@@ -3224,7 +3273,7 @@ _ariaLockScroll = (instance) ->
     document.body.style.top = "-#{scrollY}px"
     document.body.style.width = '100%'
 
-_ariaUnlockScroll = (instance) ->
+_ariaUnlockScroll = (instance: unknown) ->
   idx = _ariaModalStack.findIndex (m) -> m.instance is instance
   return if idx < 0
   { scrollY } = _ariaModalStack.splice(idx, 1)[0]
@@ -3242,7 +3291,7 @@ _ariaUnlockScroll = (instance) ->
 # `_ariaAnchorChecked = true` after we've successfully run a real probe.
 _ariaAnchorChecked: boolean = false
 _ariaAnchorSupported: boolean = false
-_ariaHasAnchor = ->
+_ariaHasAnchor = (): boolean ->
   return _ariaAnchorSupported if _ariaAnchorChecked
   return false unless typeof document isnt 'undefined' and document.body
   try
@@ -3274,7 +3323,7 @@ _ariaResetPositionStyles = (el) ->
   for prop in _ARIA_POSITION_OWNED
     el.style[prop] = ''
 
-_ariaPosition = (trigger, floating, opts: { placement?: string, offset?: number, matchWidth?: boolean } = {}) ->
+_ariaPosition = (trigger, floating, opts: AriaPositionOptions = {}) ->
   return unless trigger and floating
   placement = opts.placement ?? 'bottom start'
   offset = opts.offset ?? 4
@@ -3346,13 +3395,13 @@ _ariaPosition = (trigger, floating, opts: { placement?: string, offset?: number,
 #       ARIA.bindPopover  open, ...
 #       ARIA.popupDismiss open, ...
 #     )
-_ariaCombine = (...disposers) ->
+_ariaCombine = (...disposers: Array<Disposer | null | undefined>): Disposer ->
   ->
     for d in disposers
       try d?()
       catch then null
 
-globalThis.__aria ??= {
+_aria: AriaApi = {
   listNav: _ariaListNav, rovingNav: _ariaRovingNav, popupDismiss: _ariaPopupDismiss, popupGuard: _ariaPopupGuard,
   bindPopover: _ariaBindPopover, bindDialog: _ariaBindDialog,
   positionBelow: _ariaPositionBelow, trapFocus: _ariaTrapFocus, wireAria: _ariaWireAria,
@@ -3360,5 +3409,6 @@ globalThis.__aria ??= {
   position: _ariaPosition, hasAnchor: _ariaHasAnchor,
   combine: _ariaCombine,
 }
+globalThis.__aria ??= _aria
 globalThis.ARIA ??= globalThis.__aria
 
