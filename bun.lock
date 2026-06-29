@@ -13,37 +13,6 @@
         "vscode-textmate": "9.3.2",
       },
     },
-    "apps/medapi": {
-      "name": "medapi",
-      "dependencies": {
-        "@rip-lang/db": "^2.1.0",
-        "@rip-lang/http": "^1.1.122",
-        "@rip-lang/server": "^1.4.26",
-        "@rip-lang/time": "^1.0.7",
-      },
-    },
-    "apps/medlabs": {
-      "name": "medlabs",
-      "dependencies": {
-        "@rip-lang/app": "^0.3.3",
-        "@rip-lang/csv": "^1.3.122",
-        "@rip-lang/db": "^2.1.2",
-        "@rip-lang/http": "^1.1.123",
-        "@rip-lang/server": "^1.4.28",
-        "@rip-lang/swarm": "^1.2.133",
-        "@rip-lang/time": "^1.0.8",
-        "@rip-lang/ui": "^0.4.25",
-        "@rip-lang/validate": "^1.0.2",
-        "rip-lang": "^3.17.4",
-      },
-    },
-    "apps/rip-dental": {
-      "name": "rip-dental",
-      "dependencies": {
-        "@rip-lang/validate": "workspace:*",
-        "@rip-lang/x12": "workspace:*",
-      },
-    },
     "examples/analytics": {
       "name": "@rip-lang/example-analytics",
       "dependencies": {
@@ -321,19 +290,11 @@
 
     "mdn-data": ["mdn-data@2.27.1", "", {}, "sha512-9Yubnt3e8A0OKwxYSXyhLymGW4sCufcLG6VdiDdUGVkPhpqLxlvP5vl1983gQjJl3tqbrM731mjaZaP68AgosQ=="],
 
-    "medapi": ["medapi@workspace:apps/medapi"],
-
-    "medlabs": ["medlabs@workspace:apps/medlabs"],
-
     "minimatch": ["minimatch@5.1.9", "", { "dependencies": { "brace-expansion": "^2.0.1" } }, "sha512-7o1wEA2RyMP7Iu7GNba9vc0RWWGACJOCZBJX2GJWip0ikV+wcOsgVuY9uE8CPiyQhkGFSlhuSkZPavN7u1c2Fw=="],
 
     "playwright": ["playwright@1.58.2", "", { "dependencies": { "playwright-core": "1.58.2" }, "optionalDependencies": { "fsevents": "2.3.2" }, "bin": { "playwright": "cli.js" } }, "sha512-vA30H8Nvkq/cPBnNw4Q8TWz1EJyqgpuinBcHET0YVJVFldr8JDNiU9LaWAE1KqSkRYazuaBhTpB5ZzShOezQ6A=="],
 
     "playwright-core": ["playwright-core@1.58.2", "", { "bin": { "playwright-core": "cli.js" } }, "sha512-yZkEtftgwS8CsfYo7nm0KE8jsvm6i/PTgVtB8DL726wNf6H2IMsDuxCpJj59KDaxCtSnrWan2AeDqM7JBaultg=="],
-
-    "rip-dental": ["rip-dental@workspace:apps/rip-dental"],
-
-    "rip-lang": ["rip-lang@3.17.4", "", { "dependencies": { "@types/bun": "1.3.14", "typescript": "5.9.3" }, "bin": { "rip": "bin/rip" } }, "sha512-zdU6N3kxULBwwXjKe+Srhtp7SQIKoVvGjxLIW3MZ/kRCAK+Nc14d0RmTw9O+/Cdx3w9hCcRvU5n6Sfinv8SHTg=="],
 
     "semver": ["semver@7.7.4", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-vFKC2IEtQnVhpT78h1Yp8wzwrf8CM+MzKMHGJZfBtzhZNycRFnXsHk6E5TxIkkMsgNS7mdX3AGB7x2QM2di4lA=="],
 
@@ -362,7 +323,5 @@
     "vscode-rip": ["vscode-rip@workspace:packages/vscode"],
 
     "vscode-textmate": ["vscode-textmate@9.3.2", "", {}, "sha512-n2uGbUcrjhUEBH16uGA0TvUfhWwliFZ1e3+pTjrkim1Mt7ydB41lV08aUvsi70OlzDWp6X7Bx3w/x3fAXIsN0Q=="],
-
-    "rip-lang/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
   }
 }

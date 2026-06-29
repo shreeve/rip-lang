@@ -6,8 +6,7 @@
   "main": "src/compiler.js",
   "workspaces": [
     "examples/*",
-    "packages/*",
-    "apps/*"
+    "packages/*"
   ],
   "catalog": {
     "typescript": "6.0.3"
