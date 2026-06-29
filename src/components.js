@@ -319,23 +319,28 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       return 0;
     };
 
-    // Is the `@` token at index `at` a bare event directive — i.e. in a
-    // position where `@name: handler` would be legal? Two cases, both requiring
-    // it not be an attribute value (`value: @x`, prev `:`) and not nested in
-    // ()/[]/{} (depth > 0):
-    //   (1) tag-head argument:      `button @click`, `button x: 1, @click`, `.card @click`
-    //   (2) element-body statement: a line starting `@click` at the direct
-    //       attribute/child indent of an open element.
+    // Is the `@` token at index `at` a bare event directive — i.e. a directive in
+    // its own right, NOT a `@member` buried inside an attribute value? It fires
+    // only at a genuine argument/attribute boundary, never inside a value
+    // expression. Requires explicit-bracket depth 0, and one of:
+    //   (1) tag-head argument: `@event` is a NEW arg, so its previous token is
+    //       the tag-expression end (IDENTIFIER like `button`/`div#id`, or a
+    //       `.class`/`#id` tail PROPERTY) or a `,` separator — AND startsWithTag
+    //       confirms tag context. A value token before it (`:`, `!`, `?`, an
+    //       operator, `(`, a string/number…) means it's an attribute VALUE
+    //       (e.g. `aria-pressed: !!@pressed`, `value: @x`) — NOT a directive.
+    //   (2) element-body statement start: a line beginning `@click` at the
+    //       direct attribute/child indent of an open element.
     // Bare `@member` is no longer a text child anywhere — `= @member` renders
-    // text — so a bare `@name` here is unconditionally a directive (the emitter
-    // errors if `name` isn't a real DOM event).
+    // text — so a bare `@name` in a directive slot is unconditionally a directive
+    // (the emitter errors if `name` isn't a real DOM event).
     let isBareEventAttr = (tokens, at) => {
       let prev = at > 0 ? tokens[at - 1] : null;
-      if (!prev || prev[0] === ':') return false;
+      if (!prev) return false;
       if (explicitDepthAt(tokens, at) !== 0) return false;
-      if (startsWithTag(tokens, at)) return true;
-      if ((prev[0] === 'INDENT' || prev[0] === 'TERMINATOR') &&
-          elementBodyLevels.includes(currentIndent)) return true;
+      let pt = prev[0];
+      if ((pt === ',' || pt === 'IDENTIFIER' || pt === 'PROPERTY') && startsWithTag(tokens, at)) return true;
+      if ((pt === 'INDENT' || pt === 'TERMINATOR') && elementBodyLevels.includes(currentIndent)) return true;
       return false;
     };
 

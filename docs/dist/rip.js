@@ -8626,13 +8626,14 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       };
       let isBareEventAttr = (tokens, at) => {
         let prev = at > 0 ? tokens[at - 1] : null;
-        if (!prev || prev[0] === ":")
+        if (!prev)
           return false;
         if (explicitDepthAt(tokens, at) !== 0)
           return false;
-        if (startsWithTag(tokens, at))
+        let pt = prev[0];
+        if ((pt === "," || pt === "IDENTIFIER" || pt === "PROPERTY") && startsWithTag(tokens, at))
           return true;
-        if ((prev[0] === "INDENT" || prev[0] === "TERMINATOR") && elementBodyLevels.includes(currentIndent))
+        if ((pt === "INDENT" || pt === "TERMINATOR") && elementBodyLevels.includes(currentIndent))
           return true;
         return false;
       };
@@ -16952,7 +16953,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.17.4";
-  var BUILD_DATE = "2026-06-29@01:56:51GMT";
+  var BUILD_DATE = "2026-06-29@04:01:14GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
