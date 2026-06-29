@@ -1260,10 +1260,18 @@ export function installComponentSupport(CodeEmitter, Lexer) {
                 const pair = obj[j];
                 if (!Array.isArray(pair) || pair.length < 2) continue;
                 const [, key, value] = pair;
-                if (Array.isArray(key) && key[0] === '.' && key[1] === 'this' &&
-                    Array.isArray(value) && value[0] === '.' && value[1] === 'this') {
+                if (Array.isArray(key) && key[0] === '.' && key[1] === 'this') {
                   const eventName = typeof key[2] === 'string' ? key[2] : key[2]?.valueOf?.();
-                  const methodName = typeof value[2] === 'string' ? value[2] : value[2]?.valueOf?.();
+                  // Handler ref may be `@event: @handler` (this-member) or the bare
+                  // `@event: handler` (member identifier) — accept either form.
+                  let methodName = null;
+                  if (Array.isArray(value) && value[0] === '.' && value[1] === 'this') {
+                    methodName = typeof value[2] === 'string' ? value[2] : value[2]?.valueOf?.();
+                  } else {
+                    const ident = (typeof value === 'string') ? value
+                                : (value instanceof String) ? value.valueOf() : null;
+                    if (ident && this.componentMembers?.has(ident)) methodName = ident;
+                  }
                   if (eventName && methodName && !eventMethodTypes.has(methodName)) {
                     eventMethodTypes.set(methodName, eventName);
                   }

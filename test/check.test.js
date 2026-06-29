@@ -1345,6 +1345,39 @@ check('AriaApi (index.rip) and aria.d.ts do not drift', async () => {
   }
 });
 
+// ── A no-`@` event binding (`@event: handler`) types the handler's param ──
+//
+// The param-typing prescan only matched the `@event: @handler` (this-member)
+// reference, so the bare `@event: handler` form fell back to implicit-any.
+// Fixed: it resolves the handler from either reference shape.
+
+check('a no-`@` event binding types the handler param from the event', async () => {
+  const r = await checkProject({
+    'box.rip': `export Box = component extends input
+  closed := false
+  onKeydown = (e) ->
+    closed = true if e.key is 'Escape'
+  render
+    input @keydown: onKeydown
+`,
+  });
+  assert(r.ok, 'expected clean check (e typed as KeyboardEvent), got:\n' + r.out);
+});
+
+check('a no-`@` event binding types the param as the specific event, not any', async () => {
+  const r = await checkProject({
+    'box.rip': `export Box = component extends input
+  closed := false
+  onKeydown = (e) ->
+    closed = true if e.clientX > 0
+  render
+    input @keydown: onKeydown
+`,
+  });
+  assert(!r.ok, 'expected an error (clientX is not on KeyboardEvent)');
+  assert(/clientX/.test(r.out), 'unexpected output:\n' + r.out);
+});
+
 // ── Drain the queued checks with bounded concurrency ──
 // Workers pull from a shared cursor; results are stored by index and printed in
 // definition order afterward, so output is deterministic regardless of which
