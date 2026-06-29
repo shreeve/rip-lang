@@ -27,10 +27,11 @@
 # ==============================================================================
 
 import { createInterface } from 'readline'
-import * as store    from './lib/store.rip'
-import * as toolset  from './lib/tools.rip'
+import * as store      from './lib/store.rip'
+import * as toolset    from './lib/tools.rip'
+import * as providers  from './lib/providers.rip'
 
-VERSION =! '1.0.0'
+VERSION =! '1.1.0'
 PROTOCOL =! '2024-11-05'
 MAX_RESPONSE =! 256_000
 
@@ -61,7 +62,7 @@ TOOLS =! [
   }
   {
     name: 'list_models'
-    description: 'Live model catalog from configured providers, merged with local capability + pricing metadata.'
+    description: 'Resolved catalog from configured providers, flagging which entry is the current "latest" per provider. Rarely needed — just pass model: "gpt" or "claude".'
     inputSchema:
       type: 'object'
       properties:
@@ -75,7 +76,7 @@ TOOLS =! [
       type: 'object'
       properties:
         prompt:        { type: 'string' }
-        model:         { type: 'string', description: '"provider:model" or alias (gpt, opus, haiku, ...).' }
+        model:         { type: 'string', description: '"gpt" (latest OpenAI) or "claude" (latest Anthropic). Defaults to "gpt". An explicit "provider:model" also works.' }
         system:        { type: 'string' }
         attachments:   ATTACHMENT_SCHEMA
         max_tokens:    { type: 'integer' }
@@ -90,7 +91,7 @@ TOOLS =! [
       properties:
         conversation_id: { type: 'string', description: 'Existing conversation, or omit to create one.' }
         message:         { type: 'string' }
-        model:           { type: 'string' }
+        model:           { type: 'string', description: '"gpt" or "claude". Defaults to "claude".' }
         system:          { type: 'string', description: 'Used only on first turn.' }
         attachments:     ATTACHMENT_SCHEMA
         independent_of:  { type: 'array', items: { type: 'string' }, description: 'Artifact / conversation labels to stay independent from.' }
@@ -100,12 +101,12 @@ TOOLS =! [
   }
   {
     name: 'panel'
-    description: 'Send the same prompt to multiple models in parallel. Optional cheap-model synthesis.'
+    description: 'Send the same prompt to multiple models in parallel. Optional synthesis. Typically models: ["gpt", "claude"].'
     inputSchema:
       type: 'object'
       properties:
         prompt:                  { type: 'string' }
-        models:                  { type: 'array', items: { type: 'string' } }
+        models:                  { type: 'array', items: { type: 'string', description: '"gpt", "claude", or "provider:model".' } }
         system:                  { type: 'string' }
         attachments:             ATTACHMENT_SCHEMA
         synthesize:              { type: 'boolean', description: 'Run synthesis over successful responses.' }
@@ -181,19 +182,29 @@ TOOLS =! [
 ]
 
 INSTRUCTIONS =! '''
-  Persistent multi-model AI consultation. Use:
-    - status / list_models     — discover what's available
+  Persistent multi-model AI consultation.
+
+  MODELS — there are exactly two, and you do NOT need to look them up:
+    - "gpt"    → the latest OpenAI flagship
+    - "claude" → the latest Anthropic flagship
+  Pass model: "gpt" or model: "claude", or omit model to take the default
+  (chat → gpt, discuss → claude). The server resolves each alias to the newest
+  released model live and caches it — skip list_models unless you specifically
+  want the resolved version string.
+
+  Tools:
     - chat                     — one-shot second opinion
     - discuss                  — multi-turn collaboration with state across restarts
-    - panel                    — fan out to several models, optional synthesis
+    - panel                    — fan out to both models, optional synthesis
     - fresh_review             — independent review with coauthor exclusion
+    - status / list_models     — server info / resolved catalog (rarely needed)
     - list_/get_/delete_/export_/redact_conversation — manage stored conversations
 
   Conversations persist on disk and survive server restarts. Attachments are
   loaded once and content-addressed; pass them again on later turns and the
   server will detect changes since the peer's last view.
 
-  When relaying peer feedback, attribute it (e.g. "GPT-5.5 suggests…").
+  When relaying peer feedback, attribute it (e.g. "GPT suggests…", "Claude suggests…").
 '''
 
 # ==============================================================================
@@ -285,6 +296,8 @@ main = ->
 
   log "v#{VERSION} ready (db=#{s.dbPath})"
   log "store recovered from corruption" if s.recovered
+
+  providers.warmLatest()  # background-resolve latest gpt/claude so the first call is instant
 
   rl = createInterface({ input: process.stdin })
   rl.on 'line', (line) ->

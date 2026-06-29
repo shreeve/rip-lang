@@ -1,132 +1,315 @@
 # ==============================================================================
-# providers.rip — registry, pricing, capability metadata, model catalog
+# providers.rip — registry, pricing, latest-model autodetect, model catalog
+#
+# Only two logical models are exposed: the latest OpenAI flagship (`gpt`) and
+# the latest Anthropic flagship (`claude`). Both are resolved live from each
+# provider's /models API — the newest version within the flagship family — and
+# cached so the hot path never pays for a network round-trip.
 #
 # Public API:
-#   parseModel(spec)             — "provider:model" or alias → { provider, model, id }
-#   defaults()                   — default chat / discuss / synthesis / fresh_review IDs
+#   parseModel(spec)             — alias or "provider:model" → { provider, model, id }
+#   resolveModel!(spec, fb)      — async; refreshes a stale `latest` alias first
+#   ensureLatest!(provider)      — async; refresh + cache the latest flagship id
+#   warmLatest()                 — fire-and-forget background refresh (both providers)
+#   defaults()                   — default chat / discuss / synthesis / fresh_review aliases
 #   credentialStatus()           — { openai: {available, source}, anthropic: ... }
 #   priceFor(id)                 — { input_per_million, output_per_million } | null
 #   computeCost(id, tin, tout)   — number (usd)
 #   estimateInputTokens(text)    — rough int (chars / 4)
 #   listAll(opts)                — { models, fetched_at, cache: { hit, ttl_seconds } }
-#   chat(opts)                   — dispatch to adapter, compute cost, return normalized
+#   chat!(opts)                  — dispatch to adapter, compute cost, return normalized
 # ==============================================================================
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import * as cred       from './credentials.rip'
 import * as openai     from './openai.rip'
 import * as anthropic  from './anthropic.rip'
 
 home = process.env.HOME or process.env.USERPROFILE or ''
-ROOT_DIR =! join(home, '.config', 'rip-ai')
-DISK_CACHE =! join(ROOT_DIR, 'models.json')
+ROOT_DIR    =! join(home, '.config', 'rip-ai')
+DISK_CACHE  =! join(ROOT_DIR, 'models.json')
+LATEST_FILE =! join(ROOT_DIR, 'latest.json')
 
 MEMORY_TTL_MS =! 5 * 60 * 1000
-DISK_TTL_MS   =! 24 * 60 * 60 * 1000
+LATEST_TTL_MS =! 12 * 60 * 60 * 1000
 
 ADAPTERS =! { openai, anthropic }
 
 # ==============================================================================
-# Local metadata — pricing + capabilities
-# Pricing is per 1M tokens (USD). Numbers are approximate; user should
-# update as providers change their public rates.
+# Flagship families + fallbacks
+#
+# "latest" = the highest-versioned model id in the live catalog that matches the
+# flagship pattern below. Change FAMILY only if a provider renames its flagship
+# tier (e.g. Anthropic moving off `opus`). SEED is the cold-start / offline
+# fallback — a live refresh overrides it, so it only needs to be a sane default.
 # ==============================================================================
 
-LOCAL_META =! {
-  'openai:gpt-5.5':           { tier: 'frontier', context: 400000, tool_use: true,  strengths: ['reasoning', 'coding', 'review'],   pricing: { input_per_million: 5,  output_per_million: 15 } }
-  'openai:gpt-5.5-mini':      { tier: 'cheap',    context: 400000, tool_use: true,  strengths: ['fast', 'extraction', 'synthesis'], pricing: { input_per_million: 0.4, output_per_million: 1.2 } }
-  'openai:gpt-5.4':           { tier: 'frontier', context: 256000, tool_use: true,  strengths: ['reasoning', 'coding'],              pricing: { input_per_million: 5,  output_per_million: 15 } }
-  'openai:gpt-5.4-mini':      { tier: 'cheap',    context: 128000, tool_use: false, strengths: ['fast'],                              pricing: { input_per_million: 0.3, output_per_million: 1.0 } }
-  'anthropic:claude-fable-5':     { tier: 'frontier', context: 1000000, tool_use: true, strengths: ['reasoning', 'coding', 'review'], pricing: { input_per_million: 10, output_per_million: 50 } }
-  'anthropic:claude-opus-4-7':    { tier: 'frontier', context: 200000, tool_use: true,  strengths: ['coding', 'long-doc review'],     pricing: { input_per_million: 15, output_per_million: 75 } }
-  'anthropic:claude-opus-4-6':    { tier: 'frontier', context: 200000, tool_use: true,  strengths: ['coding', 'long-doc review'],     pricing: { input_per_million: 15, output_per_million: 75 } }
-  'anthropic:claude-sonnet-4-5':  { tier: 'mid',      context: 200000, tool_use: true,  strengths: ['fast coding', 'review'],          pricing: { input_per_million: 3,  output_per_million: 15 } }
-  'anthropic:claude-haiku-4-1':   { tier: 'cheap',    context: 200000, tool_use: true,  strengths: ['fast', 'synthesis', 'extraction'],pricing: { input_per_million: 1,  output_per_million: 5 } }
+FAMILY =! {
+  openai:    /^gpt-\d+(?:\.\d+)*$/           # gpt-5.5, gpt-6 — excludes -mini, -nano, dated snapshots
+  anthropic: /^claude-opus-\d+(?:[-.]\d+)*$/ # claude-opus-4-8 — excludes sonnet, haiku, fable
 }
 
-ALIASES =! {
-  'gpt':                'openai:gpt-5.5'
-  'gpt-5':              'openai:gpt-5.5'
-  'gpt-5.5':            'openai:gpt-5.5'
-  'gpt-5.5-mini':       'openai:gpt-5.5-mini'
-  'mini':               'openai:gpt-5.5-mini'
-  'gpt-5.4':            'openai:gpt-5.4'
-  'gpt-5.4-mini':       'openai:gpt-5.4-mini'
-  'openai':             'openai:gpt-5.5'
-  'claude':             'anthropic:claude-opus-4-7'
-  'fable':              'anthropic:claude-fable-5'
-  'fable-5':            'anthropic:claude-fable-5'
-  'claude-fable':       'anthropic:claude-fable-5'
-  'claude-fable-5':     'anthropic:claude-fable-5'
-  'opus':               'anthropic:claude-opus-4-7'
-  'claude-opus':        'anthropic:claude-opus-4-7'
-  'claude-opus-4-7':    'anthropic:claude-opus-4-7'
-  'claude-opus-4-6':    'anthropic:claude-opus-4-6'
-  'claude-sonnet':      'anthropic:claude-sonnet-4-5'
-  'claude-sonnet-4-5':  'anthropic:claude-sonnet-4-5'
-  'sonnet':             'anthropic:claude-sonnet-4-5'
-  'claude-haiku':       'anthropic:claude-haiku-4-1'
-  'claude-haiku-4-1':   'anthropic:claude-haiku-4-1'
-  'haiku':              'anthropic:claude-haiku-4-1'
-  'anthropic':          'anthropic:claude-opus-4-7'
+SEED =! {
+  openai:    'openai:gpt-5.5'
+  anthropic: 'anthropic:claude-opus-4-8'
 }
 
-DEFAULT_CHAT      =! 'openai:gpt-5.5'
-DEFAULT_DISCUSS   =! 'anthropic:claude-opus-4-7'
-DEFAULT_SYNTHESIS =! 'openai:gpt-5.5-mini'
-DEFAULT_FRESH     =! 'openai:gpt-5.5'
+# Per-flagship pricing (USD per 1M tokens). Provider-scoped so autodetected
+# successors inherit it without a code change; update when public rates move.
+PRICING =! {
+  openai:    { input_per_million: 5,  output_per_million: 15 }
+  anthropic: { input_per_million: 15, output_per_million: 75 }
+}
+
+# The only aliases. Everything else must be an explicit "provider:model".
+LATEST_ALIASES =! {
+  'gpt':           'openai'
+  'chatgpt':       'openai'
+  'openai':        'openai'
+  'gpt-latest':    'openai'
+  'claude':        'anthropic'
+  'anthropic':     'anthropic'
+  'opus':          'anthropic'
+  'claude-latest': 'anthropic'
+}
 
 export defaults = ->
-  chat: DEFAULT_CHAT
-  discuss: DEFAULT_DISCUSS
-  synthesis: DEFAULT_SYNTHESIS
-  fresh_review: DEFAULT_FRESH
+  chat:         'gpt'
+  discuss:      'claude'
+  synthesis:    'gpt'
+  fresh_review: 'gpt'
 
 # ==============================================================================
 # Credentials
 # ==============================================================================
+
+providerEnvKey = (providerName) ->
+  switch providerName
+    when 'openai'    then 'OPENAI_API_KEY'
+    when 'anthropic' then 'ANTHROPIC_API_KEY'
+    else null
 
 export credentialStatus = ->
   openai:    { available: cred.has('OPENAI_API_KEY'),    source: cred.source('OPENAI_API_KEY') }
   anthropic: { available: cred.has('ANTHROPIC_API_KEY'), source: cred.source('ANTHROPIC_API_KEY') }
 
 # ==============================================================================
+# Latest-model resolution (memory + disk cache)
+# ==============================================================================
+
+latestMem = {}
+latestInflight = {}
+
+readLatestDisk = ->
+  return null unless existsSync(LATEST_FILE)
+  try
+    JSON.parse(readFileSync(LATEST_FILE, 'utf-8'))
+  catch
+    null
+
+# A cached entry is trustworthy only if its id is well-formed and still matches
+# the flagship family — guards against a corrupt or stale-family cache file.
+validLatest = (provider, entry) ->
+  return false unless entry?.id and FAMILY[provider]
+  idx = String(entry.id).indexOf(':')
+  return false unless idx > 0
+  entry.id.slice(0, idx) is provider and FAMILY[provider].test(entry.id.slice(idx + 1))
+
+# Lazily load a provider's disk entry into memory once, ignoring invalid entries.
+hydrate = (provider) ->
+  return if latestMem[provider]
+  entry = readLatestDisk()?[provider]
+  latestMem[provider] = entry if validLatest(provider, entry)
+
+# Merge with whatever is already on disk so refreshing one provider never drops
+# another provider's cached entry.
+persistLatest = ->
+  try
+    mkdirSync(ROOT_DIR, { recursive: true, mode: 0o700 }) unless existsSync(ROOT_DIR)
+    merged = { ...(readLatestDisk() or {}), ...latestMem }
+    latestMem = merged
+    writeFileSync(LATEST_FILE, JSON.stringify(merged, null, 2), { mode: 0o600 })
+
+resolveLatestCached = (provider) ->
+  hydrate(provider)
+  latestMem[provider]?.id or SEED[provider]
+
+isLatestStale = (provider) ->
+  hydrate(provider)
+  entry = latestMem[provider]
+  return true unless entry?.resolved_at
+  (Date.now() - (Date.parse(entry.resolved_at) or 0)) > LATEST_TTL_MS
+
+# A trailing -YYYYMMDD snapshot date must not act as a version component, or an
+# old dated build (…-4-20250514) would outrank a newer clean release (…-4-8).
+DATE_SUFFIX =! /-(\d{8})$/
+
+modelParts = (name) ->
+  s = String(name)
+  m = s.match(DATE_SUFFIX)
+  base = if m then s.slice(0, m.index) else s
+  version: (base.match(/\d+/g) or []).map(Number)
+  date:    if m then Number(m[1]) else 0
+
+# Returns >0 when version a is newer than b.
+cmpVersion = (a, b) ->
+  len = Math.max(a.length, b.length)
+  for i in [0...len]
+    av = a[i] or 0
+    bv = b[i] or 0
+    return av - bv if av isnt bv
+  0
+
+# Newest = highest semantic version; ties broken by the newer snapshot date.
+pickLatest = (rows, re) ->
+  best = null
+  bestP = null
+  for row in rows
+    name = row.provider_model or ''
+    continue unless re.test(name)
+    parts = modelParts(name)
+    cmp = if best then cmpVersion(parts.version, bestP.version) else 1
+    if cmp > 0 or (cmp is 0 and parts.date > bestP.date)
+      best = row
+      bestP = parts
+  best
+
+refreshLatest = (provider) ->
+  try
+    rows = ADAPTERS[provider].listModels!
+    best = pickLatest(rows, FAMILY[provider])
+    if best
+      latestMem[provider] =
+        id: best.id
+        provider_model: best.provider_model
+        resolved_at: new Date().toISOString()
+      persistLatest()
+      return best.id
+  catch err
+    console.error "[rip-ai] latest #{provider} refresh failed: #{err.message}"
+  resolveLatestCached(provider)
+
+# Refresh the cached flagship id for one provider if stale; always returns an id
+# (live → cache → SEED). Network is touched at most once per LATEST_TTL_MS, and
+# concurrent callers (startup warm + first request) share one in-flight refresh.
+export ensureLatest = (key) ->
+  provider = LATEST_ALIASES[key] or key
+  return resolveLatestCached(provider) unless ADAPTERS[provider] and FAMILY[provider]
+  return resolveLatestCached(provider) unless cred.has(providerEnvKey(provider))
+  return resolveLatestCached(provider) unless isLatestStale(provider)
+  unless latestInflight[provider]
+    latestInflight[provider] = refreshLatest(provider).finally -> delete latestInflight[provider]
+  await latestInflight[provider]  # awaiting a stored promise value — `!` would wrongly call it
+
+export warmLatest = ->
+  for provider in Object.keys(ADAPTERS)
+    continue unless cred.has(providerEnvKey(provider))
+    ensureLatest(provider).catch (err) ->
+      console.error "[rip-ai] warm #{provider} failed: #{err.message}"
+  null
+
+# ==============================================================================
 # Model parsing
 # ==============================================================================
 
-export parseModel = (spec) ->
-  raise "model required" unless spec
-  s = String(spec).trim()
-  raise "empty model" unless s.length
-  alias = ALIASES[s.toLowerCase()]
-  s = alias if alias
+parseConcrete = (s) ->
   idx = s.indexOf(':')
-  raise "unknown model alias: #{spec}" if idx < 1
+  raise "unknown model: #{s}" if idx < 1
   provider = s.slice(0, idx)
   model = s.slice(idx + 1)
   raise "unsupported provider: #{provider}" unless ADAPTERS[provider]
   { provider, model, id: "#{provider}:#{model}" }
 
+# Synchronous: `latest` aliases resolve from cache (may be SEED until warmed).
+export parseModel = (spec) ->
+  raise "model required" unless spec
+  s = String(spec).trim()
+  raise "empty model" unless s.length
+  key = LATEST_ALIASES[s.toLowerCase()]
+  return parseConcrete(resolveLatestCached(key)) if key
+  parseConcrete(s)
+
+# Async: a `latest` alias gets a freshness check (one network call if stale)
+# before resolving; concrete specs go straight through.
+export resolveModel = (spec, fallback) ->
+  raw = spec or fallback or 'gpt'
+  s = String(raw).trim()
+  key = LATEST_ALIASES[s.toLowerCase()]
+  if key
+    id = ensureLatest! key
+    return parseConcrete(id)
+  parseModel(raw)
+
 # ==============================================================================
 # Pricing + cost
 # ==============================================================================
 
+# Pricing covers the flagship family only. An explicit non-flagship pin
+# (e.g. a cheaper mini/haiku) has unknown rates here → null (cost reports 0,
+# and it can't be falsely rejected by a max_cost_usd preflight at flagship rates).
 export priceFor = (id) ->
-  LOCAL_META[id]?.pricing or null
+  return null unless id
+  idx = String(id).indexOf(':')
+  return null unless idx > 0
+  provider = id.slice(0, idx)
+  model = id.slice(idx + 1)
+  return null unless PRICING[provider] and FAMILY[provider]
+  return PRICING[provider] if FAMILY[provider].test(model)
+  null
 
 export estimateInputTokens = (text) ->
   return 0 unless text
   Math.ceil(String(text).length / 4)
 
 export computeCost = (id, tokensIn, tokensOut) ->
-  p = priceFor(id)
-  return 0 unless p
-  ((tokensIn or 0) / 1_000_000) * p.input_per_million +
-  ((tokensOut or 0) / 1_000_000) * p.output_per_million
+  price = priceFor(id)
+  return 0 unless price
+  ((tokensIn or 0) / 1_000_000) * price.input_per_million +
+  ((tokensOut or 0) / 1_000_000) * price.output_per_million
 
 # ==============================================================================
-# Catalog cache (memory + disk)
+# Usage formatting — a structured breakdown + a one-line human summary
+# ==============================================================================
+
+fmtInt = (n) -> Number(n or 0).toLocaleString('en-US')
+
+fmtCost = (c) ->
+  v = Number(c or 0)
+  if v >= 1 then "$#{v.toFixed(2)}" else "$#{v.toFixed(4)}"
+
+# Takes a chat result / usage-like object and returns the normalized usage
+# object plus a `.summary` string, e.g.
+#   "12,525 in · 7,290 out (3,200 reasoning + 4,090 answer) · $0.1720"
+export formatUsage = (u = {}) ->
+  tin       = u.tokens_in        or 0
+  tout      = u.tokens_out       or 0
+  reasoning = u.reasoning_tokens or 0
+  cached    = u.cached_tokens    or 0
+  cost      = u.cost_usd         or 0
+
+  outPart =
+    if reasoning > 0
+      answer = Math.max(0, tout - reasoning)
+      "#{fmtInt(tout)} out (#{fmtInt(reasoning)} reasoning + #{fmtInt(answer)} answer)"
+    else
+      "#{fmtInt(tout)} out"
+
+  segs = ["#{fmtInt(tin)} in", outPart]
+  segs.push "#{fmtInt(cached)} cached input" if cached > 0
+  segs.push fmtCost(cost)
+
+  {
+    tokens_in: tin
+    tokens_out: tout
+    reasoning_tokens: reasoning
+    cached_tokens: cached
+    cost_usd: cost
+    summary: segs.join(' · ')
+  }
+
+# ==============================================================================
+# Catalog cache (memory + disk) — informational; selection no longer needs it
 # ==============================================================================
 
 memCache = null
@@ -135,8 +318,7 @@ memFetchedAt = 0
 readDiskCache = ->
   return null unless existsSync(DISK_CACHE)
   try
-    raw = readFileSync(DISK_CACHE, 'utf-8')
-    JSON.parse(raw)
+    JSON.parse(readFileSync(DISK_CACHE, 'utf-8'))
   catch
     null
 
@@ -146,47 +328,30 @@ writeDiskCache = (payload) ->
     writeFileSync(DISK_CACHE, JSON.stringify(payload, null, 2), { mode: 0o600 })
 
 mergeMeta = (live) ->
-  byId = {}
-  knownIds = Object.keys(LOCAL_META)
-  for id in knownIds
-    meta = LOCAL_META[id]
-    [provider, model] = id.split(':')
-    byId[id] =
-      id: id
+  # Flag is_latest from the live rows themselves, so a forced refresh reflects
+  # what was actually fetched rather than a possibly-seeded cache.
+  latestIds = new Set()
+  for provider in Object.keys(ADAPTERS)
+    continue unless FAMILY[provider]
+    rows = live.filter (entry) -> String(entry.id).split(':')[0] is provider
+    best = pickLatest(rows, FAMILY[provider])
+    latestIds.add(best.id) if best
+  rows = for entry in live
+    [provider, model] = entry.id.split(':')
+    {
+      id: entry.id
       provider: provider
       provider_model: model
-      display: model
-      available: false
-      tool_use: meta.tool_use
-      context: meta.context
-      tier: meta.tier
-      strengths: meta.strengths
-      pricing: meta.pricing
-      source: 'local'
-  for entry in live
-    existing = byId[entry.id]
-    if existing
-      existing.available = true
-      existing.created_at = entry.created_at if entry.created_at
-      existing.source = 'live+local'
-    else
-      [provider, model] = entry.id.split(':')
-      byId[entry.id] =
-        id: entry.id
-        provider: provider
-        provider_model: model
-        display: model
-        available: true
-        tool_use: false
-        context: null
-        tier: 'unknown'
-        strengths: []
-        pricing: null
-        created_at: entry.created_at
-        source: 'live'
-  Object.values(byId).sort (a, b) ->
-    return -1 if a.tier is 'frontier' and b.tier isnt 'frontier'
-    return 1  if b.tier is 'frontier' and a.tier isnt 'frontier'
+      display: entry.raw?.display_name or model
+      available: true
+      is_latest: latestIds.has(entry.id)
+      pricing: priceFor(entry.id)
+      created_at: entry.created_at or null
+      source: 'live'
+    }
+  rows.sort (a, b) ->
+    return -1 if a.is_latest and not b.is_latest
+    return 1  if b.is_latest and not a.is_latest
     a.id.localeCompare(b.id)
 
 fetchLive = (providerName) ->
@@ -197,12 +362,6 @@ fetchLive = (providerName) ->
   catch err
     console.error "[rip-ai] #{providerName} listModels failed: #{err.message}"
     []
-
-providerEnvKey = (providerName) ->
-  switch providerName
-    when 'openai'    then 'OPENAI_API_KEY'
-    when 'anthropic' then 'ANTHROPIC_API_KEY'
-    else null
 
 export listAll = (opts = {}) ->
   filter = opts.provider or null
@@ -241,15 +400,8 @@ export listAll = (opts = {}) ->
 # Unified chat dispatch
 # ==============================================================================
 
-export resolveModel = (spec, fallback) ->
-  if spec
-    return parseModel(spec)
-  if fallback
-    return parseModel(fallback)
-  parseModel(DEFAULT_CHAT)
-
 export chat = (opts) ->
-  { provider, model, id } = resolveModel(opts.model, opts.fallback)
+  { provider, model, id } = resolveModel! opts.model, opts.fallback
   adapter = ADAPTERS[provider]
   raise "unsupported provider: #{provider}" unless adapter
 
@@ -266,6 +418,8 @@ export chat = (opts) ->
 
   cost = computeCost(id, result.tokens_in, result.tokens_out)
   warnings = []
+  if result.finish_reason is 'length' and result.text
+    warnings.push "response truncated (finish_reason=length); raise max_tokens for a complete answer"
   if opts.max_cost_usd and cost > opts.max_cost_usd
     warnings.push "actual cost $#{cost.toFixed(4)} exceeded cap $#{Number(opts.max_cost_usd).toFixed(4)}"
 
@@ -276,6 +430,8 @@ export chat = (opts) ->
     text: result.text
     tokens_in:  result.tokens_in
     tokens_out: result.tokens_out
+    reasoning_tokens: result.reasoning_tokens or 0
+    cached_tokens:    result.cached_tokens or 0
     cost_usd:   cost
     finish_reason: result.finish_reason
     warnings:   warnings
@@ -292,9 +448,9 @@ joinForEstimate = (opts) ->
 
 checkCostCap = (id, tokensInEstimate, cap) ->
   return { ok: true } unless cap
-  p = priceFor(id)
-  return { ok: true } unless p
-  minInputCost = (tokensInEstimate / 1_000_000) * p.input_per_million
+  price = priceFor(id)
+  return { ok: true } unless price
+  minInputCost = (tokensInEstimate / 1_000_000) * price.input_per_million
   if minInputCost > cap
     return { error: "estimated input cost $#{minInputCost.toFixed(4)} exceeds max_cost_usd $#{Number(cap).toFixed(4)}" }
   { ok: true }
