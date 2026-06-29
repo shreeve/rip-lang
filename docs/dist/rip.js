@@ -5075,6 +5075,58 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
   }
 
   // src/types.js
+  var CAST_LHS_ENDERS = new Set([
+    "IDENTIFIER",
+    "PROPERTY",
+    "NUMBER",
+    "STRING",
+    "STRING_END",
+    "REGEX",
+    "REGEX_END",
+    "BOOL",
+    "NULL",
+    "UNDEFINED",
+    "INFINITY",
+    "NAN",
+    "JS",
+    ")",
+    "CALL_END",
+    "PARAM_END",
+    "]",
+    "INDEX_END",
+    "}",
+    "THIS",
+    "SUPER",
+    "?",
+    "PRESENCE",
+    "CAST"
+  ]);
+  var CAST_TYPE_STARTERS = new Set([
+    "IDENTIFIER",
+    "(",
+    "CALL_START",
+    "PARAM_START",
+    "{",
+    "[",
+    "INDEX_START",
+    "STRING",
+    "STRING_START",
+    "NUMBER",
+    "BOOL",
+    "NULL",
+    "UNDEFINED",
+    "-",
+    "UNARY"
+  ]);
+  function isCastAs(tokens, i) {
+    let prev = tokens[i - 1];
+    if (!prev || prev[0] === "." || prev[0] === "?.")
+      return false;
+    if (!CAST_LHS_ENDERS.has(prev[0]))
+      return false;
+    let next = tokens[i + 1];
+    return !!next && CAST_TYPE_STARTERS.has(next[0]);
+  }
   function installTypeSupport(Lexer) {
     let proto = Lexer.prototype;
     proto.rewriteTypes = function() {
@@ -5095,6 +5147,27 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       };
       this.scanTokens((token, i, tokens2) => {
         let tag = token[0];
+        if (tag === "IDENTIFIER" && token[1] === "as" && !token.data?.bang && isCastAs(tokens2, i)) {
+          let typeTokens = collectTypeExpression(tokens2, i + 1, { castContext: true });
+          if (typeTokens.length > 0) {
+            let typeStr = buildTypeString(typeTokens);
+            for (let tt of typeTokens) {
+              if (tt[0] === "IDENTIFIER")
+                typeRefNames.add(tt[1]);
+            }
+            let carrier = tokens2[i - 1];
+            if (!carrier.data)
+              carrier.data = {};
+            (carrier.data.cast ??= []).push(typeStr);
+            tokens2.splice(i, 1 + typeTokens.consumed);
+            let follow = tokens2[i];
+            if (follow && follow[0] !== "TERMINATOR" && follow[0] !== "INDENT" && follow.loc?.r != null && carrier.loc?.r != null && follow.loc.r > carrier.loc.r) {
+              tokens2.splice(i, 0, gen("TERMINATOR", `
+`, follow));
+            }
+            return 0;
+          }
+        }
         if (tag === "IDENTIFIER") {
           let next = tokens2[i + 1];
           if (next && next[0] === "COMPARE" && next[1] === "<" && !next.spaced) {
@@ -5797,6 +5870,12 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         }
         break;
       }
+      if (opts.castContext && depth === 0 && j > startJ) {
+        let prevRow = tokens[j - 1]?.loc?.r;
+        let curRow = t.loc?.r;
+        if (prevRow != null && curRow != null && curRow > prevRow)
+          break;
+      }
       if (depth === 0) {
         if (opts.stopAtFatArrow && tTag === "=>")
           break;
@@ -5818,6 +5897,9 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           continue;
         }
         if (tTag === "=" || tTag === "REACTIVE_ASSIGN" || tTag === "COMPUTED_ASSIGN" || tTag === "READONLY_ASSIGN" || tTag === "EFFECT" || tTag === "GATE" || tTag === "TERMINATOR" || tTag === "INDENT" || tTag === "OUTDENT" || tTag === "->" || tTag === ",") {
+          break;
+        }
+        if (opts.castContext && (tTag === "+" || tTag === "-" || tTag === "MATH" || tTag === "**" || tTag === "SHIFT" || tTag === "COMPARE" || tTag === "&&" || tTag === "||" || tTag === "??" || tTag === "^" || tTag === "RELATION" || tTag === "TERNARY" || tTag === "?" || tTag === "PRESENCE" || tTag === ":")) {
           break;
         }
       }
@@ -12872,8 +12954,19 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
       walk(body);
       return typed;
     }
+    castWrap(code, node) {
+      let cast = meta(node, "cast");
+      if (!cast || !this.options.inlineTypes)
+        return code;
+      return `(${code} as ${cast.join(" as ")})`;
+    }
     emit(sexpr, context = "statement") {
       if (sexpr instanceof String) {
+        if (meta(sexpr, "cast") && this.options.inlineTypes && meta(sexpr, "bang") !== true && !meta(sexpr, "optional") && !meta(sexpr, "quote") && !(meta(sexpr, "delimiter") === "///" && meta(sexpr, "heregex"))) {
+          let v = str(sexpr);
+          let base = this.reactiveVars?.has(v) && !this.suppressReactiveUnwrap ? `${v}.value` : v;
+          return this.castWrap(base, sexpr);
+        }
         if (meta(sexpr, "bang") === true) {
           return `await ${str(sexpr)}()`;
         }
@@ -13365,7 +13458,7 @@ function _setDataSection() {
         return `await ${base}.${str(prop)}()`;
       if (meta(prop, "optional"))
         return `(${base}.${str(prop)} != null)`;
-      return `${base}.${str(prop)}`;
+      return this.castWrap(`${base}.${str(prop)}`, prop);
     }
     emitOptionalProperty(head, rest) {
       let [obj, prop] = rest;
@@ -16954,7 +17047,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.17.4";
-  var BUILD_DATE = "2026-06-29@05:33:13GMT";
+  var BUILD_DATE = "2026-06-29@06:45:45GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -20629,14 +20722,16 @@ ${indented}`);
   };
   _ARIA_POSITION_OWNED = ["position", "inset", "top", "right", "bottom", "left", "margin", "marginTop", "marginRight", "marginBottom", "marginLeft", "transform", "minWidth", "positionAnchor", "positionArea", "positionTry", "positionVisibility"];
   _ariaResetPositionStyles = function(el) {
+    let style;
+    style = el.style;
     const _result = [];
     for (let prop of _ARIA_POSITION_OWNED) {
-      _result.push(el.style[prop] = "");
+      _result.push(style[prop] = "");
     }
     return _result;
   };
   _ariaPosition = function(trigger, floating, opts = {}) {
-    let align, matchWidth, name, offset, placement, prevTrigger, rect, side;
+    let align, fl, matchWidth, name, offset, placement, prevTrigger, rect, side;
     if (!(trigger && floating))
       return;
     placement = opts.placement ?? "bottom start";
@@ -20645,13 +20740,14 @@ ${indented}`);
     _ariaResetPositionStyles(floating);
     if (_ariaHasAnchor()) {
       name = `--anchor-${floating.id || Math.random().toString(36).slice(2, 8)}`;
-      prevTrigger = floating.__ariaPrevTrigger;
+      fl = floating;
+      prevTrigger = fl.__ariaPrevTrigger;
       if (prevTrigger && prevTrigger !== trigger) {
         try {
           prevTrigger.style.anchorName = "";
         } catch {}
       }
-      floating.__ariaPrevTrigger = trigger;
+      fl.__ariaPrevTrigger = trigger;
       trigger.style.anchorName = name;
       floating.style.positionAnchor = name;
       floating.style.position = "fixed";

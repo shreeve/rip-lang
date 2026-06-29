@@ -932,9 +932,33 @@ export class CodeEmitter {
   // Main dispatch
   // ---------------------------------------------------------------------------
 
+  // `expr as Type` cast wrap. The type rewriter stashes the collected type
+  // string(s) as `.data.cast` (an array, for chains) on the token that ends
+  // the cast's left-hand expression. At runtime the cast is fully erased, so
+  // this only fires in the shadow-TS check path (`inlineTypes`), where it
+  // re-materializes a real TS assertion `(code as A as B)`.
+  castWrap(code, node) {
+    let cast = meta(node, 'cast');
+    if (!cast || !this.options.inlineTypes) return code;
+    return `(${code} as ${cast.join(' as ')})`;
+  }
+
   emit(sexpr, context = 'statement') {
-    // String object with metadata (quote, bang, optional, heregex, etc.)
+    // String object with metadata (quote, bang, optional, heregex, cast, etc.)
     if (sexpr instanceof String) {
+      // `expr as Type` cast on a bare identifier / numeric atom. Emit the
+      // underlying value, then wrap as a TS assertion in the check path. Other
+      // metadata shapes (bang/optional/heregex/quote) keep their own handling
+      // below — a cast directly on those leaf forms is not a real-world LHS.
+      if (meta(sexpr, 'cast') && this.options.inlineTypes &&
+          meta(sexpr, 'bang') !== true && !meta(sexpr, 'optional') &&
+          !meta(sexpr, 'quote') &&
+          !(meta(sexpr, 'delimiter') === '///' && meta(sexpr, 'heregex'))) {
+        let v = str(sexpr);
+        let base = (this.reactiveVars?.has(v) && !this.suppressReactiveUnwrap) ? `${v}.value` : v;
+        return this.castWrap(base, sexpr);
+      }
+
       // Dammit operator (!)
       if (meta(sexpr, 'bang') === true) {
         return `await ${str(sexpr)}()`;
@@ -1462,7 +1486,7 @@ export class CodeEmitter {
     let base = needsParens ? `(${objCode})` : objCode;
     if (meta(prop, 'bang') === true) return `await ${base}.${str(prop)}()`;
     if (meta(prop, 'optional')) return `(${base}.${str(prop)} != null)`;
-    return `${base}.${str(prop)}`;
+    return this.castWrap(`${base}.${str(prop)}`, prop);
   }
 
   emitOptionalProperty(head, rest) {

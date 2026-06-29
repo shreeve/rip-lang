@@ -343,6 +343,7 @@ Multiple lines
 | `?!` | Presence | `@checked?!` | `(this.checked ? true : undefined)` — Houdini operator |
 | `=~` | Match | `str =~ /pat/` | Ruby-style regex match, captures in `_` |
 | `::` | Prototype | `String::trim` | `String.prototype.trim` |
+| `as` | Type cast | `x as Foo` | Type-checker-only assertion — erased at runtime |
 | `[-n]` | Negative index | `arr[-1]` | `arr.at(-1)` |
 | `*` | String repeat | `"-" * 40` | `"-".repeat(40)` |
 | `<` `<=` | Chained comparison | `1 < x < 10` | `(1 < x) && (x < 10)` |
@@ -1106,6 +1107,45 @@ Type annotations are erased from `.js` output. In `.d.ts` output, reactive state
 declare const count: Signal<number>;
 declare const doubled: Computed<number>;
 ```
+
+## Type Cast (`expr as Type`)
+
+`expr as Type` is a TypeScript-style cast. It is **purely a type-checker
+construct**: it is **erased at runtime** (the emitted JavaScript is exactly
+`expr`, with no trace of the cast) and only feeds the shadow-TS type checker,
+where it asserts/narrows the value's type. There is **no** grammar or parser
+change behind it — the cast is recognized and stripped in the type rewriter, so
+it never reaches the parser.
+
+```coffee
+y = x as Foo                       # runtime: y = x ; checker: y is Foo
+m = x as Map<string, number>       # generics, unions (A | B), intersections,
+u = x as A | B                     #   object/array types are all accepted
+chained = x as A as B              # chaining works
+style = el.style as unknown as Record<string, string>   # via `unknown`
+```
+
+It is **not** a cast in `for x as iter`, `for x as! iter`, `import x as y`,
+`export x as y`, or after `.`/`?.` (`obj.as` is a property) — those keep their
+existing meaning.
+
+**Narrowing support (known limitation, pending RFC-12).** The cast narrows for
+the checker only when its left-hand carrier is an **identifier** or a **member
+(property) access**:
+
+```coffee
+v = raw as Aug          # ✅ narrows  (identifier)
+v = obj.prop as Aug     # ✅ narrows  (member access)
+v = foo() as Aug        # ⚠️ erases, does NOT narrow  (call result)
+v = arr[0] as Aug       # ⚠️ erases, does NOT narrow  (index result)
+v = (raw) as Aug        # ⚠️ erases, does NOT narrow  (parenthesized)
+```
+
+For call results, index results, and parenthesized expressions the runtime
+erasure is still correct, but the type assertion is dropped from the checker's
+view (the marker can't yet ride those carrier tokens into the s-expression).
+Until RFC-12 lands, bind the value to a local first (`tmp = foo()`) and cast the
+identifier (`tmp as Aug`), or cast a member access directly.
 
 ## Two-Way Binding (`<=>`)
 

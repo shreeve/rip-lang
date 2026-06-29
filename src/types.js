@@ -15,6 +15,44 @@
 import { RipError } from './error.js';
 
 // ============================================================================
+// `expr as Type` cast — recognition sets
+// ============================================================================
+//
+// The cast is a contextual postfix operator: a bare `as` (already an
+// IDENTIFIER here — the lexer emits AS / FORAS / FORASAWAIT for the
+// import/export and for-loop cases, so an `as` that survives as an
+// IDENTIFIER is never one of those) glued to a value on its left and a type
+// on its right. We recognize it purely from token shape: the previous token
+// must be able to END an expression, and the next must be able to START a
+// type. Detection runs in rewriteTypes(), BEFORE addImplicitBracesAndParens(),
+// so `x as Foo` is still three bare identifiers (not yet `x(as(Foo))`).
+
+// Tokens whose token can be the tail of the cast's left-hand expression.
+// CAST is included so chains (`x as A as B`) work: the first cast collapses
+// to `<value> CAST`, and the second `as` sees CAST as its left edge.
+const CAST_LHS_ENDERS = new Set([
+  'IDENTIFIER', 'PROPERTY', 'NUMBER', 'STRING', 'STRING_END',
+  'REGEX', 'REGEX_END', 'BOOL', 'NULL', 'UNDEFINED', 'INFINITY', 'NAN', 'JS',
+  ')', 'CALL_END', 'PARAM_END', ']', 'INDEX_END', '}',
+  'THIS', 'SUPER', '?', 'PRESENCE', 'CAST',
+]);
+
+// Tokens that can begin a type expression on the cast's right-hand side.
+const CAST_TYPE_STARTERS = new Set([
+  'IDENTIFIER', '(', 'CALL_START', 'PARAM_START', '{', '[', 'INDEX_START',
+  'STRING', 'STRING_START', 'NUMBER', 'BOOL', 'NULL', 'UNDEFINED', '-', 'UNARY',
+]);
+
+// Does the `as` token at index i look like a cast (vs. a stray identifier)?
+function isCastAs(tokens, i) {
+  let prev = tokens[i - 1];
+  if (!prev || prev[0] === '.' || prev[0] === '?.') return false;
+  if (!CAST_LHS_ENDERS.has(prev[0])) return false;
+  let next = tokens[i + 1];
+  return !!next && CAST_TYPE_STARTERS.has(next[0]);
+}
+
+// ============================================================================
 // installTypeSupport — adds rewriteTypes() to Lexer.prototype
 // ============================================================================
 
@@ -59,6 +97,44 @@ export function installTypeSupport(Lexer) {
 
     this.scanTokens((token, i, tokens) => {
       let tag = token[0];
+
+      // ── `expr as Type` cast — pure type construct, erased from the parse ──
+      // A postfix type assertion. The Type RHS is collected as a string (the
+      // same machinery as `::` annotations) and the whole `as Type` run is
+      // spliced out of the token stream, so the grammar/parser never sees it.
+      // The type string is stashed as `.data.cast` on the token that ENDS the
+      // left-hand expression — exactly where every other annotation rides —
+      // so the parser's String-wrapper bridge carries it into the s-expression
+      // for the compiler. The compiler erases it at runtime and re-materializes
+      // it as a real TS `(expr as Type)` only in the shadow-TS check path.
+      // Chaining (`x as A as B`) accumulates onto one carrier; splicing then
+      // re-examining position `i` lets the next `as` see the same carrier.
+      if (tag === 'IDENTIFIER' && token[1] === 'as' && !token.data?.bang &&
+          isCastAs(tokens, i)) {
+        let typeTokens = collectTypeExpression(tokens, i + 1, { castContext: true });
+        if (typeTokens.length > 0) {
+          let typeStr = buildTypeString(typeTokens);
+          for (let tt of typeTokens) {
+            if (tt[0] === 'IDENTIFIER') typeRefNames.add(tt[1]);
+          }
+          let carrier = tokens[i - 1];
+          if (!carrier.data) carrier.data = {};
+          (carrier.data.cast ??= []).push(typeStr);
+          tokens.splice(i, 1 + typeTokens.consumed);
+          // A trailing `>` (or other "unfinished" tail) makes the lexer
+          // suppress the newline after the type, so once the `as Type` run is
+          // gone the statement can collide with the next line. If what now
+          // follows the carrier sits on a later row and isn't already a
+          // separator, restore the TERMINATOR the lexer ate.
+          let follow = tokens[i];
+          if (follow && follow[0] !== 'TERMINATOR' && follow[0] !== 'INDENT' &&
+              follow.loc?.r != null && carrier.loc?.r != null &&
+              follow.loc.r > carrier.loc.r) {
+            tokens.splice(i, 0, gen('TERMINATOR', '\n', follow));
+          }
+          return 0; // re-examine position i (handles chained `as`)
+        }
+      }
 
       // ── Generic type parameters: DEF name<T>(...) or Name<T> = component ──
       // (Generic params on type aliases are handled by the `type` keyword handler below)
@@ -829,6 +905,17 @@ function collectTypeExpression(tokens, j, opts = {}) {
       break;
     }
 
+    // Cast context: a cast's type lives on one logical line, but the lexer
+    // suppresses the newline after a trailing `>` (a COMPARE token is
+    // "unfinished"), so no TERMINATOR separates `x as Map<K, V>` from the next
+    // statement. Stop at a depth-0 row change so the collector can't run past
+    // end-of-line into the following code (the `Map<K, V> nextStmt` footgun).
+    if (opts.castContext && depth === 0 && j > startJ) {
+      let prevRow = tokens[j - 1]?.loc?.r;
+      let curRow = t.loc?.r;
+      if (prevRow != null && curRow != null && curRow > prevRow) break;
+    }
+
     // Delimiters that end the type at depth 0
     if (depth === 0) {
       // Arrow-return context: a depth-0 `=>` is the arrow OPERATOR, so it ends
@@ -853,6 +940,21 @@ function collectTypeExpression(tokens, j, opts = {}) {
           tTag === 'EFFECT' || tTag === 'GATE' || tTag === 'TERMINATOR' ||
           tTag === 'INDENT' || tTag === 'OUTDENT' ||
           tTag === '->' || tTag === ',') {
+        break;
+      }
+      // Cast context (`expr as Type`): the type RHS lives inside a larger
+      // expression, so it must also end at any depth-0 binary/relational/
+      // ternary operator. `|` and `&` are NOT stops — they're union /
+      // intersection type operators (TS reads everything after `as` as a
+      // type, so `x as A & B` is `x as (A & B)`). COMPARE's `<`/`>` never
+      // reach here (handled as generic brackets above), leaving only
+      // `== != <= >=`, which do stop.
+      if (opts.castContext && (
+          tTag === '+' || tTag === '-' || tTag === 'MATH' || tTag === '**' ||
+          tTag === 'SHIFT' || tTag === 'COMPARE' || tTag === '&&' ||
+          tTag === '||' || tTag === '??' || tTag === '^' ||
+          tTag === 'RELATION' || tTag === 'TERNARY' || tTag === '?' ||
+          tTag === 'PRESENCE' || tTag === ':')) {
         break;
       }
     }

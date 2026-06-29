@@ -2923,6 +2923,11 @@ export type AriaEl = HTMLElement | null | undefined
 export type AriaElRef = AriaEl | (() => AriaEl)
 export type AriaOrientation = 'vertical' | 'horizontal' | 'both'
 
+# Augmented element shape for the custom `__ariaPrevTrigger` expando these
+# helpers stash on a floating element. Reached only via an `as` cast inside
+# the helper; the public AriaApi never widens.
+type AriaFloatingEl = HTMLElement & { __ariaPrevTrigger?: AriaEl }
+
 # Keyboard handler map for listNav/rovingNav — every key is optional; a handler
 # only runs if provided. `char` receives the printable key for typeahead.
 export type AriaNavHandlers =
@@ -3007,6 +3012,9 @@ _ariaListNav = (e: KeyboardEvent, h: AriaNavHandlers) ->
 #    is tear down whatever was stored on the popup, then conditionally
 #    re-attach.
 _ariaPopupDismiss = (open: boolean, popup: AriaElRef, close: () => void, els: AriaElRef[] = [], repos: (() => void) | null = null): Disposer | undefined ->
+  # `get` stays `any`: its result is read for the `__ariaPopupDismiss` expando,
+  # but an `as` cast on a call result doesn't narrow yet (pending RFC-12), and
+  # `pop` is captured by the closures below so it degrades to `any` regardless.
   get = (x: AriaElRef): any -> if typeof x is 'function' then x() else x
   pop = get(popup)
   if pop and pop.__ariaPopupDismiss
@@ -3043,6 +3051,9 @@ _ariaPopupGuard = (delay: number = 250): AriaPopupGuard ->
 # setOpen: callback that receives actual native open state (true/false)
 # source: optional control element or lazy getter used as popover invoker
 _ariaBindPopover = (open: boolean, popover: AriaElRef, setOpen: (open: boolean) => void, source: AriaElRef = null): Disposer | undefined ->
+  # `get` stays `any`: `el` is read for the `__ariaBindPopover` expando, but an
+  # `as` cast on a call result doesn't narrow yet (pending RFC-12), and `el` is
+  # captured by the handlers below so it degrades to `any` regardless.
   get = (x: AriaElRef): any -> if typeof x is 'function' then x() else x
   currentFocus = ->
     active = document.activeElement
@@ -3128,6 +3139,9 @@ _ariaBindPopover = (open: boolean, popover: AriaElRef, setOpen: (open: boolean) 
 # setOpen: callback invoked when native state changes
 # dismissable: false prevents Esc/cancel close
 _ariaBindDialog = (open: boolean, dialog: AriaElRef, setOpen: (open: boolean) => void, dismissable: boolean = true): Disposer | undefined ->
+  # `get` stays `any`: `el` is downcast to a dialog + read for the
+  # `__ariaBindDialog` expando, but an `as` cast on a call result doesn't narrow
+  # yet (pending RFC-12), and `el` is captured by the handlers below anyway.
   get = (x: AriaElRef): any -> if typeof x is 'function' then x() else x
   currentFocus = ->
     active = document.activeElement
@@ -3319,11 +3333,15 @@ _ARIA_POSITION_OWNED = ['position', 'inset', 'top', 'right', 'bottom', 'left',
   'transform', 'minWidth',
   'positionAnchor', 'positionArea', 'positionTry', 'positionVisibility']
 
-_ariaResetPositionStyles = (el) ->
+_ariaResetPositionStyles = (el: HTMLElement) ->
+  # `CSSStyleDeclaration` has only a numeric index signature, so a dynamic
+  # string key needs a string-indexable view. The two shapes don't overlap,
+  # so the `as` cast goes through `unknown` (chained `as`).
+  style = el.style as unknown as Record<string, string>
   for prop in _ARIA_POSITION_OWNED
-    el.style[prop] = ''
+    style[prop] = ''
 
-_ariaPosition = (trigger: AriaEl, floating, opts: AriaPositionOptions = {}) ->
+_ariaPosition = (trigger: AriaEl, floating: AriaEl, opts: AriaPositionOptions = {}) ->
   return unless trigger and floating
   placement = opts.placement ?? 'bottom start'
   offset = opts.offset ?? 4
@@ -3335,11 +3353,15 @@ _ariaPosition = (trigger: AriaEl, floating, opts: AriaPositionOptions = {}) ->
     # trigger, clear the OLD trigger's anchor-name so we don't leave a
     # stale CSS anchor reference on a now-unrelated element. (Slot
     # re-renders, dynamically-swapped triggers, etc. hit this path.)
-    prevTrigger = floating.__ariaPrevTrigger
+    # The `__ariaPrevTrigger` expando lives on the augmented shape; cast a
+    # local view for it (an identifier `as` cast narrows; reassigning the
+    # param would not). Standard `style`/`id` members stay on `floating`.
+    fl = floating as AriaFloatingEl
+    prevTrigger = fl.__ariaPrevTrigger
     if prevTrigger and prevTrigger isnt trigger
       try prevTrigger.style.anchorName = ''
       catch then null
-    floating.__ariaPrevTrigger = trigger
+    fl.__ariaPrevTrigger = trigger
     trigger.style.anchorName = name
     floating.style.positionAnchor = name
     floating.style.position = 'fixed'
