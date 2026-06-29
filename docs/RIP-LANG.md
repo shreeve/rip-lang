@@ -343,6 +343,7 @@ Multiple lines
 | `?!` | Presence | `@checked?!` | `(this.checked ? true : undefined)` — Houdini operator |
 | `=~` | Match | `str =~ /pat/` | Ruby-style regex match, captures in `_` |
 | `::` | Prototype | `String::trim` | `String.prototype.trim` |
+| `as` | Type cast | `x as Foo` | Type-checker-only assertion — erased at runtime |
 | `[-n]` | Negative index | `arr[-1]` | `arr.at(-1)` |
 | `*` | String repeat | `"-" * 40` | `"-".repeat(40)` |
 | `<` `<=` | Chained comparison | `1 < x < 10` | `(1 < x) && (x < 10)` |
@@ -1106,6 +1107,47 @@ Type annotations are erased from `.js` output. In `.d.ts` output, reactive state
 declare const count: Signal<number>;
 declare const doubled: Computed<number>;
 ```
+
+## Type Cast (`expr as Type`)
+
+`expr as Type` is a TypeScript-style cast. It is **purely a type-checker
+construct**: it is **erased at runtime** (the emitted JavaScript is exactly
+`expr`, with no trace of the cast) and only feeds the shadow-TS type checker,
+where it asserts/narrows the value's type. The grammar **never parses a type** —
+the type rewriter collapses the `as Type` run into a single opaque-string marker
+token, and the grammar reduces a structural postfix node (`['cast', expr,
+typeStr]`), conceptually like `!` or `?.`. So no type syntax ever reaches the
+parser.
+
+```coffee
+y = x as Foo                       # runtime: y = x ; checker: y is Foo
+m = x as Map<string, number>       # generics, unions (A | B), intersections,
+u = x as A | B                     #   object/array types are all accepted
+chained = x as A as B              # chaining works (left-associative)
+style = el.style as unknown as Record<string, string>   # via `unknown`
+```
+
+It is **not** a cast in `for x as iter`, `for x as! iter`, `import x as y`,
+`export x as y`, or after `.`/`?.` (`obj.as` is a property) — those keep their
+existing meaning.
+
+**Narrowing — every expression form.** Because the cast is a grammar node that
+reduces *after* the full postfix expression is built, it narrows for the checker
+on **all** carriers — identifier, member access, and call / index /
+parenthesized results alike:
+
+```coffee
+v = raw as Aug          # ✅ narrows  (identifier)
+v = obj.prop as Aug     # ✅ narrows  (member access)
+v = foo() as Aug        # ✅ narrows  (call result)
+v = arr[0] as Aug       # ✅ narrows  (index result)
+v = (raw) as Aug        # ✅ narrows  (parenthesized)
+```
+
+**Precedence** matches TypeScript: `as` binds looser than member/call/index and
+arithmetic (`a + b as T` is `(a + b) as T`) but tighter than relational and
+comparison operators, and chains are left-associative (`x as A as B` is
+`(x as A) as B`).
 
 ## Two-Way Binding (`<=>`)
 
