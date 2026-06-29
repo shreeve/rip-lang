@@ -3089,7 +3089,7 @@ _ariaBindPopover = (open: boolean, popover: AriaElRef, setOpen: (open: boolean) 
     el.removeEventListener 'toggle', el.__ariaBindPopover
     el.__ariaBindPopover = null
 
-  onToggle = (e) ->
+  onToggle = (e: ToggleEvent) ->
     isOpen = e.newState is 'open'
     if isOpen
       restoreEl = get(source) or currentFocus()
@@ -3323,7 +3323,7 @@ _ariaResetPositionStyles = (el) ->
   for prop in _ARIA_POSITION_OWNED
     el.style[prop] = ''
 
-_ariaPosition = (trigger, floating, opts: AriaPositionOptions = {}) ->
+_ariaPosition = (trigger: AriaEl, floating, opts: AriaPositionOptions = {}) ->
   return unless trigger and floating
   placement = opts.placement ?? 'bottom start'
   offset = opts.offset ?? 4
