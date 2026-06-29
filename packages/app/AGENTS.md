@@ -70,23 +70,26 @@ match. `test/check.test.js` guards the pair both ways: a behavioral pin (real
 `rip check` over ARIA usage) **and** a textual drift guard that normalizes both
 and compares method-by-method. Edit one side → edit the other, or the guard bites.
 
-**How a consumer turns on ARIA typing — and the trade-off.** A project opts in
-by adding the shipped `.d.ts` to its `package.json#rip.types` (the general
-ambient-include mechanism — see `docs/RIP-TYPES.md`):
+**How a consumer gets ARIA typing (zero-config).** `aria.d.ts` is advertised in
+this package's `package.json` via `rip.ambient`:
 
 ```json
-{ "rip": { "types": ["node_modules/@rip-lang/app/aria.d.ts"] } }
+{ "rip": { "ambient": ["aria.d.ts"] }, "files": ["index.rip", "aria.d.ts"] }
 ```
 
-`rip check` then loads it as an explicit program root so `ARIA.` is typed in
-every `.rip` file. **Discoverability trade-off:** this used to be auto-injected
-into any file that merely referenced `ARIA.`, so it Just Worked with zero config.
-It's now **opt-in** — a consumer that uses `ARIA.` without the `rip.types` line
-gets *no* typing (`ARIA` is simply undeclared / `Cannot find name 'ARIA'`). The
-win is that the contract lives in one shipped file co-located with its impl
-instead of a regex-injected table buried in the compiler (`src/dts.js`); the cost
-is the one config line. `@rip-lang/ui` carries that line (and declares the
-`@rip-lang/app` peerDependency that the runtime `ARIA` global implies).
+`rip check` auto-includes the ambient `.d.ts` of every declared `@rip-lang/*`
+dependency, so **just depending on `@rip-lang/app` makes `ARIA.` typed — no
+config**. It's loaded as an explicit program root (visible to every `.rip` file,
+not suppressed by the `types` compiler option). `@rip-lang/ui` gets ARIA typing
+purely through its `@rip-lang/app` peerDependency; it carries no `rip.types` line.
+
+This replaced the old behavior where the contract was regex-injected into any
+file that referenced `ARIA.` from a table buried in the compiler (`src/dts.js`).
+The win: one shipped file co-located with its impl, auto-included by dependency.
+**Residual trade-off:** a project that uses `ARIA.` but does *not* depend on
+`@rip-lang/app` (and sets no `rip.types`) gets no typing — `ARIA` is simply
+undeclared. The explicit `rip.types` escape hatch (see `docs/RIP-TYPES.md`)
+covers ad-hoc cases; both feeds dedupe by absolute path.
 
 ## How it gets into rip.min.js
 

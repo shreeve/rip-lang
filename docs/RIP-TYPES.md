@@ -622,8 +622,7 @@ Configure via the `"rip"` key in `package.json`:
 {
   "strict": true,
   "checkAll": true,
-  "exclude": ["vendor/**", "legacy/**"],
-  "types": ["node_modules/@rip-lang/app/aria.d.ts"]
+  "exclude": ["vendor/**", "legacy/**"]
 }
 ```
 
@@ -632,7 +631,39 @@ Configure via the `"rip"` key in `package.json`:
 | `strict` | Enable TS strict family for `rip check` (default: `false`) |
 | `checkAll` | Type-check every non-`@nocheck` `.rip` file, not just annotated ones (default: `false`) |
 | `exclude` | Glob patterns for files to skip during `rip check` |
-| `types` | Hand-written ambient `.d.ts` files to include as explicit program roots (paths relative to the project root). Their global `declare`s become visible to every `.rip` file in the project — like tsconfig's `files`. Use it to pull in a shared ambient contract (e.g. `@rip-lang/app/aria.d.ts` for the global `ARIA` helpers). A missing path is warned and skipped, not fatal. |
+| `types` | Extra hand-written ambient `.d.ts` files to include as explicit program roots (paths relative to the project root). The **escape hatch** for ad-hoc / non-dependency `.d.ts` — most dependency-provided ambients arrive automatically (see below). A missing path is warned and skipped, not fatal. |
+| `ambient` | Declared **by a package** (not a consumer): the ambient `.d.ts` files this package ships, so consumers that depend on it get them automatically. Paths are relative to the package root; the file must also be in `files`. |
+
+### Ambient `.d.ts` includes — two mechanisms
+
+A `.d.ts` added as an explicit program root contributes its global `declare`s to
+every `.rip` file in the project — like tsconfig's `files`, and unlike the `types`
+compiler option it is **not** suppressed by the auto-discovered `@types/*` set.
+Rip feeds that list from two places:
+
+1. **Automatic (`rip.ambient`, zero-config).** A package advertises the ambient
+   types it ships via its own `package.json#rip.ambient`. Any project that
+   declares that package as a dependency (`dependencies`, `devDependencies`,
+   `peerDependencies`, or `optionalDependencies`) auto-includes those files
+   during `rip check` — resolved relative to the dependency's installed location.
+   "You used the framework, so its types are just there."
+
+   For example, `@rip-lang/app` ships `aria.d.ts` for the global `ARIA` helpers:
+
+   ```json
+   { "name": "@rip-lang/app", "rip": { "ambient": ["aria.d.ts"] }, "files": ["index.rip", "aria.d.ts"] }
+   ```
+
+   So an app or package that depends on `@rip-lang/app` gets `ARIA` typed with no
+   configuration at all.
+
+2. **Explicit (`rip.types`, escape hatch).** Point at any `.d.ts` by path
+   (relative to the project root) — for ad-hoc declarations or a `.d.ts` that
+   isn't shipped by a dependency.
+
+Both feeds are merged and **deduped by absolute path**, so pointing `rip.types`
+at a file a dependency already provides is harmless. Missing/unresolvable entries
+are warned and skipped, never fatal.
 
 ### File Level
 

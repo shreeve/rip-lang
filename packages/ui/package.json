@@ -23,11 +23,6 @@
     "AGENTS.md",
     "ui.rip"
   ],
-  "rip": {
-    "types": [
-      "node_modules/@rip-lang/app/aria.d.ts"
-    ]
-  },
   "dependencies": {
     "tailwindcss": "^4",
     "css-tree": "^3"

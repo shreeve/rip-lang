@@ -51,13 +51,15 @@ The current model is:
 - `ARIA` / `__aria` owns shared primitives such as popup dismissal, popover binding, dialog binding, positioning, roving/list navigation, and short reopen-suppression after pointer-driven closes
 - individual components own only the semantics that make that widget unique
 
-**ARIA typing is opt-in.** `ARIA` is a runtime global from `@rip-lang/app`, so
-this package declares it as a `peerDependency` and pulls in its ambient contract
-(`@rip-lang/app/aria.d.ts`) via `package.json#rip.types` so the widgets'
-`ARIA.` calls type-check. If you split this package or add a new one that uses
-`ARIA.`, copy that `rip.types` line (and the peerDep) — without it, `ARIA` is
-undeclared at check time (the contract is no longer auto-injected). See
-`packages/app/AGENTS.md` → "The ambient `ARIA` type contract".
+**ARIA typing is automatic via the `@rip-lang/app` dependency.** `ARIA` is a
+runtime global from `@rip-lang/app`, so this package declares it as a
+`peerDependency`. That's all it takes: `rip check` auto-includes the ambient
+`.d.ts` (`aria.d.ts`) that `@rip-lang/app` advertises in its
+`package.json#rip.ambient`, so the widgets' `ARIA.` calls type-check with **no
+`rip.types` line**. If you split this package or add a new one that uses `ARIA.`,
+just declare the `@rip-lang/app` dependency (peer/dev/normal) — the ambient
+contract comes with it. See `packages/app/AGENTS.md` → "The ambient `ARIA` type
+contract" and `docs/RIP-TYPES.md` → "Ambient `.d.ts` includes".
 
 ## Reference Component
 

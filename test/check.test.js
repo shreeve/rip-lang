@@ -1076,16 +1076,19 @@ check('exclude patterns with route-dir brackets/parens are honored', async () =>
 
 // ── 13. The ambient `ARIA` global is typed (aria.d.ts ↔ AriaApi) ──
 //
-// The `ARIA.` global contract ships as `packages/app/aria.d.ts` and a project
-// opts in via `package.json#rip.types` (the general ambient-include mechanism).
-// `rip check` then loads that `.d.ts` as an explicit program root so `declare
-// const ARIA: { ... }` is visible to every `.rip` file. That decl is the
-// consumer-facing twin of `AriaApi` in packages/app/index.rip (the impl
-// contract). These pins guard the pairing through the config-include path: good
-// usage checks clean, and the strict signatures (literal orientation,
-// `char(key: string)`, `hasAnchor()` as a method, no index-signature escape
-// hatch) reject misuse. If either side drifts, one of these flips. The textual
-// AriaApi ↔ aria.d.ts drift guard lives in section 14 below.
+// The `ARIA.` global contract ships as `packages/app/aria.d.ts`, advertised by
+// `@rip-lang/app`'s `package.json#rip.ambient`. A project gets it two ways:
+// automatically (just by depending on `@rip-lang/app` — mechanism ②, the
+// zero-config path) or explicitly via `package.json#rip.types` (mechanism ①, the
+// escape hatch). Either way `rip check` loads that `.d.ts` as an explicit program
+// root so `declare const ARIA: { ... }` is visible to every `.rip` file. That
+// decl is the consumer-facing twin of `AriaApi` in packages/app/index.rip (the
+// impl contract). These pins guard the pairing: good usage checks clean, and the
+// strict signatures (literal orientation, `char(key: string)`, `hasAnchor()` as
+// a method, no index-signature escape hatch) reject misuse. If either side
+// drifts, one of these flips. The textual AriaApi ↔ aria.d.ts drift guard lives
+// in section 15 below. (These cases pass `{ types: [ariaDts] }` explicitly so
+// they exercise mechanism ① directly; mechanism ② is covered by its own pins.)
 
 check('typed ARIA usage checks clean against the ambient include', async () => {
   const r = await checkProject({
@@ -1132,26 +1135,121 @@ check('an unknown ARIA method errors (no index-signature escape hatch)', async (
   assert(/bogusMethod/.test(r.out), 'error should name the bogus method:\n' + r.out);
 });
 
-// Without the `rip.types` include, the `ARIA.` global is no longer auto-injected,
-// so it's simply undeclared — this is the documented discoverability trade-off of
-// moving the contract from always-on injection to opt-in config. A consumer that
-// forgets the include loses the typing (here: ARIA resolves to nothing).
-check('ARIA is undeclared without the rip.types include (opt-in trade-off)', async () => {
+// ── 13b. Zero-config auto-include via the @rip-lang/app dependency (②) ──
+//
+// The default checkProject package.json already declares `@rip-lang/app` as a
+// dependency, and `@rip-lang/app` advertises `aria.d.ts` via `rip.ambient`. So
+// `ARIA.` is typed with NO `rip.types` line — purely from the dependency. This is
+// the "you used the framework, so its types are just there" behavior, and it's
+// what lets `@rip-lang/ui` drop its manual `rip.types` while keeping ARIA typing
+// (via its `@rip-lang/app` peerDependency).
+
+check('ARIA is auto-included via the @rip-lang/app dependency (zero-config)', async () => {
   const r = await checkProject({
+    'aria.rip': `export demo = (el: HTMLElement): boolean ->
+  ARIA.rovingNav new KeyboardEvent('keydown'), {}, 'both'
+  ARIA.hasAnchor()
+`,
+  }); // NO rip.types — relies solely on the @rip-lang/app dependency's rip.ambient
+  assert(r.ok, 'ARIA should be auto-included via the @rip-lang/app dependency:\n' + r.out);
+});
+
+check('auto-included ARIA still enforces its signature (zero-config)', async () => {
+  const r = await checkProject({
+    'aria.rip': `bad = (el: HTMLElement) ->
+  ARIA.rovingNav new KeyboardEvent('keydown'), {}, 'diagonal'
+`,
+  }); // NO rip.types
+  assert(!r.ok, "'diagonal' must error even when ARIA arrives via auto-include");
+  assert(/not assignable/.test(r.out), 'unexpected output:\n' + r.out);
+});
+
+// The discoverability trade-off only remains for a project that doesn't depend on
+// the package providing the ambient: with no `@rip-lang/app` dependency AND no
+// `rip.types`, `ARIA` is simply undeclared. (Custom package.json drops the
+// default `@rip-lang/app` dep.)
+check('ARIA is undeclared with neither a providing dependency nor rip.types', async () => {
+  const r = await checkProject({
+    'package.json': JSON.stringify({ name: 'no-deps', rip: { strict: true, checkAll: true } }) + '\n',
     'aria.rip': `bad = (el: HTMLElement) ->
   ARIA.rovingNav new KeyboardEvent('keydown'), {}, 'both'
 `,
   });
-  assert(!r.ok, 'ARIA must be undeclared without the rip.types include');
+  assert(!r.ok, 'ARIA must be undeclared with no provider dependency and no rip.types');
   assert(/Cannot find name 'ARIA'|ARIA/.test(r.out), 'error should reference the missing ARIA global:\n' + r.out);
 });
 
-// ── 14. The general `rip.types` ambient-include mechanism ──
+// ── 14. The general ambient-include mechanisms (rip.types ① + rip.ambient ②) ──
 //
-// `package.json#rip.types: ["x.d.ts"]` adds hand-written `.d.ts` files as
-// explicit TS program roots, so their global `declare`s reach every `.rip` file
-// (like tsconfig `files`). This is the seam the ARIA contract rides on. These
-// pins guard the mechanism itself, independent of ARIA.
+// ① `package.json#rip.types: ["x.d.ts"]` adds hand-written `.d.ts` files as
+//    explicit TS program roots, so their global `declare`s reach every `.rip`
+//    file (like tsconfig `files`) — the escape hatch.
+// ② A declared `@rip-lang/*` dependency that advertises `rip.ambient` in its own
+//    package.json has those files auto-included, resolved relative to the
+//    dependency's location — the zero-config path.
+// This is the seam the ARIA contract rides on. These pins guard the mechanisms
+// themselves, independent of ARIA, including dedupe across the two.
+
+// Build a project that depends on a fake `@rip-lang/widget` whose package.json
+// advertises an ambient `.d.ts`. `rip.ambient` paths resolve relative to the
+// dependency's own directory, so the file lives under its node_modules entry.
+function widgetDepFiles(extra = {}) {
+  return {
+    'node_modules/@rip-lang/widget/package.json':
+      JSON.stringify({ name: '@rip-lang/widget', version: '1.0.0', rip: { ambient: ['ambient.d.ts'] } }) + '\n',
+    'node_modules/@rip-lang/widget/ambient.d.ts': `declare const WIDGET: { ping(name: string): number };\n`,
+    ...extra,
+  };
+}
+
+check('an ambient .d.ts from a declared @rip-lang/* dependency is auto-included (②)', async () => {
+  const r = await checkProject(widgetDepFiles({
+    'package.json': JSON.stringify({ name: 'consumer', rip: { strict: true, checkAll: true }, dependencies: { '@rip-lang/widget': '1.0.0' } }) + '\n',
+    'use.rip': `export n: number = WIDGET.ping('ok')\n`,
+  }));
+  assert(r.ok, 'a dependency-declared rip.ambient should be auto-included with no rip.types:\n' + r.out);
+});
+
+check('an auto-included dependency ambient still enforces its signature (②)', async () => {
+  const r = await checkProject(widgetDepFiles({
+    'package.json': JSON.stringify({ name: 'consumer', rip: { strict: true, checkAll: true }, dependencies: { '@rip-lang/widget': '1.0.0' } }) + '\n',
+    'use.rip': `export n: number = WIDGET.ping(123)\n`,
+  }));
+  assert(!r.ok, 'passing a number where the ambient decl wants a string must error');
+  assert(/not assignable/.test(r.out), 'unexpected output:\n' + r.out);
+});
+
+check('a dependency without rip.ambient contributes nothing (no crash)', async () => {
+  const r = await checkProject({
+    'node_modules/@rip-lang/widget/package.json': JSON.stringify({ name: '@rip-lang/widget', version: '1.0.0' }) + '\n',
+    'package.json': JSON.stringify({ name: 'consumer', rip: { strict: true, checkAll: true }, dependencies: { '@rip-lang/widget': '1.0.0' } }) + '\n',
+    'ok.rip': `export n: number = 1 + 2\n`,
+  });
+  assert(r.ok, 'a dependency with no rip.ambient must not affect the check:\n' + r.out);
+});
+
+check('auto-include + explicit rip.types on the same file does not double-include (dedupe)', async () => {
+  const r = await checkProject(widgetDepFiles({
+    'package.json': JSON.stringify({
+      name: 'consumer',
+      rip: { strict: true, checkAll: true, types: ['node_modules/@rip-lang/widget/ambient.d.ts'] },
+      dependencies: { '@rip-lang/widget': '1.0.0' },
+    }) + '\n',
+    'use.rip': `export n: number = WIDGET.ping('ok')\n`,
+  }));
+  assert(r.ok, 'the same file via both auto-include and rip.types must dedupe cleanly:\n' + r.out);
+});
+
+// A dependency that declares a rip.ambient file that does not exist is warned and
+// skipped, never fatal — the rest of the project still checks.
+check('a dependency-declared ambient that is missing is skipped gracefully (②)', async () => {
+  const r = await checkProject({
+    'node_modules/@rip-lang/widget/package.json': JSON.stringify({ name: '@rip-lang/widget', version: '1.0.0', rip: { ambient: ['nope.d.ts'] } }) + '\n',
+    'package.json': JSON.stringify({ name: 'consumer', rip: { strict: true, checkAll: true }, dependencies: { '@rip-lang/widget': '1.0.0' } }) + '\n',
+    'ok.rip': `export n: number = 1 + 2\n`,
+  });
+  assert(r.ok, 'a missing dependency ambient file must not crash the check:\n' + r.out);
+});
 
 check('a rip.types ambient .d.ts makes its globals visible to .rip files', async () => {
   const r = await checkProject({
@@ -1194,7 +1292,7 @@ check('a missing rip.types path is skipped gracefully', async () => {
   assert(r.ok, 'a missing rip.types path must not crash the check:\n' + r.out);
 });
 
-// ── Textual AriaApi ↔ aria.d.ts drift guard ──
+// ── 15. Textual AriaApi ↔ aria.d.ts drift guard ──
 //
 // The single source for the ARIA contract is `AriaApi` in packages/app/index.rip
 // (impl) and its shipped consumer twin `packages/app/aria.d.ts` (the ambient
