@@ -13,8 +13,8 @@
 #     a $link: true, href: "/about", "About"
 
 export NavigationMenu = component
-  _root := null
-  _slot := null
+  rootRef := null
+  slotRef := null
   @orientation := "horizontal"
   @hoverDelay := 200
   @hoverCloseDelay := 300
@@ -25,8 +25,8 @@ export NavigationMenu = component
   _closeTimer := null
 
   _navItems ~=
-    return [] unless @_slot
-    Array.from(@_slot.children).filter (el) ->
+    return [] unless @slotRef
+    Array.from(@slotRef.children).filter (el) ->
       el.dataset?.link? or el.dataset?.trigger?
 
   mounted: -> _ready = true
@@ -55,11 +55,11 @@ export NavigationMenu = component
     clearTimeout _closeTimer if _closeTimer
 
   _position: (id) ->
-    ARIA.positionBelow @_root?.querySelector("[data-nav-trigger=\"#{id}\"]"),
-                       @_root?.querySelector("[data-nav-panel=\"#{id}\"]"), 2, false
+    ARIA.positionBelow @rootRef?.querySelector("[data-nav-trigger=\"#{id}\"]"),
+                       @rootRef?.querySelector("[data-nav-panel=\"#{id}\"]"), 2, false
 
   _onKeydown: (e) ->
-    navBtns = @_root?.querySelectorAll('[data-nav-trigger], [data-nav-link]')
+    navBtns = @rootRef?.querySelectorAll('[data-nav-trigger], [data-nav-link]')
     return unless navBtns?.length
     focused = Array.from(navBtns).indexOf(document.activeElement)
     return if focused < 0
@@ -76,14 +76,14 @@ export NavigationMenu = component
         if triggerId
           e.preventDefault()
           @_openPanel(triggerId)
-          @_root?.querySelector("[data-nav-panel=\"#{triggerId}\"] a, [data-nav-panel=\"#{triggerId}\"] button")?.focus()
+          @rootRef?.querySelector("[data-nav-panel=\"#{triggerId}\"] a, [data-nav-panel=\"#{triggerId}\"] button")?.focus()
       when 'Escape'
         @_closePanel()
 
   ~>
     return unless _ready
     if activePanel
-      onDown   = (e) => @_closePanel() unless @_root?.contains(e.target)
+      onDown   = (e) => @_closePanel() unless @rootRef?.contains(e.target)
       onScroll = => @_position(activePanel)
       document.addEventListener 'mousedown', onDown
       window.addEventListener   'scroll',    onScroll, true
@@ -92,10 +92,10 @@ export NavigationMenu = component
         window.removeEventListener   'scroll',    onScroll, true
 
   render
-    nav ref: _root, role: "navigation", aria-orientation: @orientation
+    nav ref: rootRef, role: "navigation", aria-orientation: @orientation
       $orientation: @orientation
 
-      . ref: _slot, style: "display:none"
+      . ref: slotRef, style: "display:none"
         slot
 
       for navItem, nIdx in _navItems
@@ -124,5 +124,5 @@ export NavigationMenu = component
                     @keydown: (e) =>
                       if e.key is 'Escape'
                         @_closePanel()
-                        @_root?.querySelector("[data-nav-trigger=\"#{navItem.dataset.trigger}\"]")?.focus()
+                        @rootRef?.querySelector("[data-nav-trigger=\"#{navItem.dataset.trigger}\"]")?.focus()
                     = link.textContent

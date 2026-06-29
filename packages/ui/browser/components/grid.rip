@@ -20,8 +20,8 @@
 #     @afterEdit: (row, col, oldVal, newVal) -> null
 
 export Grid = component
-  _body := null
-  _container := null
+  bodyRef := null
+  containerRef := null
 
   @data := []
   @columns := []
@@ -156,7 +156,7 @@ export Grid = component
   # Effect: update tbody rows from pool on every viewport/data change
   ~>
     return unless _ready
-    tbody = @_body
+    tbody = @bodyRef
     return unless tbody
     numCols = @columns.length
     count = endRow - startRow + 1
@@ -229,7 +229,7 @@ export Grid = component
   # Selection overlay — applies data-* attributes to active/selected cells
   ~>
     return unless _ready
-    tbody = @_body
+    tbody = @bodyRef
     return unless tbody
     trs = tbody.querySelectorAll('tr:not(.spacer)')
 
@@ -241,7 +241,7 @@ export Grid = component
     unless _selBorder
       _selBorder = document.createElement('div')
       _selBorder.style.cssText = 'position:absolute;pointer-events:none;border:0;outline:1px solid #3b82f6;outline-offset:-1px;z-index:1;display:none'
-      @_container.appendChild(_selBorder)
+      @containerRef.appendChild(_selBorder)
 
     if anchorRow >= 0 and activeRow >= 0 and anchorCol >= 0 and activeCol >= 0
       minR = Math.min(anchorRow, activeRow)
@@ -269,11 +269,11 @@ export Grid = component
           topTd = topTr.children[minC]
           botTd = botTr.children[maxC]
           if topTd and botTd
-            cRect = @_container.getBoundingClientRect()
+            cRect = @containerRef.getBoundingClientRect()
             tl = topTd.getBoundingClientRect()
             br = botTd.getBoundingClientRect()
-            _selBorder.style.top = "#{tl.top - cRect.top + @_container.scrollTop}px"
-            _selBorder.style.left = "#{tl.left - cRect.left + @_container.scrollLeft}px"
+            _selBorder.style.top = "#{tl.top - cRect.top + @containerRef.scrollTop}px"
+            _selBorder.style.left = "#{tl.left - cRect.left + @containerRef.scrollLeft}px"
             _selBorder.style.width = "#{br.right - tl.left}px"
             _selBorder.style.height = "#{br.bottom - tl.top}px"
             _selBorder.style.display = 'block'
@@ -296,7 +296,7 @@ export Grid = component
           td.dataset.active = ''
 
   _removeEditor: ->
-    @_container.querySelector('.rip-grid-editor')?.remove()
+    @containerRef.querySelector('.rip-grid-editor')?.remove()
 
   openEditor: (initial, cursorEnd) ->
     if activeRow < 0 or activeCol < 0 or editing
@@ -339,17 +339,17 @@ export Grid = component
       el.addEventListener 'input', (e) =>
         editValue = e.target.value
       el.addEventListener 'keydown', (e) => @_editorKeydown(e)
-    @_container.appendChild(el)
+    @containerRef.appendChild(el)
     requestAnimationFrame =>
-      trs = @_body.querySelectorAll('tr:not(.spacer)')
+      trs = @bodyRef.querySelectorAll('tr:not(.spacer)')
       tr = trs[activeRow - startRow]
       if tr
         td = tr.children[activeCol]
         if td
           tdRect = td.getBoundingClientRect()
-          cRect = @_container.getBoundingClientRect()
-          el.style.top = "#{tdRect.top - cRect.top + @_container.scrollTop}px"
-          el.style.left = "#{tdRect.left - cRect.left + @_container.scrollLeft}px"
+          cRect = @containerRef.getBoundingClientRect()
+          el.style.top = "#{tdRect.top - cRect.top + @containerRef.scrollTop}px"
+          el.style.left = "#{tdRect.left - cRect.left + @containerRef.scrollLeft}px"
           el.style.width = "#{tdRect.width}px"
           el.style.height = "#{tdRect.height}px"
           if el.selectionStart isnt undefined
@@ -373,7 +373,7 @@ export Grid = component
       dataVersion++
       editing = false
       @_removeEditor()
-      @_container.focus() if @_container
+      @containerRef.focus() if @containerRef
       if @afterEdit
         @afterEdit(di, activeCol, oldVal, val)
 
@@ -382,7 +382,7 @@ export Grid = component
     @_removeEditor()
     anchorRow = activeRow
     anchorCol = activeCol
-    @_container.focus() if @_container
+    @containerRef.focus() if @containerRef
 
   _editorKeydown: (e) ->
     numCols = @columns.length
@@ -427,7 +427,7 @@ export Grid = component
     startW = @columns[ci].width
     handle = e.target
     handle.classList.add('active')
-    colEl = @_container.querySelector("colgroup").children[ci]
+    colEl = @containerRef.querySelector("colgroup").children[ci]
     onMove = (ev) =>
       w = Math.max(40, startW + ev.clientX - startX)
       colEl.style.width = "#{w}px"
@@ -481,7 +481,7 @@ export Grid = component
         @_rafPending = false
 
   scrollToRow: (row) ->
-    el = @_container
+    el = @containerRef
     if el
       top = row * @rowHeight
       if top < el.scrollTop
@@ -498,9 +498,9 @@ export Grid = component
     td = e.target.closest('td')
     if td and not td.parentElement.classList.contains('spacer')
       e.preventDefault()
-      @_container.focus() if @_container
+      @containerRef.focus() if @containerRef
       selecting = true
-      el = @_container
+      el = @containerRef
       rect = el.getBoundingClientRect()
       ri = Math.floor((e.clientY - rect.top + el.scrollTop - @headerHeight) / @rowHeight)
       if ri >= 0 and ri < totalRows
@@ -520,7 +520,7 @@ export Grid = component
   onMousemove: (e) ->
     if not selecting or e.buttons isnt 1
       return
-    el = @_container
+    el = @containerRef
     rect = el.getBoundingClientRect()
     ri = Math.floor((e.clientY - rect.top + el.scrollTop - @headerHeight) / @rowHeight)
     ri = Math.max(0, Math.min(totalRows - 1, ri))
@@ -869,19 +869,19 @@ export Grid = component
     _topSpacer = @_createSpacer()
     _botSpacer = @_createSpacer()
     _ready = true
-    if @_container
+    if @containerRef
       handler = (entries) =>
         for entry in entries
           containerHeight = entry.contentRect.height
       @_resizeObs = new ResizeObserver(handler)
-      @_resizeObs.observe(@_container)
+      @_resizeObs.observe(@containerRef)
 
   unmounted: ->
     if @_resizeObs
       @_resizeObs.disconnect()
 
   render
-    div.grid-container ref: _container, role: "grid", tabIndex: 0
+    div.grid-container ref: containerRef, role: "grid", tabIndex: 0
       $editing: editing?!
       $selecting: selecting?!
       @dblclick
@@ -906,4 +906,4 @@ export Grid = component
                   span.sort-badge
                     "#{sortInfo.ranks[ci]}"
                 span.resize-handle @mousedown: @_resizeStart
-        tbody ref: _body
+        tbody ref: bodyRef

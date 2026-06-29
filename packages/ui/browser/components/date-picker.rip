@@ -37,8 +37,8 @@ dpInRange = (day, from, to) ->
   t >= lo and t <= hi
 
 export DatePicker = component
-  _cal := null
-  _trigger := null
+  calRef := null
+  triggerRef := null
   @value := null
   @placeholder := "mm/dd/yyyy"
   @disabled := false
@@ -174,14 +174,14 @@ export DatePicker = component
     _hoveredDay = null
     _focusedDay = null
 
-  _position: -> ARIA.positionBelow @_trigger, @_cal, 4, false
+  _position: -> ARIA.positionBelow @triggerRef, @calRef, 4, false
 
   # Focus the day-cell whose date matches _focusedDay. Uses a
   # data-date attribute we put on each gridcell button.
   _focusGridDay: ->
-    return unless @_cal and _focusedDay
+    return unless @calRef and _focusedDay
     iso = "#{_focusedDay.getFullYear()}-#{_focusedDay.getMonth()}-#{_focusedDay.getDate()}"
-    @_cal.querySelector("[data-date='#{iso}']")?.focus()
+    @calRef.querySelector("[data-date='#{iso}']")?.focus()
 
   _shiftFocus: (delta) ->
     return unless _focusedDay
@@ -243,12 +243,12 @@ export DatePicker = component
       when 'Escape'
         e.preventDefault()
         @close()
-        @_trigger?.focus()
+        @triggerRef?.focus()
 
   ~>
     if open
       onDown = (e) =>
-        unless @_trigger?.contains(e.target) or @_cal?.contains(e.target)
+        unless @triggerRef?.contains(e.target) or @calRef?.contains(e.target)
           @close()
       document.addEventListener 'mousedown', onDown
       return -> document.removeEventListener 'mousedown', onDown
@@ -257,7 +257,7 @@ export DatePicker = component
     . $open: open?!, $disabled: @disabled?!, $range: @range?!
 
       # Trigger
-      button type: "button", ref: _trigger, $trigger: true
+      button type: "button", ref: triggerRef, $trigger: true
         aria-haspopup: "dialog"
         aria-expanded: !!open
         disabled: @disabled
@@ -267,7 +267,7 @@ export DatePicker = component
 
       # Calendar dropdown
       if open
-        div ref: _cal, role: "dialog", aria-label: "Date picker", $calendar: true
+        div ref: calRef, role: "dialog", aria-label: "Date picker", $calendar: true
           style: "position:fixed;z-index:50"
           @keydown: @_onGridKeydown
 

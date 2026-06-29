@@ -11,7 +11,7 @@
 #       p "User details here..."
 
 export PreviewCard = component
-  _root := null
+  rootRef := null
   @delay := 400
   @closeDelay := 200
 
@@ -27,8 +27,8 @@ export PreviewCard = component
 
   mounted: ->
     _ready = true
-    trigger = @_root?.querySelector('[data-trigger]')
-    floating = @_root?.querySelector('[data-content]')
+    trigger = @rootRef?.querySelector('[data-trigger]')
+    floating = @rootRef?.querySelector('[data-content]')
     return unless trigger and floating
     floating.id = _id
     floating.setAttribute 'popover', 'hint'
@@ -49,14 +49,14 @@ export PreviewCard = component
       _closeTimer = setTimeout (=> open = false), @closeDelay
 
   _applyPlacement: ->
-    trigger = @_root?.querySelector('[data-trigger]')
-    floating = @_root?.querySelector('[data-content]')
+    trigger = @rootRef?.querySelector('[data-trigger]')
+    floating = @rootRef?.querySelector('[data-content]')
     ARIA.position trigger, floating, placement: 'bottom start', offset: 4
 
   ~>
     return unless _ready
-    trigger = @_root?.querySelector('[data-trigger]')
-    floating = @_root?.querySelector('[data-content]')
+    trigger = @rootRef?.querySelector('[data-trigger]')
+    floating = @rootRef?.querySelector('[data-content]')
     return unless floating and trigger
     trigger.setAttribute 'aria-expanded', !!open
     floating.hidden = not open
@@ -74,5 +74,5 @@ export PreviewCard = component
         floating.removeEventListener 'mouseleave', onLeave
 
   render
-    div ref: _root
+    div ref: rootRef
       slot

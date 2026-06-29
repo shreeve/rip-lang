@@ -11,9 +11,9 @@
 MIN_THUMB = 20
 
 export ScrollArea = component
-  _scrollbar := null
-  _thumb := null
-  _viewport := null
+  scrollbarRef := null
+  thumbRef := null
+  viewportRef := null
   @orientation := "vertical"
 
   hovering := false
@@ -25,9 +25,9 @@ export ScrollArea = component
   _ready := false
 
   _updateThumb: ->
-    vp = @_viewport
-    sb = @_scrollbar
-    th = @_thumb
+    vp = @viewportRef
+    sb = @scrollbarRef
+    th = @thumbRef
     return unless vp and sb and th
     vert = @orientation is 'vertical'
 
@@ -61,10 +61,10 @@ export ScrollArea = component
     @_updateThumb()
 
   _onTrackClick: (e) ->
-    return if e.target is @_thumb
-    vp = @_viewport
-    sb = @_scrollbar
-    th = @_thumb
+    return if e.target is @thumbRef
+    vp = @viewportRef
+    sb = @scrollbarRef
+    th = @thumbRef
     return unless vp and sb and th
     vert = @orientation is 'vertical'
     rect = sb.getBoundingClientRect()
@@ -88,17 +88,17 @@ export ScrollArea = component
     _dragging = true
     if @orientation is 'vertical'
       _dragStart = e.clientY
-      _dragScrollStart = @_viewport.scrollTop
+      _dragScrollStart = @viewportRef.scrollTop
     else
       _dragStart = e.clientX
-      _dragScrollStart = @_viewport.scrollLeft
-    @_thumb.setPointerCapture e.pointerId
+      _dragScrollStart = @viewportRef.scrollLeft
+    @thumbRef.setPointerCapture e.pointerId
 
   _onThumbMove: (e) ->
     return unless _dragging
-    vp = @_viewport
-    sb = @_scrollbar
-    th = @_thumb
+    vp = @viewportRef
+    sb = @scrollbarRef
+    th = @thumbRef
     return unless vp and sb and th
     vert = @orientation is 'vertical'
     thumbPx = if vert then th.offsetHeight else th.offsetWidth
@@ -114,15 +114,15 @@ export ScrollArea = component
 
   _onThumbUp: (e) ->
     _dragging = false
-    @_thumb.releasePointerCapture e.pointerId
+    @thumbRef.releasePointerCapture e.pointerId
 
   mounted: ->
     _ready = true
     requestAnimationFrame => @_updateThumb()
-    if @_viewport
+    if @viewportRef
       @_resizeObs = new ResizeObserver => @_updateThumb()
-      @_resizeObs.observe @_viewport
-      @_resizeObs.observe @_viewport.firstElementChild if @_viewport.firstElementChild
+      @_resizeObs.observe @viewportRef
+      @_resizeObs.observe @viewportRef.firstElementChild if @viewportRef.firstElementChild
 
   beforeUnmount: ->
     @_resizeObs?.disconnect()
@@ -135,14 +135,14 @@ export ScrollArea = component
       @mouseenter: (=> hovering = true)
       @mouseleave: (=> hovering = false)
 
-      div ref: _viewport, $viewport: true
+      div ref: viewportRef, $viewport: true
         style: "overflow:scroll;scrollbar-width:none"
         @scroll: @_onScroll
         slot
 
-      div ref: _scrollbar, $scrollbar: true
+      div ref: scrollbarRef, $scrollbar: true
         @click: @_onTrackClick
-        div ref: _thumb, $thumb: true
+        div ref: thumbRef, $thumb: true
           @pointerdown: @_onThumbDown
           @pointermove: @_onThumbMove
           @pointerup: @_onThumbUp

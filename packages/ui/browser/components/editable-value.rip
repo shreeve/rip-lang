@@ -11,7 +11,7 @@
 #       input type: "text", value: name, @input: (e) => name = e.target.value
 
 export EditableValue = component
-  _root := null
+  rootRef := null
   @disabled := false
 
   editing := false
@@ -40,12 +40,12 @@ export EditableValue = component
   setSaving: (val) -> saving = val
 
   _position: ->
-    display = @_root?.querySelector('[data-display]')
-    editor = @_root?.querySelector('[data-editor]')
+    display = @rootRef?.querySelector('[data-display]')
+    editor = @rootRef?.querySelector('[data-editor]')
     return unless display and editor
-    @_root.style.position = 'relative'
+    @rootRef.style.position = 'relative'
     dr = display.getBoundingClientRect()
-    cr = @_root.getBoundingClientRect()
+    cr = @rootRef.getBoundingClientRect()
     editor.style.position = 'absolute'
     editor.style.left = "0px"
     editor.style.top = "#{dr.bottom - cr.top + 4}px"
@@ -59,14 +59,14 @@ export EditableValue = component
     _readyNow = _ready
     _editing = editing                                 # track before any early return
     return unless _readyNow
-    display = @_root?.querySelector('[data-display]')
-    editor = @_root?.querySelector('[data-editor]')
+    display = @rootRef?.querySelector('[data-display]')
+    editor = @rootRef?.querySelector('[data-editor]')
     return unless display and editor
     editor.hidden = not _editing
     if _editing
       editor.setAttribute 'data-open', ''
       onDown = (e) =>
-        unless @_root?.contains(e.target)
+        unless @rootRef?.contains(e.target)
           @_onCancel()
       document.addEventListener 'mousedown', onDown
       return -> document.removeEventListener 'mousedown', onDown
@@ -82,7 +82,7 @@ export EditableValue = component
       @_onSave()
 
   render
-    div ref: _root, $editing: editing?!, $disabled: @disabled?!, $saving: saving?!
+    div ref: rootRef, $editing: editing?!, $disabled: @disabled?!, $saving: saving?!
       @keydown
       slot
       unless editing

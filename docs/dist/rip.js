@@ -17168,7 +17168,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.17.4";
-  var BUILD_DATE = "2026-06-29@21:42:27GMT";
+  var BUILD_DATE = "2026-06-29@22:27:55GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

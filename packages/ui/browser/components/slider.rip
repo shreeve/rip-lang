@@ -10,7 +10,7 @@
 #   Slider value <=> range, min: 0, max: 100   (pass array for range mode)
 
 export Slider = component
-  _track := null
+  trackRef := null
   @value := 0                                    # number | number[] (range mode)
   @min := 0
   @max := 100
@@ -48,7 +48,7 @@ export Slider = component
     ((@_clamp(v) - @min) / (@max - @min)) * 100
 
   _valueFromPointer: (e) ->
-    rect = @_track.getBoundingClientRect()
+    rect = @trackRef.getBoundingClientRect()
     if horiz
       ratio = (e.clientX - _thumbOffset - rect.left) / rect.width
     else
@@ -58,7 +58,7 @@ export Slider = component
 
   _closestThumb: (e) ->
     return 0 unless isRange
-    rect = @_track.getBoundingClientRect()
+    rect = @trackRef.getBoundingClientRect()
     pos = if horiz then (e.clientX - rect.left) / rect.width else 1 - (e.clientY - rect.top) / rect.height
     best = 0
     bestDist = Infinity
@@ -93,7 +93,7 @@ export Slider = component
 
   _focusThumb: (idx) ->
     requestAnimationFrame =>
-      @_track?.querySelector("#" + "#{_id}-thumb-#{idx}")?.focus()
+      @trackRef?.querySelector("#" + "#{_id}-thumb-#{idx}")?.focus()
 
   _onPointerDown: (e) ->
     return if @disabled or e.button isnt 0
@@ -102,7 +102,7 @@ export Slider = component
     activeThumb = idx
     dragging = true
 
-    thumb = @_track.querySelectorAll('[data-thumb]')[idx]
+    thumb = @trackRef.querySelectorAll('[data-thumb]')[idx]
     if thumb
       tr = thumb.getBoundingClientRect()
       if horiz
@@ -115,7 +115,7 @@ export Slider = component
     newVal = @_valueFromPointer(e)
     @_setValue idx, newVal
 
-    @_track.setPointerCapture e.pointerId
+    @trackRef.setPointerCapture e.pointerId
 
   _onPointerMove: (e) ->
     return unless dragging
@@ -130,7 +130,7 @@ export Slider = component
     # releasePointerCapture can throw if capture was already lost (e.g.,
     # via pointercancel). Swallow defensively so a benign teardown
     # doesn't surface as an unhandled error.
-    try @_track.releasePointerCapture e.pointerId
+    try @trackRef.releasePointerCapture e.pointerId
     catch then null
     @_commitValue()
 
@@ -167,7 +167,7 @@ export Slider = component
       style: "--slider-min: #{@min}; --slider-max: #{@max}"
 
       # Track
-      div ref: _track, $track: true
+      div ref: trackRef, $track: true
         style: "position:relative"
         @pointerdown: @_onPointerDown
         @pointermove: @_onPointerMove

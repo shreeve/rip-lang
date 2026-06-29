@@ -13,7 +13,7 @@
 #     button @click: (=> showDialog = false), "Close"
 
 export Dialog = component
-  _dialog := null
+  dialogRef := null
   @open := false
   @dismissable := true
   @initialFocus := null
@@ -31,7 +31,7 @@ export Dialog = component
     # onKeydown handler does NOT additionally call @close() because that
     # would emit `close` twice for the same Escape press (once from
     # native cancel via bindDialog, once from our handler).
-    ARIA.bindDialog @open, (=> @_dialog), ((isOpen) =>
+    ARIA.bindDialog @open, (=> @dialogRef), ((isOpen) =>
       if not isOpen and @open
         @open = false
         @emit 'close'
@@ -45,7 +45,7 @@ export Dialog = component
       # detached content (and possibly throw on some browsers).
       _focusRaf = requestAnimationFrame =>
         _focusRaf = null
-        panel = @_dialog
+        panel = @dialogRef
         if panel
           ARIA.wireAria panel, _id
           if @initialFocus
@@ -70,10 +70,10 @@ export Dialog = component
 
   onBackdropClick: (e) ->
     if e.target is e.currentTarget and @dismissable
-      @_dialog?.close()
+      @dialogRef?.close()
 
   render
-    dialog ref: _dialog
+    dialog ref: dialogRef
       hidden: not @open
       aria-hidden: (@open ? undefined : "true")
       @click: @onBackdropClick

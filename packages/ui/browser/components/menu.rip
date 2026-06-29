@@ -12,9 +12,9 @@
 #     div $item: "archive", "Archive"
 
 export Menu = component
-  _list := null
-  _slot := null
-  _trigger := null
+  listRef := null
+  slotRef := null
+  triggerRef := null
   @disabled := false
 
   open := false
@@ -25,12 +25,12 @@ export Menu = component
   _id =! "menu-#{Math.random().toString(36).slice(2, 8)}"
 
   items ~=
-    return [] unless @_slot
-    Array.from(@_slot.querySelectorAll('[data-item]') or [])
+    return [] unless @slotRef
+    Array.from(@slotRef.querySelectorAll('[data-item]') or [])
 
   triggerLabel ~=
-    return '' unless @_slot
-    el = @_slot.querySelector(':not([data-item])')
+    return '' unless @slotRef
+    el = @slotRef.querySelector(':not([data-item])')
     el?.textContent?.trim() or ''
 
   toggle: ->
@@ -40,12 +40,12 @@ export Menu = component
   openMenu: ->
     open = true
     highlightedIndex = 0
-    requestAnimationFrame => @_list?.querySelectorAll('[role="menuitem"]')[0]?.focus()
+    requestAnimationFrame => @listRef?.querySelectorAll('[role="menuitem"]')[0]?.focus()
 
   close: ->
     open = false
     highlightedIndex = -1
-    @_trigger?.focus()
+    @triggerRef?.focus()
 
   selectIndex: (idx) ->
     item = items[idx]
@@ -74,10 +74,10 @@ export Menu = component
     idx = items.findIndex (o) -> o.textContent.trim().toLowerCase().startsWith(typeaheadBuffer)
     if idx >= 0
       highlightedIndex = idx
-      @_list?.querySelectorAll('[role="menuitem"]')[idx]?.focus()
+      @listRef?.querySelectorAll('[role="menuitem"]')[idx]?.focus()
 
   _applyPlacement: ->
-    ARIA.position @_trigger, @_list, placement: 'bottom start', offset: 4
+    ARIA.position @triggerRef, @listRef, placement: 'bottom start', offset: 4
 
   mounted: ->
     _ready = true
@@ -90,7 +90,7 @@ export Menu = component
 
   _focusItem: (idx) ->
     highlightedIndex = idx
-    @_list?.querySelectorAll('[role="menuitem"]')[idx]?.focus()
+    @listRef?.querySelectorAll('[role="menuitem"]')[idx]?.focus()
 
   onMenuKeydown: (e) ->
     len = items.length
@@ -107,17 +107,17 @@ export Menu = component
 
   ~>
     return unless _ready
-    if @_list
-      @_list.id = _id
-      @_list.setAttribute 'popover', 'auto'
+    if @listRef
+      @listRef.id = _id
+      @listRef.setAttribute 'popover', 'auto'
       @_applyPlacement()
-    if @_trigger
-      @_trigger.setAttribute 'aria-controls', _id
-    ARIA.bindPopover open, (=> @_list), ((isOpen) => open = isOpen), (=> @_trigger)
+    if @triggerRef
+      @triggerRef.setAttribute 'aria-controls', _id
+    ARIA.bindPopover open, (=> @listRef), ((isOpen) => open = isOpen), (=> @triggerRef)
 
   render
     .
-      button ref: _trigger
+      button ref: triggerRef
         aria-haspopup: "menu"
         aria-expanded: !!open
         aria-controls: _id
@@ -128,10 +128,10 @@ export Menu = component
         @keydown: @onTriggerKeydown
         triggerLabel
 
-      . ref: _slot, style: "display:none"
+      . ref: slotRef, style: "display:none"
         slot
 
-      div ref: _list
+      div ref: listRef
         id: _id
         role: "menu"
         popover: "auto"

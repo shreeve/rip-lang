@@ -11,16 +11,16 @@
 #     div $value: "lettuce", "Lettuce"
 
 export CheckboxGroup = component
-  _root := null
-  _slot := null
+  rootRef := null
+  slotRef := null
   @value := []
   @disabled := false
   @orientation := "vertical"
   @label := ""
 
   _options ~=
-    return [] unless @_slot
-    Array.from(@_slot.querySelectorAll('[data-value]') or [])
+    return [] unless @slotRef
+    Array.from(@slotRef.querySelectorAll('[data-value]') or [])
 
   _toggle: (val) ->
     return if @disabled
@@ -33,7 +33,7 @@ export CheckboxGroup = component
     @emit 'change', @value
 
   _boxes: ->
-    Array.from(@_root?.querySelectorAll('[role="checkbox"]') or [])
+    Array.from(@rootRef?.querySelectorAll('[role="checkbox"]') or [])
 
   _syncTabStops: (focusIdx = null) ->
     boxes = @_boxes()
@@ -75,13 +75,13 @@ export CheckboxGroup = component
   ~> @_syncTabStops()
 
   render
-    div ref: _root, role: "group", aria-label: @label or undefined, aria-orientation: @orientation
+    div ref: rootRef, role: "group", aria-label: @label or undefined, aria-orientation: @orientation
       $orientation: @orientation
       $disabled: @disabled?!
       @keydown
       @focusin
 
-      . ref: _slot, style: "display:none"
+      . ref: slotRef, style: "display:none"
         slot
 
       for opt, idx in _options

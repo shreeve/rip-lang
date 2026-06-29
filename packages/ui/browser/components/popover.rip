@@ -10,7 +10,7 @@
 #       p "Popover content"
 
 export Popover = component
-  _content := null
+  contentRef := null
   @placement := "bottom-start"
   @offset := 4
   @disabled := false
@@ -25,8 +25,8 @@ export Popover = component
   _id =! "pop-#{Math.random().toString(36).slice(2, 8)}"
 
   _applyPlacement: ->
-    trigger = @_content?.querySelector('[data-trigger]')
-    floating = @_content?.querySelector('[data-content]')
+    trigger = @contentRef?.querySelector('[data-trigger]')
+    floating = @contentRef?.querySelector('[data-content]')
     [side, align] = @placement.split('-')
     align ??= 'center'
     ARIA.position trigger, floating, placement: "#{side} #{align}", offset: @offset
@@ -41,8 +41,8 @@ export Popover = component
 
   mounted: ->
     _ready = true
-    trigger = @_content?.querySelector('[data-trigger]')
-    floating = @_content?.querySelector('[data-content]')
+    trigger = @contentRef?.querySelector('[data-trigger]')
+    floating = @contentRef?.querySelector('[data-content]')
     if trigger and floating
       floating.id = _id
       floating.setAttribute 'popover', 'auto'
@@ -85,8 +85,8 @@ export Popover = component
 
   ~>
     return unless _ready
-    trigger = @_content?.querySelector('[data-trigger]')
-    floating = @_content?.querySelector('[data-content]')
+    trigger = @contentRef?.querySelector('[data-trigger]')
+    floating = @contentRef?.querySelector('[data-content]')
     if trigger
       trigger.setAttribute 'aria-expanded', !!open
     if floating
@@ -99,7 +99,7 @@ export Popover = component
 
   ~>
     return unless _ready
-    ARIA.bindPopover open, (=> @_content?.querySelector('[data-content]')), ((isOpen) => open = isOpen), (=> @_content?.querySelector('[data-trigger]'))
+    ARIA.bindPopover open, (=> @contentRef?.querySelector('[data-content]')), ((isOpen) => open = isOpen), (=> @contentRef?.querySelector('[data-trigger]'))
 
   onKeydown: (e) ->
     if e.key is 'Escape' and open
@@ -107,6 +107,6 @@ export Popover = component
       @close()
 
   render
-    div ref: _content
+    div ref: contentRef
       @keydown
       slot

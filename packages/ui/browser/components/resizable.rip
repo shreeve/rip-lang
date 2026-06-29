@@ -19,7 +19,7 @@
 #     div $panel: true, "Bottom"
 
 export Resizable = component
-  _root := null
+  rootRef := null
   @orientation := "horizontal"
   @minSize := 10
   @maxSize := 90
@@ -31,12 +31,12 @@ export Resizable = component
   sizes := []
 
   _panels: ->
-    return [] unless @_root
-    Array.from(@_root.querySelectorAll(':scope > [data-panel]') or [])
+    return [] unless @rootRef
+    Array.from(@rootRef.querySelectorAll(':scope > [data-panel]') or [])
 
   _handles: ->
-    return [] unless @_root
-    Array.from(@_root.querySelectorAll(':scope > [data-handle]') or [])
+    return [] unless @rootRef
+    Array.from(@rootRef.querySelectorAll(':scope > [data-handle]') or [])
 
   mounted: ->
     _ready = true
@@ -56,7 +56,7 @@ export Resizable = component
     if @orientation is 'horizontal' then e.clientX else e.clientY
 
   _getContainerSize: ->
-    rect = @_root?.getBoundingClientRect()
+    rect = @rootRef?.getBoundingClientRect()
     return 0 unless rect
     if @orientation is 'horizontal' then rect.width else rect.height
 
@@ -117,7 +117,7 @@ export Resizable = component
       handle.setAttribute 'aria-orientation', @orientation
 
   render
-    div ref: _root, $orientation: @orientation
+    div ref: rootRef, $orientation: @orientation
       @pointermove: @_onPointerMove
       @pointerup: @_onPointerUp
       style: "display:flex; flex-direction:#{if @orientation is 'horizontal' then 'row' else 'column'}"

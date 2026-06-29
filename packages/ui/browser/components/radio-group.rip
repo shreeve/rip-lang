@@ -10,16 +10,16 @@
 #     div $value: "lg", "Large"
 
 export RadioGroup = component
-  _root := null
-  _slot := null
+  rootRef := null
+  slotRef := null
   @value := null
   @disabled := false
   @orientation := "vertical"
   @name := ""
 
   _options ~=
-    return [] unless @_slot
-    Array.from(@_slot.querySelectorAll('[data-value]') or [])
+    return [] unless @slotRef
+    Array.from(@slotRef.querySelectorAll('[data-value]') or [])
 
   _select: (val) ->
     return if @disabled
@@ -27,7 +27,7 @@ export RadioGroup = component
     @emit 'change', @value
 
   onKeydown: (e) ->
-    radios = @_root?.querySelectorAll('[role="radio"]')
+    radios = @rootRef?.querySelectorAll('[role="radio"]')
     return unless radios?.length
     focused = Array.from(radios).indexOf(document.activeElement)
     return if focused < 0
@@ -41,12 +41,12 @@ export RadioGroup = component
     }, 'both'
 
   render
-    div ref: _root, role: "radiogroup", aria-orientation: @orientation
+    div ref: rootRef, role: "radiogroup", aria-orientation: @orientation
       $orientation: @orientation
       $disabled: @disabled?!
       @keydown
 
-      . ref: _slot, style: "display:none"
+      . ref: slotRef, style: "display:none"
         slot
 
       for opt, idx in _options

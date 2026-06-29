@@ -15,16 +15,16 @@
 #       div $item: "redo", "Redo"
 
 export Menubar = component
-  _root := null
-  _slot := null
+  rootRef := null
+  slotRef := null
   @disabled := false
 
   activeMenu := null
   highlightedIndex := -1
 
   _menus ~=
-    return [] unless @_slot
-    Array.from(@_slot.querySelectorAll('[data-menu]') or [])
+    return [] unless @slotRef
+    Array.from(@slotRef.querySelectorAll('[data-menu]') or [])
 
   _menuItemsFor: (menu) ->
     return [] unless menu
@@ -36,23 +36,23 @@ export Menubar = component
     highlightedIndex = 0
     requestAnimationFrame =>
       @_position(menuId)
-      @_root?.querySelector("[data-menu-list=\"#{menuId}\"] [role=\"menuitem\"]")?.focus()
+      @rootRef?.querySelector("[data-menu-list=\"#{menuId}\"] [role=\"menuitem\"]")?.focus()
 
   _closeMenu: ->
     activeMenu = null
     highlightedIndex = -1
 
   _position: (menuId) ->
-    ARIA.positionBelow @_root?.querySelector("[data-menu-trigger=\"#{menuId}\"]"),
-                       @_root?.querySelector("[data-menu-list=\"#{menuId}\"]"), 2, false
+    ARIA.positionBelow @rootRef?.querySelector("[data-menu-trigger=\"#{menuId}\"]"),
+                       @rootRef?.querySelector("[data-menu-list=\"#{menuId}\"]"), 2, false
 
   selectItem: (menuId, itemId) ->
     @emit 'select', { menu: menuId, item: itemId }
     @_closeMenu()
-    @_root?.querySelector("[data-menu-trigger=\"#{menuId}\"]")?.focus()
+    @rootRef?.querySelector("[data-menu-trigger=\"#{menuId}\"]")?.focus()
 
   _onBarKeydown: (e) ->
-    triggers = @_root?.querySelectorAll('[data-menu-trigger]')
+    triggers = @rootRef?.querySelectorAll('[data-menu-trigger]')
     return unless triggers?.length
     focused = Array.from(triggers).indexOf(document.activeElement)
     return if focused < 0
@@ -84,11 +84,11 @@ export Menubar = component
       when 'ArrowDown'
         e.preventDefault()
         highlightedIndex = (highlightedIndex + 1) %% len
-        @_root?.querySelector("[data-menu-list=\"#{menuId}\"]")?.querySelectorAll('[role="menuitem"]')[highlightedIndex]?.focus()
+        @rootRef?.querySelector("[data-menu-list=\"#{menuId}\"]")?.querySelectorAll('[role="menuitem"]')[highlightedIndex]?.focus()
       when 'ArrowUp'
         e.preventDefault()
         highlightedIndex = (highlightedIndex - 1) %% len
-        @_root?.querySelector("[data-menu-list=\"#{menuId}\"]")?.querySelectorAll('[role="menuitem"]')[highlightedIndex]?.focus()
+        @rootRef?.querySelector("[data-menu-list=\"#{menuId}\"]")?.querySelectorAll('[role="menuitem"]')[highlightedIndex]?.focus()
       when 'Enter', ' '
         e.preventDefault()
         item = menuItems[highlightedIndex]
@@ -96,11 +96,11 @@ export Menubar = component
       when 'Escape', 'Tab'
         e.preventDefault() if e.key is 'Escape'
         @_closeMenu()
-        @_root?.querySelector("[data-menu-trigger=\"#{menuId}\"]")?.focus()
+        @rootRef?.querySelector("[data-menu-trigger=\"#{menuId}\"]")?.focus()
       when 'ArrowRight'
         e.preventDefault()
         @_closeMenu()
-        triggers = @_root?.querySelectorAll('[data-menu-trigger]')
+        triggers = @rootRef?.querySelectorAll('[data-menu-trigger]')
         focused = Array.from(triggers).findIndex (t) -> t.dataset.menuTrigger is menuId
         next = (focused + 1) %% triggers.length
         triggers[next]?.focus()
@@ -108,7 +108,7 @@ export Menubar = component
       when 'ArrowLeft'
         e.preventDefault()
         @_closeMenu()
-        triggers = @_root?.querySelectorAll('[data-menu-trigger]')
+        triggers = @rootRef?.querySelectorAll('[data-menu-trigger]')
         focused = Array.from(triggers).findIndex (t) -> t.dataset.menuTrigger is menuId
         prev = (focused - 1) %% triggers.length
         triggers[prev]?.focus()
@@ -116,7 +116,7 @@ export Menubar = component
 
   ~>
     if activeMenu
-      onDown   = (e) => @_closeMenu() unless @_root?.contains(e.target)
+      onDown   = (e) => @_closeMenu() unless @rootRef?.contains(e.target)
       onScroll = => @_position(activeMenu)
       document.addEventListener 'mousedown', onDown
       window.addEventListener   'scroll',    onScroll, true
@@ -125,9 +125,9 @@ export Menubar = component
         window.removeEventListener   'scroll',    onScroll, true
 
   render
-    div ref: _root, role: "menubar", $disabled: @disabled?!
+    div ref: rootRef, role: "menubar", $disabled: @disabled?!
 
-      . ref: _slot, style: "display:none"
+      . ref: slotRef, style: "display:none"
         slot
 
       for menu in _menus

@@ -16,7 +16,7 @@
 #         p "Content B"
 
 export Accordion = component
-  _content := null
+  contentRef := null
   @multiple := false
 
   openItems := new Set()
@@ -25,7 +25,7 @@ export Accordion = component
 
   mounted: ->
     _ready = true
-    @_content?.querySelectorAll('[data-trigger]').forEach (trigger) =>
+    @contentRef?.querySelectorAll('[data-trigger]').forEach (trigger) =>
       item = trigger.closest('[data-item]')
       return unless item
       id = item.dataset.item
@@ -36,7 +36,7 @@ export Accordion = component
 
   ~>
     return unless _ready
-    @_content?.querySelectorAll('[data-item]').forEach (item) =>
+    @contentRef?.querySelectorAll('[data-item]').forEach (item) =>
       id = item.dataset.item
       isOpen = openItems.has(id)
       item.toggleAttribute 'data-open', isOpen
@@ -84,8 +84,8 @@ export Accordion = component
     }, 'vertical'
 
   _triggers: ->
-    return [] unless @_content
-    Array.from(@_content.querySelectorAll('[data-trigger]'))
+    return [] unless @contentRef
+    Array.from(@contentRef.querySelectorAll('[data-trigger]'))
 
   _focusNext: (dir) ->
     triggers = @_triggers()
@@ -100,5 +100,5 @@ export Accordion = component
     target?.focus()
 
   render
-    div ref: _content
+    div ref: contentRef
       slot

@@ -13,17 +13,17 @@
 #     button $suffix: true, @click: doSearch, "Go"
 
 export InputGroup = component
-  _root := null
+  rootRef := null
   @disabled := false
 
   focused := false
 
   mounted: ->
-    ctrl = @_root?.querySelector('input, select, textarea')
+    ctrl = @rootRef?.querySelector('input, select, textarea')
     return unless ctrl
     ctrl.addEventListener 'focusin', => focused = true
     ctrl.addEventListener 'focusout', => focused = false
 
   render
-    div ref: _root, $disabled: @disabled?!, $focused: focused?!
+    div ref: rootRef, $disabled: @disabled?!, $focused: focused?!
       slot

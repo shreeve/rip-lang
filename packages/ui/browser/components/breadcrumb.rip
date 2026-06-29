@@ -15,7 +15,7 @@
 #     span $item: true, "Settings"
 
 export Breadcrumb = component
-  _content := null
+  contentRef := null
   @separator := "/"
   @label := "Breadcrumb"
 
@@ -25,14 +25,14 @@ export Breadcrumb = component
 
   _items ~=
     return [] unless _ready
-    return [] unless @_content
-    Array.from(@_content.querySelectorAll('[data-item]') or [])
+    return [] unless @contentRef
+    Array.from(@contentRef.querySelectorAll('[data-item]') or [])
 
   ~>
     return unless _ready
     items = _items
     return unless items.length
-    @_content?.style.setProperty '--breadcrumb-separator', JSON.stringify(@separator)
+    @contentRef?.style.setProperty '--breadcrumb-separator', JSON.stringify(@separator)
     items.forEach (el, idx) =>
       isLast = idx is items.length - 1
       if isLast
@@ -44,5 +44,5 @@ export Breadcrumb = component
 
   render
     nav aria-label: @label
-      ol ref: _content
+      ol ref: contentRef
         slot

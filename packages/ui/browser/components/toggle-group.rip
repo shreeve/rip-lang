@@ -11,16 +11,16 @@
 #     div $value: "right", "Right"
 
 export ToggleGroup = component
-  _root := null
-  _slot := null
+  rootRef := null
+  slotRef := null
   @value := null
   @disabled := false
   @multiple := false
   @orientation := "horizontal"
 
   _items ~=
-    return [] unless @_slot
-    Array.from(@_slot.querySelectorAll('[data-value]') or [])
+    return [] unless @slotRef
+    Array.from(@slotRef.querySelectorAll('[data-value]') or [])
 
   _isPressed: (item) ->
     val = item.dataset.value
@@ -43,7 +43,7 @@ export ToggleGroup = component
     @emit 'change', @value
 
   _buttons: ->
-    Array.from(@_root?.querySelectorAll('button[aria-pressed]') or [])
+    Array.from(@rootRef?.querySelectorAll('button[aria-pressed]') or [])
 
   _syncTabStops: (focusIdx = null) ->
     buttons = @_buttons()
@@ -87,13 +87,13 @@ export ToggleGroup = component
   ~> @_syncTabStops()
 
   render
-    div ref: _root, role: "group", aria-orientation: @orientation
+    div ref: rootRef, role: "group", aria-orientation: @orientation
       $orientation: @orientation
       $disabled: @disabled?!
       @keydown
       @focusin
 
-      . ref: _slot, style: "display:none"
+      . ref: slotRef, style: "display:none"
         slot
 
       for item, idx in _items
