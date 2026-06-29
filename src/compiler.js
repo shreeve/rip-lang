@@ -282,6 +282,9 @@ export class CodeEmitter {
 
     // Symbol literals
     'symbol': 'emitSymbol',
+
+    // `expr as Type` cast — runtime-erased, narrows in the check path
+    'cast': 'emitCast',
   };
 
   constructor(options = {}) {
@@ -932,33 +935,29 @@ export class CodeEmitter {
   // Main dispatch
   // ---------------------------------------------------------------------------
 
-  // `expr as Type` cast wrap. The type rewriter stashes the collected type
-  // string(s) as `.data.cast` (an array, for chains) on the token that ends
-  // the cast's left-hand expression. At runtime the cast is fully erased, so
-  // this only fires in the shadow-TS check path (`inlineTypes`), where it
-  // re-materializes a real TS assertion `(code as A as B)`.
-  castWrap(code, node) {
-    let cast = meta(node, 'cast');
-    if (!cast || !this.options.inlineTypes) return code;
-    return `(${code} as ${cast.join(' as ')})`;
+  // `expr as Type` cast wrap. At runtime the cast is fully erased, so this only
+  // fires in the shadow-TS check path (`inlineTypes`), where it re-materializes
+  // a real TS assertion `(code as Type)`. `typeStr` is the opaque type string
+  // collapsed by the type rewriter onto the CAST marker token.
+  castWrap(code, typeStr) {
+    if (!typeStr || !this.options.inlineTypes) return code;
+    return `(${code} as ${typeStr})`;
+  }
+
+  // `['cast', expr, typeStr]` — postfix type assertion. Emit just the inner
+  // expression on the runtime path (the cast leaves zero trace); in the check
+  // path wrap it as a real TS assertion so it narrows for the checker. Covers
+  // every carrier (identifier, member, call/index/paren result) because the
+  // grammar reduces this AFTER the full postfix expression is built. Chains
+  // nest (`['cast',['cast',x,'A'],'B']`) and re-wrap recursively.
+  emitCast(head, rest) {
+    let [expr, typeStr] = rest;
+    return this.castWrap(this.emit(expr, 'value'), typeStr);
   }
 
   emit(sexpr, context = 'statement') {
     // String object with metadata (quote, bang, optional, heregex, cast, etc.)
     if (sexpr instanceof String) {
-      // `expr as Type` cast on a bare identifier / numeric atom. Emit the
-      // underlying value, then wrap as a TS assertion in the check path. Other
-      // metadata shapes (bang/optional/heregex/quote) keep their own handling
-      // below — a cast directly on those leaf forms is not a real-world LHS.
-      if (meta(sexpr, 'cast') && this.options.inlineTypes &&
-          meta(sexpr, 'bang') !== true && !meta(sexpr, 'optional') &&
-          !meta(sexpr, 'quote') &&
-          !(meta(sexpr, 'delimiter') === '///' && meta(sexpr, 'heregex'))) {
-        let v = str(sexpr);
-        let base = (this.reactiveVars?.has(v) && !this.suppressReactiveUnwrap) ? `${v}.value` : v;
-        return this.castWrap(base, sexpr);
-      }
-
       // Dammit operator (!)
       if (meta(sexpr, 'bang') === true) {
         return `await ${str(sexpr)}()`;
@@ -1486,7 +1485,7 @@ export class CodeEmitter {
     let base = needsParens ? `(${objCode})` : objCode;
     if (meta(prop, 'bang') === true) return `await ${base}.${str(prop)}()`;
     if (meta(prop, 'optional')) return `(${base}.${str(prop)} != null)`;
-    return this.castWrap(`${base}.${str(prop)}`, prop);
+    return `${base}.${str(prop)}`;
   }
 
   emitOptionalProperty(head, rest) {

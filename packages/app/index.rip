@@ -2923,10 +2923,14 @@ export type AriaEl = HTMLElement | null | undefined
 export type AriaElRef = AriaEl | (() => AriaEl)
 export type AriaOrientation = 'vertical' | 'horizontal' | 'both'
 
-# Augmented element shape for the custom `__ariaPrevTrigger` expando these
-# helpers stash on a floating element. Reached only via an `as` cast inside
-# the helper; the public AriaApi never widens.
+# Augmented element shapes for the custom `__aria*` expandos these helpers
+# stash on their target element. Reached only via an `as` cast inside the
+# helper; the public AriaApi never widens.
 type AriaFloatingEl = HTMLElement & { __ariaPrevTrigger?: AriaEl }
+type AriaDialogEl = HTMLDialogElement & { __ariaBindDialog?: [EventListener, EventListener] | null }
+type AriaToggleHandler = (e: ToggleEvent) => void
+type AriaPopoverEl = HTMLElement & { __ariaBindPopover?: AriaToggleHandler | null }
+type AriaDismissEl = HTMLElement & { __ariaPopupDismiss?: Disposer | null }
 
 # Keyboard handler map for listNav/rovingNav — every key is optional; a handler
 # only runs if provided. `char` receives the printable key for typeahead.
@@ -3012,16 +3016,16 @@ _ariaListNav = (e: KeyboardEvent, h: AriaNavHandlers) ->
 #    is tear down whatever was stored on the popup, then conditionally
 #    re-attach.
 _ariaPopupDismiss = (open: boolean, popup: AriaElRef, close: () => void, els: AriaElRef[] = [], repos: (() => void) | null = null): Disposer | undefined ->
-  # `get` stays `any`: its result is read for the `__ariaPopupDismiss` expando,
-  # but an `as` cast on a call result doesn't narrow yet (pending RFC-12), and
-  # `pop` is captured by the closures below so it degrades to `any` regardless.
-  get = (x: AriaElRef): any -> if typeof x is 'function' then x() else x
-  pop = get(popup)
+  get = (x: AriaElRef): AriaEl -> if typeof x is 'function' then x() else x
+  # Route A: the `as` cast narrows the `get(...)` call result, so `pop` is a
+  # concrete type (the `AriaDismissEl` augment adds the `__ariaPopupDismiss`
+  # expando) even though the closures below capture it.
+  pop = get(popup) as AriaDismissEl
   if pop and pop.__ariaPopupDismiss
     pop.__ariaPopupDismiss()
     pop.__ariaPopupDismiss = null
   return unless open and pop
-  onDown   = (e) => close() unless [pop, ...els.map(get)].some (el) -> el?.contains(e.target)
+  onDown   = (e) => close() unless [pop, ...els.map(get)].some (el: AriaEl) -> el?.contains(e.target)
   onScroll = (e) =>
     return if pop?.contains(e.target)
     if repos then repos() else close()
@@ -3051,17 +3055,17 @@ _ariaPopupGuard = (delay: number = 250): AriaPopupGuard ->
 # setOpen: callback that receives actual native open state (true/false)
 # source: optional control element or lazy getter used as popover invoker
 _ariaBindPopover = (open: boolean, popover: AriaElRef, setOpen: (open: boolean) => void, source: AriaElRef = null): Disposer | undefined ->
-  # `get` stays `any`: `el` is read for the `__ariaBindPopover` expando, but an
-  # `as` cast on a call result doesn't narrow yet (pending RFC-12), and `el` is
-  # captured by the handlers below so it degrades to `any` regardless.
-  get = (x: AriaElRef): any -> if typeof x is 'function' then x() else x
+  get = (x: AriaElRef): AriaEl -> if typeof x is 'function' then x() else x
   currentFocus = ->
     active = document.activeElement
     return active if active and active isnt document.body
     last = globalThis.__ariaLastFocusedEl
     return last if last?.isConnected isnt false
     null
-  el = get(popover)
+  # Route A: the `as` cast narrows the `get(...)` call result, so `el` is a
+  # concrete type (the `AriaPopoverEl` augment adds the `__ariaBindPopover`
+  # expando) even though the handlers below capture it.
+  el = get(popover) as AriaPopoverEl
   return unless el
   return unless Object.hasOwn(HTMLElement.prototype, 'togglePopover')
   restoreEl = null
@@ -3139,17 +3143,17 @@ _ariaBindPopover = (open: boolean, popover: AriaElRef, setOpen: (open: boolean) 
 # setOpen: callback invoked when native state changes
 # dismissable: false prevents Esc/cancel close
 _ariaBindDialog = (open: boolean, dialog: AriaElRef, setOpen: (open: boolean) => void, dismissable: boolean = true): Disposer | undefined ->
-  # `get` stays `any`: `el` is downcast to a dialog + read for the
-  # `__ariaBindDialog` expando, but an `as` cast on a call result doesn't narrow
-  # yet (pending RFC-12), and `el` is captured by the handlers below anyway.
-  get = (x: AriaElRef): any -> if typeof x is 'function' then x() else x
+  get = (x: AriaElRef): AriaEl -> if typeof x is 'function' then x() else x
   currentFocus = ->
     active = document.activeElement
     return active if active and active isnt document.body
     last = globalThis.__ariaLastFocusedEl
     return last if last?.isConnected isnt false
     null
-  el = get(dialog)
+  # Route A: the `as` cast on the `get(...)` call result narrows, so `el` is a
+  # concrete dialog type — no implicit `any`, even though it's captured by the
+  # closures below. `AriaDialogEl` adds the custom `__ariaBindDialog` expando.
+  el = get(dialog) as AriaDialogEl
   return unless el?.showModal?
   restoreEl = null
 

@@ -59,9 +59,26 @@ box.inner.label
 const mlabel = (box.inner as Rich).label
 console.log(mlabel)
 
-// ── Known gap (pending RFC-12): call / index / parenthesized results do NOT
-// narrow. The runtime erase is still correct; only the type narrowing is lost,
-// so these forms are deliberately NOT exercised as positive narrowing cases.
-// e.g. `(makeRich() as Rich)`, `(arr[0] as Rich)`, and `((b) as Rich)` compile
-// and erase, but the assertion is dropped from the checker's view. Use an
-// identifier or member-access carrier when you need narrowing today.
+// ── Call result narrows (route A — the cast rides the whole call) ──
+
+function makeBase(): Base {
+  return { id: 2 }
+}
+
+// @ts-expect-error — `label` is not on Base
+makeBase().label
+const clabel = (makeBase() as Rich).label
+console.log(clabel)
+
+// ── Index result narrows ──
+
+const bases: Base[] = [makeRich()]
+// @ts-expect-error — `label` is not on Base
+bases[0].label
+const ilabel = (bases[0] as Rich).label
+console.log(ilabel)
+
+// ── Parenthesized expression narrows ──
+
+const plabel = ((b) as Rich).label
+console.log(plabel)

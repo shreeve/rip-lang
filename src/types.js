@@ -98,17 +98,19 @@ export function installTypeSupport(Lexer) {
     this.scanTokens((token, i, tokens) => {
       let tag = token[0];
 
-      // ── `expr as Type` cast — pure type construct, erased from the parse ──
-      // A postfix type assertion. The Type RHS is collected as a string (the
-      // same machinery as `::` annotations) and the whole `as Type` run is
-      // spliced out of the token stream, so the grammar/parser never sees it.
-      // The type string is stashed as `.data.cast` on the token that ENDS the
-      // left-hand expression — exactly where every other annotation rides —
-      // so the parser's String-wrapper bridge carries it into the s-expression
-      // for the compiler. The compiler erases it at runtime and re-materializes
-      // it as a real TS `(expr as Type)` only in the shadow-TS check path.
-      // Chaining (`x as A as B`) accumulates onto one carrier; splicing then
-      // re-examining position `i` lets the next `as` see the same carrier.
+      // ── `expr as Type` cast — postfix type assertion (route A) ──────────
+      // A bare `as` glued to a value on its left and a type on its right. The
+      // Type RHS is collected as a string (the same machinery as `::`
+      // annotations) and the whole `as Type` run COLLAPSES into a single
+      // in-stream CAST marker token carrying that string as its value. The
+      // grammar reduces `Expression CAST` to `['cast', expr, typeStr]` — so
+      // the parser sees a structural postfix node (like `?`/`!`) but never a
+      // type. The compiler erases it at runtime and re-materializes it as a
+      // real TS `(expr as Type)` only in the shadow-TS check path. Because the
+      // marker is a real token, the reduction fires AFTER the full postfix
+      // expression is built, so call/index/paren results narrow too.
+      // Chaining (`x as A as B`) emits one CAST per `as` (`x CAST CAST`); the
+      // grammar's left-associativity nests them: `['cast',['cast',x,'A'],'B']`.
       if (tag === 'IDENTIFIER' && token[1] === 'as' && !token.data?.bang &&
           isCastAs(tokens, i)) {
         let typeTokens = collectTypeExpression(tokens, i + 1, { castContext: true });
@@ -117,22 +119,21 @@ export function installTypeSupport(Lexer) {
           for (let tt of typeTokens) {
             if (tt[0] === 'IDENTIFIER') typeRefNames.add(tt[1]);
           }
-          let carrier = tokens[i - 1];
-          if (!carrier.data) carrier.data = {};
-          (carrier.data.cast ??= []).push(typeStr);
-          tokens.splice(i, 1 + typeTokens.consumed);
+          let castTok = gen('CAST', typeStr, token);
+          tokens.splice(i, 1 + typeTokens.consumed, castTok);
           // A trailing `>` (or other "unfinished" tail) makes the lexer
           // suppress the newline after the type, so once the `as Type` run is
-          // gone the statement can collide with the next line. If what now
-          // follows the carrier sits on a later row and isn't already a
+          // collapsed the statement can collide with the next line. If what now
+          // follows the marker sits on a later row and isn't already a
           // separator, restore the TERMINATOR the lexer ate.
-          let follow = tokens[i];
+          let follow = tokens[i + 1];
           if (follow && follow[0] !== 'TERMINATOR' && follow[0] !== 'INDENT' &&
-              follow.loc?.r != null && carrier.loc?.r != null &&
-              follow.loc.r > carrier.loc.r) {
-            tokens.splice(i, 0, gen('TERMINATOR', '\n', follow));
+              follow[0] !== 'CAST' &&
+              follow.loc?.r != null && castTok.loc?.r != null &&
+              follow.loc.r > castTok.loc.r) {
+            tokens.splice(i + 1, 0, gen('TERMINATOR', '\n', follow));
           }
-          return 0; // re-examine position i (handles chained `as`)
+          return 1; // advance past the CAST marker (a chained `as` follows it)
         }
       }
 
@@ -914,6 +915,14 @@ function collectTypeExpression(tokens, j, opts = {}) {
       let prevRow = tokens[j - 1]?.loc?.r;
       let curRow = t.loc?.r;
       if (prevRow != null && curRow != null && curRow > prevRow) break;
+    }
+
+    // Cast context: a chained cast (`x as A as B`) — the type RHS is just `A`;
+    // the second `as` starts a new cast on the result. Stop here so each `as`
+    // becomes its own CAST marker and the grammar nests them left-to-right.
+    // (`as` never appears inside a real type expression, so this is safe.)
+    if (opts.castContext && depth === 0 && tTag === 'IDENTIFIER' && t[1] === 'as') {
+      break;
     }
 
     // Delimiters that end the type at depth 0

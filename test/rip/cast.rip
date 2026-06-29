@@ -46,28 +46,25 @@ code "chained casts erased", "y = x as A as B", "y = x"
 # Shadow-TS check path — the cast becomes a real TS assertion (it narrows)
 # ==============================================================================
 #
-# The assertion only survives into the check path — and therefore only narrows
-# for the checker — when its carrier is an IDENTIFIER or a member (PROPERTY)
-# access. Those are the supported forms.
+# Route A: the cast is a grammar node that reduces AFTER the full postfix
+# expression is built, so EVERY carrier narrows — identifier, member access,
+# AND call / index / parenthesized results.
 
 code "inlineTypes keeps TS cast", "y = x as Foo", "y = x as Foo", { inlineTypes: true }
 code "inlineTypes keeps generic cast", "m = x as Map<string, number>", "m = (x as Map<string, number>)", { inlineTypes: true }
 code "inlineTypes cast precedence", "y = x as Bar + n", "y = (x as Bar) + n", { inlineTypes: true }
-code "inlineTypes chained cast", "y = x as A as B", "y = x as A as B", { inlineTypes: true }
+code "inlineTypes chained cast", "y = x as A as B", "y = (x as A) as B", { inlineTypes: true }
 code "inlineTypes parenthesized identifier", "y = (x as Foo)", "y = x as Foo", { inlineTypes: true }
 code "inlineTypes member access narrows", "r = obj.prop as Foo", "r = obj.prop as Foo", { inlineTypes: true }
 
 # ==============================================================================
-# Known gap (pending RFC-12): call / index / paren-prefixed results do NOT
-# narrow. The cast is stripped even in the check path because its marker rides
-# the carrier token, and a call/index/paren carrier isn't bridged into the
-# s-expression. Runtime erasure is still correct — only the narrowing is lost.
-# These assert the assertion is ABSENT in the check path (no `as` survives).
+# Full narrowing — call / index / paren-prefixed results now narrow too
+# (the route-A grammar node closes the old RFC-12 carrier gap).
 # ==============================================================================
 
-code "gap: call result not narrowed", "c = foo(1) as Foo", "c = foo(1)", { inlineTypes: true }
-code "gap: index result not narrowed", "i = arr[0] as Foo", "i = arr[0]", { inlineTypes: true }
-code "gap: paren-prefixed not narrowed", "y = (x) as Foo", "y = x", { inlineTypes: true }
+code "inlineTypes call result narrows", "c = foo(1) as Foo", "c = foo(1) as Foo", { inlineTypes: true }
+code "inlineTypes index result narrows", "i = arr[0] as Foo", "i = arr[0] as Foo", { inlineTypes: true }
+code "inlineTypes paren-prefixed narrows", "y = (x) as Foo", "y = x as Foo", { inlineTypes: true }
 
 # ==============================================================================
 # `as` is NOT a cast in for / import / export / property contexts
