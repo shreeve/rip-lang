@@ -9,6 +9,7 @@
   },
   "files": [
     "index.rip",
+    "aria.d.ts",
     "README.md",
     "AGENTS.md"
   ]

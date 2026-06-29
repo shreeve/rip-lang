@@ -12,7 +12,7 @@ import { emitTsParam, ripToTs } from "./params.js";
 //   emitTypes(tokens, sexpr, source) — generates .d.ts from annotated
 //     tokens and the parsed s-expression tree.
 //
-//   INTRINSIC_TYPE_DECLS / INTRINSIC_FN_DECL / ARIA_TYPE_DECLS /
+//   INTRINSIC_TYPE_DECLS / INTRINSIC_FN_DECL /
 //   SIGNAL_*, COMPUTED_*, EFFECT_* — declaration tables consumed by
 //     emitTypes() and by typecheck.js when building the virtual TS
 //     file. Browser code never references these.
@@ -48,37 +48,6 @@ export const INTRINSIC_TYPE_DECLS = [
 ];
 
 export const INTRINSIC_FN_DECL = 'declare function __ripEl<K extends __RipTag>(tag: K, props?: __RipProps<K>): void;\ndeclare function __ripSvgEl<K extends keyof Omit<SVGElementTagNameMap, keyof HTMLElementTagNameMap>>(tag: K, props?: __RipProps<K> & __RipSvgAttrs): void;\ndeclare function __ripRoute<const T extends string>(s: T): T;';
-
-// Ambient type for the global `ARIA` accessibility helpers (globalThis.ARIA),
-// injected into any typed file that references `ARIA.`. This is the consumer
-// contract; it MUST stay in sync with `AriaApi` in packages/app/index.rip (the
-// implementation contract). The pairing is guarded by test/types/14-aria.rip —
-// update both sides and that fixture together. Helper types are `__Rip`-prefixed
-// so they never collide with consumer-defined names.
-export const ARIA_TYPE_DECLS = [
-  'type __RipAriaEl = HTMLElement | null | undefined;',
-  'type __RipAriaElRef = __RipAriaEl | (() => __RipAriaEl);',
-  'type __RipAriaDisposer = () => void;',
-  'type __RipAriaNavHandlers = { next?: () => void; prev?: () => void; first?: () => void; last?: () => void; select?: () => void; dismiss?: () => void; tab?: () => void; char?: (key: string) => void; };',
-  'type __RipAriaPositionOptions = { placement?: string; offset?: number; matchWidth?: boolean; };',
-  'type __RipAriaPopupGuard = { block: (ms?: number) => void; canOpen: () => boolean; };',
-  'declare const ARIA: {',
-  '  listNav(e: KeyboardEvent, h: __RipAriaNavHandlers): void;',
-  "  rovingNav(e: KeyboardEvent, h: __RipAriaNavHandlers, orientation?: 'vertical' | 'horizontal' | 'both'): void;",
-  '  popupDismiss(open: boolean, popup: __RipAriaElRef, close: () => void, els?: __RipAriaElRef[], repos?: (() => void) | null): __RipAriaDisposer | undefined;',
-  '  popupGuard(delay?: number): __RipAriaPopupGuard;',
-  '  bindPopover(open: boolean, popover: __RipAriaElRef, setOpen: (open: boolean) => void, source?: __RipAriaElRef): __RipAriaDisposer | undefined;',
-  '  bindDialog(open: boolean, dialog: __RipAriaElRef, setOpen: (open: boolean) => void, dismissable?: boolean): __RipAriaDisposer | undefined;',
-  '  positionBelow(trigger: __RipAriaEl, popup: __RipAriaEl, gap?: number, setVisible?: boolean): void;',
-  '  trapFocus(panel: Element): __RipAriaDisposer;',
-  '  wireAria(panel: __RipAriaEl, id: string): void;',
-  '  lockScroll(instance: unknown): void;',
-  '  unlockScroll(instance: unknown): void;',
-  '  position(trigger: __RipAriaEl, floating: __RipAriaEl, opts?: __RipAriaPositionOptions): void;',
-  '  hasAnchor(): boolean;',
-  '  combine(...disposers: Array<__RipAriaDisposer | null | undefined>): __RipAriaDisposer;',
-  '};',
-];
 
 export const SIGNAL_INTERFACE = 'interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }';
 export const SIGNAL_FN = 'declare function __state<T>(value: T | Signal<T>): Signal<T>;';
@@ -920,9 +889,6 @@ export function emitTypes(tokens, sexpr = null, source = '', schemaBehavior = nu
   let preamble = [];
   if (usesRipIntrinsicProps) {
     preamble.push(...INTRINSIC_TYPE_DECLS);
-  }
-  if (/\bARIA\./.test(source)) {
-    preamble.push(...ARIA_TYPE_DECLS);
   }
   if (usesSignal) {
     preamble.push(SIGNAL_INTERFACE);

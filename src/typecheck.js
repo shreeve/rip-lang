@@ -13,7 +13,7 @@
 import { Compiler, getStdlibCode } from './compiler.js';
 import { Lexer } from './lexer.js';
 import { STDLIB_TYPE_DECLS } from './stdlib.js';
-import { INTRINSIC_TYPE_DECLS, INTRINSIC_FN_DECL, ARIA_TYPE_DECLS, SIGNAL_INTERFACE, SIGNAL_FN, COMPUTED_INTERFACE, COMPUTED_FN, EFFECT_FN, ripDestructuredNames } from './dts.js';
+import { INTRINSIC_TYPE_DECLS, INTRINSIC_FN_DECL, SIGNAL_INTERFACE, SIGNAL_FN, COMPUTED_INTERFACE, COMPUTED_FN, EFFECT_FN, ripDestructuredNames } from './dts.js';
 import './schema/loader-server.js';   // registers full schema runtime provider
 import { createRequire } from 'module';
 import { readFileSync, existsSync, readdirSync } from 'fs';
@@ -2097,10 +2097,6 @@ export function compileForCheck(filePath, source, compiler, opts = {}) {
     headerDts = parts.join('\n') + '\n' + headerDts;
   }
 
-  if (hasTypes && /\bARIA\./.test(code) && !/\bdeclare const ARIA\b/.test(headerDts)) {
-    headerDts = ARIA_TYPE_DECLS.join('\n') + '\n' + headerDts;
-  }
-
   // Inline hoisted `let` declarations at their first assignment in the shadow
   // TS file, then merge DTS header types into the inlined declarations.
   //
@@ -3542,6 +3538,29 @@ export function readProjectConfig(dir) {
   return config;
 }
 
+// Resolve a project's `rip.types` ambient `.d.ts` includes to absolute paths.
+//
+// These are hand-written `.d.ts` files (like tsconfig's `files`) that a project
+// opts into via `package.json#rip.types: ["path/to/x.d.ts", ...]`. Each path is
+// resolved relative to the project root and, if it exists, added as an explicit
+// program root (appended to the language-service host's getScriptFileNames). An
+// explicit root-file `.d.ts` contributes its global `declare`s to every other
+// file in the program regardless of the `types` compiler option — so this is how
+// a project pulls in a shared ambient contract (e.g. `@rip-lang/app/aria.d.ts`
+// for the global `ARIA` helpers) without a per-file `/// <reference>`. A missing
+// path is warned and skipped rather than crashing the check.
+export function resolveTypeIncludes(ripConfig, rootPath) {
+  const list = Array.isArray(ripConfig?.types) ? ripConfig.types : [];
+  const out = [];
+  for (const entry of list) {
+    if (typeof entry !== 'string' || !entry) continue;
+    const abs = resolve(rootPath, entry);
+    if (existsSync(abs)) out.push(abs);
+    else console.warn(`[rip] rip.types include not found, skipping: ${entry}`);
+  }
+  return out;
+}
+
 // ── CLI batch type-checker ─────────────────────────────────────────
 
 // Convert a simple glob pattern to a RegExp for matching relative paths.
@@ -3621,6 +3640,7 @@ export async function runCheck(targetDir, opts = {}) {
   const checkAll = ripConfig.checkAll === true;
   const excludeGlobs = Array.isArray(ripConfig.exclude) ? ripConfig.exclude : [];
   const excludePatterns = excludeGlobs.map(globToRegex);
+  const typeIncludes = resolveTypeIncludes(ripConfig, rootPath);
 
   const allFiles = findRipFiles(rootPath, [], excludePatterns);
   if (allFiles.length === 0) {
@@ -3894,7 +3914,7 @@ export async function runCheck(targetDir, opts = {}) {
   });
 
   const host = {
-    getScriptFileNames: () => [...compiled.keys()].map(toVirtual),
+    getScriptFileNames: () => [...[...compiled.keys()].map(toVirtual), ...typeIncludes],
     getScriptVersion: () => '1',
     getScriptSnapshot(f) {
       const c = compiled.get(fromVirtual(f));
@@ -4682,6 +4702,7 @@ export async function runAudit(targetDir) {
   }
 
   const { typeRoots, types: ambientTypes } = collectAmbientTypes(rootPath);
+  const typeIncludes = resolveTypeIncludes(pkg.rip, rootPath);
   const settings = createTypeCheckSettings(ts, {
     strict: true,
     ...(typeRoots.length    ? { typeRoots }              : {}),
@@ -4689,7 +4710,7 @@ export async function runAudit(targetDir) {
   });
 
   const host = {
-    getScriptFileNames: () => [...compiled.keys()].map(toVirtual),
+    getScriptFileNames: () => [...[...compiled.keys()].map(toVirtual), ...typeIncludes],
     getScriptVersion:   () => '1',
     getScriptSnapshot(f) {
       const c = compiled.get(fromVirtual(f));
