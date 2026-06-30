@@ -9143,7 +9143,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           const item = sexpr[i];
           if (Array.isArray(item) && item[0] === "=") {
             const targetName = _str(item[1]);
-            if (targetName && !(this.reactiveMembers && this.reactiveMembers.has(targetName))) {
+            const isMember = targetName && this.componentMembers && this.componentMembers.has(targetName);
+            if (targetName && !isMember) {
               items.push(["=", item[1], this.transformComponentMembers(item[2], scope)]);
               scope.add(targetName);
               continue;
@@ -9159,6 +9160,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       const [, body] = rest;
       const statements = this.is(body, "block") ? body.slice(1) : [];
       const stateVars = [];
+      const plainVars = [];
       const derivedVars = [];
       const gateVars = [];
       const readonlyVars = [];
@@ -9245,9 +9247,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                 methods.push({ name: varName, func: val });
                 memberNames.add(varName);
               } else {
-                stateVars.push({ name: varName, value: val, isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]), optional: getMemberOptional(stmt[1]), srcLine: stmt.loc?.r });
+                plainVars.push({ name: varName, value: val, isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]), node: stmt, srcLine: stmt.loc?.r });
                 memberNames.add(varName);
-                reactiveMembers.add(varName);
               }
             }
           }
@@ -9275,6 +9276,65 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           this._gateDecls = [];
         for (const { path, key, srcLine } of gateVars) {
           this._gateDecls.push({ path, keyed: !!key, line: (srcLine ?? 0) + 1 });
+        }
+      }
+      if (plainVars.length > 0) {
+        const ASSIGN_OPS = new Set(["=", "+=", "-=", "*=", "/=", "%=", "**=", "//=", "%%=", "&&=", "||=", "??=", "?=", "&=", "|=", "^=", "<<=", ">>=", ">>>="]);
+        const occursRead = (node, name) => {
+          if (node == null)
+            return false;
+          if (!Array.isArray(node)) {
+            const s = node.valueOf ? node.valueOf() : node;
+            return s === name;
+          }
+          const h = node[0]?.valueOf?.() ?? node[0];
+          if (h === "." && node[1] === "this") {
+            const p = node[2]?.valueOf?.() ?? node[2];
+            return p === name;
+          }
+          if (ASSIGN_OPS.has(h)) {
+            const rhs = occursRead(node[2], name);
+            return h === "=" ? rhs : rhs || occursRead(node[1], name);
+          }
+          return node.some((c) => occursRead(c, name));
+        };
+        const collectAssigned = (node, out) => {
+          if (!Array.isArray(node))
+            return;
+          const h = node[0]?.valueOf?.() ?? node[0];
+          if (ASSIGN_OPS.has(h) || h === "++" || h === "--") {
+            const tn = getMemberName(node[1]);
+            if (tn)
+              out.add(tn);
+          }
+          for (const c of node)
+            collectAssigned(c, out);
+        };
+        const reassigned = new Set;
+        for (const m of methods)
+          collectAssigned(m.func, reassigned);
+        for (const e of effects)
+          collectAssigned(e[2], reassigned);
+        for (const h of lifecycleHooks)
+          collectAssigned(h.value, reassigned);
+        for (const d of derivedVars)
+          collectAssigned(d.expr, reassigned);
+        if (renderBlock)
+          collectAssigned(renderBlock, reassigned);
+        const readReactively = (name) => {
+          if (renderBlock && occursRead(renderBlock, name))
+            return true;
+          for (const d of derivedVars)
+            if (occursRead(d.expr, name))
+              return true;
+          return false;
+        };
+        for (const pv of plainVars) {
+          if (pv.isPublic)
+            continue;
+          if (reassigned.has(pv.name) && readReactively(pv.name)) {
+            this.error(`'${pv.name}' is declared with '=' (a plain, non-reactive field) but it is read in render/computed AND reassigned — the UI will read it once and never update.`, pv.node, { suggestion: `Declare it as reactive state: \`${pv.name} := ...\`` });
+          }
         }
       }
       const inheritsTag = rest[0]?.valueOf?.() ?? null;
@@ -9340,6 +9400,12 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           const ts = expandType(type) || "any";
           baseEntries.push(`${name}?: ${ts}`);
         }
+        for (const { name, type, isPublic } of plainVars) {
+          if (!isPublic)
+            continue;
+          const ts = expandType(type) || "any";
+          baseEntries.push(`${name}?: ${ts}`);
+        }
         {
           const propsOpt = requiredBindUnions.length > 0 ? "" : "?";
           const parts = [];
@@ -9396,6 +9462,10 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           const ts = expandType(type) || inferLiteralType(value);
           sl.push(ts ? `  declare ${name}: ${ts};` : `  declare ${name}: any;`);
         }
+        for (const { name, type, value } of plainVars) {
+          const ts = expandType(type) || inferLiteralType(value);
+          sl.push(ts ? `  declare ${name}: ${ts};` : `  declare ${name}: any;`);
+        }
         for (const { name, path, key, type, srcLine } of gateVars) {
           const ts = expandType(type);
           const typeAnnot = ts ? `: Computed<${ts}>` : "";
@@ -9421,6 +9491,11 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         }
         sl.push("  _init(props) {");
         for (const { name, value, isPublic, srcLine } of readonlyVars) {
+          const val = this.emitInComponent(value, "value");
+          const marker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
+          sl.push((isPublic ? `    this.${name} = props.${name} ?? ${val};` : `    this.${name} = ${val};`) + marker);
+        }
+        for (const { name, value, isPublic, srcLine } of plainVars) {
           const val = this.emitInComponent(value, "value");
           const marker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
           sl.push((isPublic ? `    this.${name} = props.${name} ?? ${val};` : `    this.${name} = ${val};`) + marker);
@@ -10023,6 +10098,10 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         lines.push(key ? `    this.${name} = __gateBind(this, '${path}', (params, query) => ${key.code});` : `    this.${name} = __gateBind(this, '${path}');`);
       }
       for (const { name, value, isPublic } of readonlyVars) {
+        const val = this.emitInComponent(value, "value");
+        lines.push(isPublic ? `    this.${name} = props.${name} ?? ${val};` : `    this.${name} = ${val};`);
+      }
+      for (const { name, value, isPublic } of plainVars) {
         const val = this.emitInComponent(value, "value");
         lines.push(isPublic ? `    this.${name} = props.${name} ?? ${val};` : `    this.${name} = ${val};`);
       }
@@ -17168,7 +17247,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.17.4";
-  var BUILD_DATE = "2026-06-29@22:27:55GMT";
+  var BUILD_DATE = "2026-06-30@01:00:50GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

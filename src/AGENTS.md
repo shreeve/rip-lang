@@ -433,6 +433,22 @@ Key entry points:
 - `emitTemplateLoop` — emits `__reconcile(...)`
 - `emitBlockFactory` — shared factory emitter used by conditionals and loops
 
+### Member Declaration Semantics (uniform `=` / `:=` / `=!`)
+
+The declaration operator decides a member's category in `emitComponent`'s categorizer (the `for (let stmt of statements)` loop). The buckets:
+
+- `:=` → `stateVars` → `__state(...)`; added to `reactiveMembers` **and** `refTargetMembers`.
+- `=` (non-function, non-lifecycle) → `plainVars` → a **plain property** `this.name = value` (public: `this.name = props.name ?? value`). **Not** added to `reactiveMembers` and **not** to `refTargetMembers`. This is uniform with `=` everywhere else in the language — a `=` member is a plain, reassignable field, not reactive.
+- `=!` → `readonlyVars` → plain const field.
+- `~=` → `derivedVars` (`__computed`); `~>` → `effects`; a `->`/`=>` value or `name: -> …` → `methods`.
+- bare `@name` / `@name :=` → public `stateVars` (reactive props, share the parent signal via `__bind_name__`).
+
+Because a plain member is in `componentMembers` but **not** `reactiveMembers`, `transformComponentMembers` rewrites its reads/writes to plain `this.name` (reactive members become `this.name.value`). One subtlety lives in the `block`/`program` branch of `transformComponentMembers`: a bare `name = value` introduces a *local* only when `name` is **not** a `componentMembers` entry — otherwise a write to a plain member would shadow it with a `let`. (Previously this checked `reactiveMembers`, which was equivalent only because every non-method `=` member used to be reactive.)
+
+Both emit paths handle `plainVars`: the runtime class (`_init`) and the type-check stub (`stubComponents` — a `declare name: T` property plus an `_init` assignment, mirroring `readonlyVars`). `dts.js` leaves private `=` members invisible in emitted `.d.ts` (unchanged — they were already not surfaced).
+
+**Silent-freeze diagnostic.** After categorization, `emitComponent` errors when a **private** `plainVars` member is *read* in `render` / a `~=` computed / a `~>` effect **and** *reassigned* anywhere in the component (methods, effects, lifecycle hooks, computed bodies, render event handlers). That pair is the silent-freeze class: a non-reactive field read reactively but mutated never re-renders. The message steers to `:=`. Public `@name = v` fields are exempt (explicit rare opt-in).
+
 ### Factory Mode
 
 Block factories need locals and `ctx.member` references instead of `this._elN` and `this.member`.

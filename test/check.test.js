@@ -264,7 +264,7 @@ check('stash methods are typed: reset() and the source() handle', async () => {
     'index.rip': `export ok = true\n`,
     'app/stash.rip': SOURCE_STASH,
     'tools.rip': `export Tools = component
-  stats = @app.data.source('user')
+  stats := @app.data.source('user')
   signout: -> @app.data.reset()
   render
     if stats.loading
