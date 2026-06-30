@@ -77,6 +77,12 @@ function packageDirs() {
   return readdirSync(join(ROOT, 'packages'), { withFileTypes: true })
     .filter(d => d.isDirectory() && !SKIP_PACKAGES.has(d.name))
     .filter(d => existsSync(join(ROOT, 'packages', d.name, 'package.json')))
+    // Never release `"private": true` packages (e.g. @rip-lang/decimal until
+    // its public .d.ts is audit-clean). They stay monorepo-only via workspace:*.
+    .filter(d => {
+      try { return !JSON.parse(readFileSync(join(ROOT, 'packages', d.name, 'package.json'), 'utf8')).private; }
+      catch { return true; }
+    })
     .map(d => d.name);
 }
 

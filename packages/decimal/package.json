@@ -1,6 +1,7 @@
 {
   "name": "@rip-lang/decimal",
   "version": "0.1.0",
+  "private": true,
   "description": "Rip Decimal — zero-dependency, BigInt-backed arbitrary-precision exact decimals with explicit rounding and resource limits",
   "type": "module",
   "main": "decimal.rip",
