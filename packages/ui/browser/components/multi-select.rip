@@ -225,7 +225,7 @@ export MultiSelect = component
             aria-selected: !!@_isSelected(item)
             @click: (=> @_toggleItem(item))
             @mouseenter: (=> highlightedIndex = idx)
-            @_label(item)
+            "#{@_label(item)}"
         if filtered.length is 0 and query
           div role: "status", aria-live: "polite", $empty: true
             "No results"
