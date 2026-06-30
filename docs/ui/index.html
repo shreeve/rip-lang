@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="index.css">
   <style>body { opacity: 0; } body.ready { opacity: 1; transition: opacity 200ms ease-in; }</style>
-  <script defer src="../dist/rip.min.js" data-src="bundle.json" data-mount="WidgetGallery">
+  <script defer src="../dist/rip.min.js" data-src="/app" data-mount="WidgetGallery">
   </script>
 </head>
 <body>
@@ -103,9 +103,9 @@ export WidgetGallery = component
     return unless entry
     sourceName = entry.name
     sourceLines = entry.lines
-    src = window.__RIP__?.components?.read("_pkg/ui/#{id}.rip")
-    return unless src
-    sourceCode = src
+    resp = fetch! "browser/components/#{id}.rip"
+    return unless resp.ok
+    sourceCode = resp.text!
   _closeSource: -> sourceCode = null
   _stopProp: (e) -> e.stopPropagation()
   _ensureHljs: (cb) ->

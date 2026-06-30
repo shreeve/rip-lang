@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/ai",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Persistent multi-model AI consultation MCP — discuss, panel, fresh-review, content-hashed attachments, live model catalog",
   "type": "module",
   "main": "mcp.rip",
