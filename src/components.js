@@ -857,7 +857,12 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         const item = sexpr[i];
         if (Array.isArray(item) && item[0] === '=') {
           const targetName = _str(item[1]);
-          if (targetName && !(this.reactiveMembers && this.reactiveMembers.has(targetName))) {
+          // A bare `name = value` introduces a local ONLY when `name` is not a
+          // component member. Plain (`=`) members are componentMembers but not
+          // reactiveMembers — a write to one must become `this.name = value`
+          // (handled by the fallthrough map), not a shadowing local.
+          const isMember = targetName && this.componentMembers && this.componentMembers.has(targetName);
+          if (targetName && !isMember) {
             items.push(['=', item[1], this.transformComponentMembers(item[2], scope)]);
             scope.add(targetName);
             continue;
@@ -887,6 +892,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
 
     // Categorize statements
     const stateVars = [];
+    const plainVars = [];
     const derivedVars = [];
     const gateVars = [];
     const readonlyVars = [];
@@ -978,9 +984,15 @@ export function installComponentSupport(CodeEmitter, Lexer) {
               methods.push({ name: varName, func: val });
               memberNames.add(varName);
             } else {
-              stateVars.push({ name: varName, value: val, isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]), optional: getMemberOptional(stmt[1]), srcLine: stmt.loc?.r });
+              // Uniform `=` semantics: a `=`-declared member is a PLAIN,
+              // non-reactive field (`this.name = value`), everywhere — including
+              // component members. Reactive state uses `:=`. A plain member is
+              // NOT a reactive member and NOT a valid `ref:` target.
+              //
+              // `@name = v` (public) is a rare plain public field sourced once
+              // from props; reactive props use `@name :=` or bare `@name`.
+              plainVars.push({ name: varName, value: val, isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]), node: stmt, srcLine: stmt.loc?.r });
               memberNames.add(varName);
-              reactiveMembers.add(varName);
             }
           }
         }
@@ -1014,6 +1026,71 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       }
     }
 
+    // ── Safety diagnostic: silent-freeze guard for now-plain `=` members ──
+    // Under uniform semantics a private `=` field is plain (non-reactive). If
+    // such a field is READ in a reactive position (render / `~=` computed /
+    // `~>` effect) AND reassigned anywhere in the component, the UI would read
+    // it once and never update — the classic silent-freeze. Steer to `:=`.
+    if (plainVars.length > 0) {
+      const ASSIGN_OPS = new Set(['=', '+=', '-=', '*=', '/=', '%=', '**=', '//=', '%%=', '&&=', '||=', '??=', '?=', '&=', '|=', '^=', '<<=', '>>=', '>>>=']);
+      const occursRead = (node, name) => {
+        if (node == null) return false;
+        if (!Array.isArray(node)) {
+          const s = node.valueOf ? node.valueOf() : node;
+          return s === name;
+        }
+        const h = node[0]?.valueOf?.() ?? node[0];
+        // `@name` member access reads `name`.
+        if (h === '.' && node[1] === 'this') {
+          const p = node[2]?.valueOf?.() ?? node[2];
+          return p === name;
+        }
+        // A pure `=` writes its LHS (not a read); compound ops also read it.
+        if (ASSIGN_OPS.has(h)) {
+          const rhs = occursRead(node[2], name);
+          return h === '=' ? rhs : (rhs || occursRead(node[1], name));
+        }
+        return node.some(c => occursRead(c, name));
+      };
+      const collectAssigned = (node, out) => {
+        if (!Array.isArray(node)) return;
+        const h = node[0]?.valueOf?.() ?? node[0];
+        if (ASSIGN_OPS.has(h) || h === '++' || h === '--') {
+          const tn = getMemberName(node[1]);
+          if (tn) out.add(tn);
+        }
+        for (const c of node) collectAssigned(c, out);
+      };
+
+      // Reassignments anywhere EXCEPT the declarations themselves: scan method,
+      // effect, lifecycle, computed, and render (event-handler) bodies.
+      const reassigned = new Set();
+      for (const m of methods) collectAssigned(m.func, reassigned);
+      for (const e of effects) collectAssigned(e[2], reassigned);
+      for (const h of lifecycleHooks) collectAssigned(h.value, reassigned);
+      for (const d of derivedVars) collectAssigned(d.expr, reassigned);
+      if (renderBlock) collectAssigned(renderBlock, reassigned);
+
+      const readReactively = (name) => {
+        if (renderBlock && occursRead(renderBlock, name)) return true;
+        for (const d of derivedVars) if (occursRead(d.expr, name)) return true;
+        for (const e of effects) if (occursRead(e[2], name)) return true;
+        return false;
+      };
+
+      for (const pv of plainVars) {
+        // Public `@name = v` is an explicit rare opt-in to a plain public field.
+        if (pv.isPublic) continue;
+        if (reassigned.has(pv.name) && readReactively(pv.name)) {
+          this.error(
+            `'${pv.name}' is declared with '=' (a plain, non-reactive field) but it is read in render/computed/effect AND reassigned — the UI will read it once and never update.`,
+            pv.node,
+            { suggestion: `Declare it as reactive state: \`${pv.name} := ...\`` }
+          );
+        }
+      }
+    }
+
     const inheritsTag = rest[0]?.valueOf?.() ?? null;
     const publicPropNames = new Set();
     for (const { name, isPublic } of stateVars) if (isPublic) publicPropNames.add(name);
@@ -1028,11 +1105,11 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     }
 
     // Writable state cells — the only valid `ref:` targets. stateVars covers
-    // `:=` state, `=`-assigned (non-method) members, and bare `@props` (each
-    // emitted as a writable `__state(...)` signal). Computed (`~=`) and
-    // readonly (`=!`) members are deliberately excluded: a computed has a
-    // get-only `.value`, and a readonly is a frozen plain field — neither can
-    // accept the live element. (`rest` is reactive but not a cell.)
+    // `:=` state and bare `@props` (each emitted as a writable `__state(...)`
+    // signal). Computed (`~=`), readonly (`=!`), and plain (`=`) members are
+    // deliberately excluded: a computed has a get-only `.value`, a readonly is
+    // a plain const field, and a plain `=` member is a non-reactive property —
+    // none can hold a live reactive ref. (`rest` is reactive but not a cell.)
     const refTargetMembers = new Set();
     for (const { name } of stateVars) refTargetMembers.add(name);
 
@@ -1097,6 +1174,11 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         }
       }
       for (const { name, type, isPublic } of readonlyVars) {
+        if (!isPublic) continue;
+        const ts = expandType(type) || 'any';
+        baseEntries.push(`${name}?: ${ts}`);
+      }
+      for (const { name, type, isPublic } of plainVars) {
         if (!isPublic) continue;
         const ts = expandType(type) || 'any';
         baseEntries.push(`${name}?: ${ts}`);
@@ -1178,6 +1260,12 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         const ts = expandType(type) || inferLiteralType(value);
         sl.push(ts ? `  declare ${name}: ${ts};` : `  declare ${name}: any;`);
       }
+      // Plain (`=`) fields: reassignable, non-reactive. Declared like readonly
+      // (no Signal wrapper); assigned in `_init` below.
+      for (const { name, type, value } of plainVars) {
+        const ts = expandType(type) || inferLiteralType(value);
+        sl.push(ts ? `  declare ${name}: ${ts};` : `  declare ${name}: any;`);
+      }
       // Gated bindings (<~): non-null by construction — the renderer loads
       // the source before the component exists. __ripGate is the generic
       // narrow `(v: T | null | undefined) => T`; soundness comes from the
@@ -1211,9 +1299,14 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         sl.push(`  ${name} = __state(${val});` + marker);
       }
 
-      // _init body — readonly, state, computed assignments (skip accepted/offered)
+      // _init body — readonly, plain, state, computed assignments (skip accepted/offered)
       sl.push('  _init(props) {');
       for (const { name, value, isPublic, srcLine } of readonlyVars) {
+        const val = this.emitInComponent(value, 'value');
+        const marker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
+        sl.push((isPublic ? `    this.${name} = props.${name} ?? ${val};` : `    this.${name} = ${val};`) + marker);
+      }
+      for (const { name, value, isPublic, srcLine } of plainVars) {
         const val = this.emitInComponent(value, 'value');
         const marker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
         sl.push((isPublic ? `    this.${name} = props.${name} ?? ${val};` : `    this.${name} = ${val};`) + marker);
@@ -1995,6 +2088,16 @@ export function installComponentSupport(CodeEmitter, Lexer) {
 
     // Constants (readonly)
     for (const { name, value, isPublic } of readonlyVars) {
+      const val = this.emitInComponent(value, 'value');
+      lines.push(isPublic
+        ? `    this.${name} = props.${name} ?? ${val};`
+        : `    this.${name} = ${val};`);
+    }
+
+    // Plain fields (=) — non-reactive, reassignable properties. A public
+    // `@name = v` field reads its initial value from props once (parent
+    // updates won't re-render — reactive props use `@name :=`/bare `@name`).
+    for (const { name, value, isPublic } of plainVars) {
       const val = this.emitInComponent(value, 'value');
       lines.push(isPublic
         ? `    this.${name} = props.${name} ?? ${val};`

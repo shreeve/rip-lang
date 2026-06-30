@@ -885,6 +885,23 @@ Rip's reactive features are **language-level operators**, not library imports.
 | `<~` | Render-ready | "loads from" | Server-backed state, loaded before render (component bodies) |
 | `=!` | Readonly | "equals, dammit!" | Constant (`const`) |
 
+### Uniform meaning — including component members
+
+The declaration operators mean the **same thing everywhere**, and that includes members declared inside a `component` body:
+
+| Operator | In a component, a member declared with it is… |
+|----------|-----------------------------------------------|
+| `x = v`  | a **plain, non-reactive** field — `this.x = v`. Reads/writes are ordinary property access; the UI does **not** re-render when it changes. |
+| `x := v` | **reactive state** — `this.x = __state(v)`. Reads/writes flow through the signal and re-render dependents. |
+| `x =! v` | a readonly **const** field. |
+| `x ~= e` | a **computed**; `x ~> …` an **effect**; `x: -> …` (or `x = -> …`) a **method**. |
+
+A plain `=` member is **not** a reactive member and is **not** a valid `ref:` target — `ref:` still requires a `:=` state cell.
+
+**Props.** `@`-prefixed reactive props are declared with `@name :=` (or bare `@name` for a required prop) so that a parent updating the prop re-renders the child. `@name = v` is a *plain public field*: its initial value is read once from props and it is non-reactive (rare — prefer `:=` unless you specifically want a one-time prop snapshot).
+
+**Silent-freeze diagnostic.** Because a `=` member is non-reactive, the compiler raises an error if a private `=` member is **read** in `render` / a `~=` computed / a `~>` effect **and reassigned** somewhere in the component — that combination would read the value once and silently never update. The fix is to declare it with `:=`.
+
 ## Reactive Behavior
 
 |  | `:=` state | `~=` computed | `~>` effect |

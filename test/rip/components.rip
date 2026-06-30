@@ -1947,6 +1947,74 @@ fail "ref to a readonly (=!) is rejected", '''
       div ref: el
 ''', "must be a state cell"
 
+fail "ref to a plain (=) member is rejected", '''
+  export A = component
+    el = null
+    render
+      div ref: el
+''', "must be a state cell"
+
+# ==============================================================================
+# Uniform assignment semantics — `=` is a plain (non-reactive) field everywhere,
+# including component members; `:=` is reactive state.
+# ==============================================================================
+
+code "private `=` member is plain, `:=` is reactive state", '''
+  export A = component
+    label = "hi"
+    count := 0
+    render
+      button "#{label}#{count}"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+      this.label = "hi";
+      this.count = __state(0);
+    }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._t0 = document.createTextNode('');
+      this._el0.appendChild(this._t0);
+      return this._el0;
+    }
+    _setup() {
+      __effect(() => { this._t0.data = `${this.label}${this.count.value}`; });
+    }
+  }
+  ''', opts
+
+code "plain `=` write is a property write; `:=` write is a signal write", '''
+  export A = component
+    flag = false
+    count := 0
+    toggle: ->
+      flag = not flag
+      count = count + 1
+    render null
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+      this.flag = false;
+      this.count = __state(0);
+    }
+    toggle() {
+    this.flag = !this.flag;
+    return (this.count.value = this.count.value + 1);
+  }
+    _create() {
+      return null;
+    }
+  }
+  ''', opts
+
+fail "plain `=` member read in render + reassigned is a silent-freeze error", '''
+  export A = component
+    open = false
+    toggle: -> open = not open
+    render
+      button "#{open}"
+''', "non-reactive field"
+
 # Runtime ref behavior — mount with a faithful in-memory DOM. `mkDoc`
 # builds nodes tracking parentNode/childNodes/nextSibling and an
 # isConnected getter (true when an ancestor is flagged _connected), so we

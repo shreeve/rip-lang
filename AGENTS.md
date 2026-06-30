@@ -210,7 +210,7 @@ Stash reactivity in components:
 
 - Inside a component's `render`, expressions rooted at `this` (`@app.data...`, component members) or at a `for`-loop iter var whose collection is reactive (e.g. `item.qty` inside `for item in @items`) are tracked as reactive by the compiler
 - Shared-scope variables are treated as static — they render once and never update
-- To use stash data reactively, declare a component-local binding: `theme = @app.data.theme`
+- To use stash data reactively, declare a component-local binding with `:=` (reactive state): `theme := @app.data.theme`. A plain `=` member is non-reactive (`this.theme = …`) and renders once — see the Reactivity table below for the uniform `=`/`:=`/`=!` rule.
 - Iter-var tracking covers direct member access only — `item.foo`, `item[0]`, `item.a.b`. Aliases (`local = item; local.foo`) and destructuring (`for {qty} in items`) are not tracked
 
 ```coffee
@@ -613,6 +613,11 @@ Rip reactivity is built into the language, not imported from a library.
 | `=!`     | readonly        | `const x = value`                  |
 | `offer`  | context provide | state + `setContext(...)`          |
 | `accept` | context consume | `getContext(...)`                  |
+
+The declaration operators mean the same thing **everywhere, including component members**: `=` is a plain, non-reactive field (`this.x = value`), `:=` is reactive state (`__state`), `=!` is a readonly const, `~=` is computed. A private `=` member is *not* reactive and is *not* a valid `ref:` target (refs still require `:=`). Inside a component, a write to a `=` member emits a normal property write (`this.x = v`); a write to a `:=` member emits a signal write (`this.x.value = v`).
+
+- **Props:** `@`-prefixed reactive props are declared with `@name :=` (or bare `@name` for a required prop) so a parent update re-renders. `@name = v` is a *plain public field* — sourced once from props at init and non-reactive (rare; reach for `:=` unless you specifically want a one-time prop read).
+- **Safety diagnostic:** the compiler errors if a private `=` member is read in `render`/a `~=` computed/a `~>` effect **and** reassigned in the component — the silent-freeze class (the UI reads it once and never updates). The fix is to declare it `:=`.
 
 Three-tier state model:
 
