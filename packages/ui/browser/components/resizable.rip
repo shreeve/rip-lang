@@ -24,10 +24,10 @@ export Resizable = component
   @maxSize := 90
 
   _ready := false
+  sizes := []
   _dragging = null
   _startPos = 0
   _startSizes = []
-  sizes := []
 
   ~>
     return unless _ready

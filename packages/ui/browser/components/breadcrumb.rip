@@ -15,14 +15,10 @@
 #     span $item: true, "Settings"
 
 export Breadcrumb = component
-  contentRef := null
   @separator := "/"
   @label := "Breadcrumb"
 
   _ready := false
-
-  mounted: -> _ready = true
-
   _items ~=
     return [] unless _ready
     return [] unless @contentRef
@@ -41,6 +37,10 @@ export Breadcrumb = component
       else
         el.removeAttribute 'aria-current'
         el.removeAttribute 'data-current'
+
+  contentRef := null
+
+  mounted: -> _ready = true
 
   render
     nav aria-label: @label

@@ -18,6 +18,40 @@ Accessible headless widgets written in Rip. They expose `$` attributes for styli
 - use reactive arrays directly: `toasts = [...toasts, { message: "Saved!" }]`
 - prefix module-scope lowercase names to avoid shared-scope collisions
 
+## Declaration order
+
+The top-of-`component` declaration block is ordered into three groups separated by **one** blank line. Skip any group that doesn't exist — never leave a stray blank line.
+
+1. **Props** — `@`-prefixed members
+2. **Local declarations**, in this exact sub-order (one block, no blank lines between sub-parts):
+   1. `:=` reactive state — *excluding* refs
+   2. `=` plain mutable fields (non-function)
+   3. `=!` consts
+   4. `~=` computed
+   5. `~>` effects
+3. **Refs** — the `Ref`-suffix `:=` cells used as `ref:` targets
+
+Methods, lifecycle hooks, and `render` stay below, unchanged.
+
+`:=` and `=` are **semantically distinct** (post-PR #53): `:=` is reactive state (`__state`), `=` is a plain non-reactive field (`this.x = v`). They must be grouped separately — **all reactive state first, then plain mutable fields** — never interleaved.
+
+```coffee
+export Widget = component
+  @value := null          # 1. props
+
+  open := false           # 2.i  := reactive state (refs excluded)
+  _hovered := false
+  _timer = null           # 2.ii = plain mutable fields
+  _id =! "w-#{...}"       # 2.iii =! const
+  filtered ~= ...         # 2.iv  ~= computed
+  ~>                      # 2.v   ~> effect (guarded; see below)
+    return unless _ready
+
+  listRef := null         # 3.    refs last
+```
+
+**Init-order safety:** a `~>` effect that *synchronously* dereferences a ref/state declared later (in group 3) must stay where it is in the body — do not hoist it into group 2. Effects that guard with `return unless _ready` (or read refs via `@xRef?` optional chaining) run early-and-bail at init, so they are safe to keep in group 2 above the refs (the grid pattern).
+
 ## Component Naming
 
 In render templates, the compiler uses naming conventions to distinguish components from variables:

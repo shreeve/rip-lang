@@ -1671,6 +1671,14 @@ App = component
   ~> p "count is now #{count}"    # re-runs when count changes
 ```
 
+**Declaration order (convention):** order the top-of-component block as
+props → locals → refs, separated by one blank line. Within the locals
+group the sub-order is `:=` → `=` → `=!` → `~=` → `~>`. Because `:=`
+(reactive state) and `=` (plain non-reactive field) are semantically
+distinct, keep them grouped separately — all reactive state first, then
+plain mutable fields — never interleaved. The `Ref`-suffix `:=` cells
+used as `ref:` targets go in the final group.
+
 **Render Blocks — Template Syntax:**
 
 ```coffee

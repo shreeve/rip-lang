@@ -15,11 +15,11 @@ export ScrollArea = component
 
   hovering := false
   scrolling := false
+  _dragging := false
+  _ready := false
   _scrollTimer = null
   _dragStart = 0
   _dragScrollStart = 0
-  _dragging := false
-  _ready := false
 
   scrollbarRef := null
   thumbRef := null
