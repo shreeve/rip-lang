@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/validate",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Zero-dependency validation and normalization vocabulary for Rip - read() validators and ~:name schema coercers, isomorphic (server + browser)",
   "type": "module",
   "main": "validate.rip",
