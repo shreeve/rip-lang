@@ -1098,6 +1098,80 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       }
     }
 
+    // ── Const-member diagnostic: `=!` members are genuine consts ──
+    // A `=!` member is a SHALLOW const (like JS `const`): rebinding the member
+    // is a compile error; content mutation (`c.push(...)`, `c.foo = 1`) is
+    // allowed. This Rip-native check is authoritative and runs in the erasure
+    // core — it does not depend on type-checking (the shadow-TS view also marks
+    // the member `readonly`, surfacing TS2540, but that's a redundant layer).
+    // A rebind is `@c = …` / `c = …` whose target *directly names* the member;
+    // `c.foo = 1` / `@c.foo = 1` target a property of the value, not the member,
+    // so they pass (getMemberName returns null for those).
+    if (readonlyVars.length > 0) {
+      const constNames = new Set(readonlyVars.map(r => r.name));
+      const CONST_ASSIGN_OPS = new Set(['=', '+=', '-=', '*=', '/=', '%=', '**=', '//=', '%%=', '&&=', '||=', '??=', '?=', '&=', '|=', '^=', '<<=', '>>=', '>>>=']);
+      const paramName = (p) => _str(Array.isArray(p) && (p[0] === 'default' || p[0] === 'rest') ? p[1] : p);
+      const reportConstAssign = (name, node) => this.error(
+        `cannot assign to const member '${name}' (declared with =!); use '=' for a mutable field or ':=' for reactive state`,
+        node
+      );
+      // Walk a body s-expression tracking local bindings (params + `=` locals)
+      // that legitimately SHADOW a member name — only an unshadowed bare write,
+      // or any `@member` write, is a member rebind.
+      const checkConst = (node, scope) => {
+        if (!Array.isArray(node)) return;
+        const h = node[0]?.valueOf?.() ?? node[0];
+        if (h === '->' || h === '=>') {
+          const child = new Set(scope);
+          const params = node[1];
+          if (Array.isArray(params)) for (const p of params) {
+            const pn = paramName(p);
+            if (pn) child.add(pn);
+          }
+          checkConst(node[2], child);
+          return;
+        }
+        if (h === 'block' || h === 'program') {
+          const child = new Set(scope);
+          for (let i = 1; i < node.length; i++) {
+            const item = node[i];
+            checkConst(item, child);
+            // A bare `name = value` introduces a shadowing local only when the
+            // name is NOT a const member (a write to a const member is the
+            // rebind we just flagged, never a new local).
+            if (Array.isArray(item) && item[0] === '=') {
+              const tn = _str(item[1]);
+              if (tn && !constNames.has(tn)) child.add(tn);
+            }
+          }
+          return;
+        }
+        if (CONST_ASSIGN_OPS.has(h) || h === '++' || h === '--') {
+          const target = node[1];
+          if (Array.isArray(target) && target[0] === '.' && target[1] === 'this') {
+            const mn = _str(target[2]);
+            if (mn && constNames.has(mn)) reportConstAssign(mn, node);
+          } else {
+            const tn = _str(target);
+            if (tn && constNames.has(tn) && !scope.has(tn)) reportConstAssign(tn, node);
+          }
+        }
+        for (let i = 1; i < node.length; i++) checkConst(node[i], scope);
+      };
+      // Scope model MUST mirror transformComponentMembers exactly: a method's
+      // own top-level params do NOT shadow members (only `methodBody` is
+      // member-transformed, not the whole arrow — a bare member-named read
+      // becomes `this.member`), so we walk the BODY with an empty scope. Nested
+      // `->`/`=>` params DO shadow (the walker's arrow branch seeds them), which
+      // matches the transform's own arrow recursion.
+      const bodyOf = (fn) => (Array.isArray(fn) && (fn[0] === '->' || fn[0] === '=>')) ? fn[2] : fn;
+      for (const m of methods) checkConst(bodyOf(m.func), new Set());
+      for (const e of effects) checkConst(e[2], new Set());
+      for (const h of lifecycleHooks) checkConst(bodyOf(h.value), new Set());
+      for (const d of derivedVars) checkConst(d.expr, new Set());
+      if (renderBlock) checkConst(renderBlock, new Set());
+    }
+
     const inheritsTag = rest[0]?.valueOf?.() ?? null;
     const publicPropNames = new Set();
     for (const { name, isPublic } of stateVars) if (isPublic) publicPropNames.add(name);
@@ -1197,7 +1271,25 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         parts.push(...requiredBindUnions);
         let propsType = parts.length ? parts.join(' & ') : '{}';
         if (inheritsTag) propsType += ` & __RipProps<'${inheritsTag}'>`;
-        sl.push(`  constructor(_props${propsOpt}: ${propsType}) {}`);
+        // Synthetic constructor — the ONLY place TypeScript permits assigning a
+        // `readonly` member. The runtime keeps the real readonly inits in `_init`
+        // (unchanged); we mirror JUST the readonly assignments here so that
+        // `declare readonly name: T` is satisfied without tripping TS2540, and we
+        // deliberately do NOT re-emit them in the shadow `_init` below (that would
+        // re-trigger TS2540 — assignment to a readonly outside the constructor).
+        const ctorInits = [];
+        for (const { name, value, isPublic, srcLine } of readonlyVars) {
+          const val = this.emitInComponent(value, 'value');
+          const marker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
+          ctorInits.push((isPublic ? `    this.${name} = _props?.${name} ?? ${val};` : `    this.${name} = ${val};`) + marker);
+        }
+        if (ctorInits.length) {
+          sl.push(`  constructor(_props${propsOpt}: ${propsType}) {`);
+          for (const line of ctorInits) sl.push(line);
+          sl.push('  }');
+        } else {
+          sl.push(`  constructor(_props${propsOpt}: ${propsType}) {}`);
+        }
       }
 
       // Infer type from literal initializer when no explicit annotation
@@ -1263,9 +1355,14 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       if (inheritsTag) {
         sl.push(`  declare rest: Signal<__RipProps<'${inheritsTag}'>>;`);
       }
+      // `=!` members are genuine consts: surface them as `readonly` so a
+      // reassignment in a method/effect/handler is TS2540 (the Rip-native check
+      // above is authoritative; this keeps editors/consumers consistent). The
+      // single init assignment lives in the synthetic constructor above — NOT in
+      // the shadow `_init` — because TS only allows writing a readonly there.
       for (const { name, type, value } of readonlyVars) {
         const ts = expandType(type) || inferLiteralType(value);
-        sl.push(ts ? `  declare ${name}: ${ts};` : `  declare ${name}: any;`);
+        sl.push(ts ? `  declare readonly ${name}: ${ts};` : `  declare readonly ${name}: any;`);
       }
       // Plain (`=`) fields: reassignable, non-reactive. Declared like readonly
       // (no Signal wrapper); assigned in `_init` below.
@@ -1306,13 +1403,11 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         sl.push(`  ${name} = __state(${val});` + marker);
       }
 
-      // _init body — readonly, plain, state, computed assignments (skip accepted/offered)
+      // _init body — plain, state, computed assignments (skip accepted/offered).
+      // Readonly (`=!`) inits are emitted in the synthetic constructor above, NOT
+      // here: assigning a `readonly` member outside the constructor is TS2540.
+      // (The RUNTIME `_init` still assigns them — see the non-stub path below.)
       sl.push('  _init(props) {');
-      for (const { name, value, isPublic, srcLine } of readonlyVars) {
-        const val = this.emitInComponent(value, 'value');
-        const marker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
-        sl.push((isPublic ? `    this.${name} = props.${name} ?? ${val};` : `    this.${name} = ${val};`) + marker);
-      }
       for (const { name, value, isPublic, srcLine } of plainVars) {
         const val = this.emitInComponent(value, 'value');
         const marker = srcLine != null ? ` // @rip-src:${srcLine}` : '';
