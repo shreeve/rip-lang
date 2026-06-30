@@ -22,22 +22,18 @@ export Tabs = component
   @active := null
   @orientation := "horizontal"
   @activation := "automatic"
+
   _ready       := false
-  _id =! "tabs-#{Math.random().toString(36).slice(2, 8)}"
   activationDirection := 'none'
+  _id =! "tabs-#{Math.random().toString(36).slice(2, 8)}"
 
   tabs ~=
     return [] unless _ready
-    Array.from(@_content?.querySelectorAll('[data-tab]') or [])
+    Array.from(@contentRef?.querySelectorAll('[data-tab]') or [])
 
   panels ~=
     return [] unless _ready
-    Array.from(@_content?.querySelectorAll('[data-panel]') or [])
-
-  mounted: ->
-    _ready = true
-    unless @active
-      @active = tabs[0]?.dataset.tab
+    Array.from(@contentRef?.querySelectorAll('[data-panel]') or [])
 
   ~>
     return unless _ready
@@ -51,10 +47,18 @@ export Tabs = component
       el.toggleAttribute 'hidden', not isActive
       el.toggleAttribute 'data-active', isActive
 
+  contentRef := null
+  tablistRef := null
+
+  mounted: ->
+    _ready = true
+    unless @active
+      @active = tabs[0]?.dataset.tab
+
   _isDisabled: (el) -> el?.hasAttribute('data-disabled')
 
   _tabButtons: ->
-    Array.from(@_tablist?.querySelectorAll('[role="tab"]') or [])
+    Array.from(@tablistRef?.querySelectorAll('[role="tab"]') or [])
 
   select: (id) ->
     prev = @active
@@ -100,7 +104,7 @@ export Tabs = component
 
   render
     .
-      div ref: "_tablist", role: "tablist", aria-orientation: @orientation, data-activation-direction: activationDirection, @keydown: @onKeydown
+      div ref: tablistRef, role: "tablist", aria-orientation: @orientation, data-activation-direction: activationDirection, @keydown: @onKeydown
         for tab in tabs
           button role: "tab"
             data-tab: tab.dataset.tab
@@ -114,5 +118,5 @@ export Tabs = component
             @click: (=> @select(tab.dataset.tab) unless @_isDisabled(tab))
             = tab.textContent
 
-      . ref: "_content"
+      . ref: contentRef
         slot

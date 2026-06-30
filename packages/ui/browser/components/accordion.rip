@@ -22,20 +22,9 @@ export Accordion = component
   _ready    := false
   _id =! "acc-#{Math.random().toString(36).slice(2, 8)}"
 
-  mounted: ->
-    _ready = true
-    @_content?.querySelectorAll('[data-trigger]').forEach (trigger) =>
-      item = trigger.closest('[data-item]')
-      return unless item
-      id = item.dataset.item
-      trigger.addEventListener 'click', =>
-        return if item.hasAttribute('data-disabled')
-        @toggle(id)
-      trigger.addEventListener 'keydown', (e) => @onTriggerKeydown(e, id)
-
   ~>
     return unless _ready
-    @_content?.querySelectorAll('[data-item]').forEach (item) =>
+    @contentRef?.querySelectorAll('[data-item]').forEach (item) =>
       id = item.dataset.item
       isOpen = openItems.has(id)
       item.toggleAttribute 'data-open', isOpen
@@ -60,6 +49,19 @@ export Accordion = component
           content.style.setProperty '--accordion-panel-height', "#{rect.height}px"
           content.style.setProperty '--accordion-panel-width', "#{rect.width}px"
 
+  contentRef := null
+
+  mounted: ->
+    _ready = true
+    @contentRef?.querySelectorAll('[data-trigger]').forEach (trigger) =>
+      item = trigger.closest('[data-item]')
+      return unless item
+      id = item.dataset.item
+      trigger.addEventListener 'click', =>
+        return if item.hasAttribute('data-disabled')
+        @toggle(id)
+      trigger.addEventListener 'keydown', (e) => @onTriggerKeydown(e, id)
+
   toggle: (id) ->
     if openItems.has(id)
       openItems.delete(id)
@@ -83,8 +85,8 @@ export Accordion = component
     }, 'vertical'
 
   _triggers: ->
-    return [] unless @_content
-    Array.from(@_content.querySelectorAll('[data-trigger]'))
+    return [] unless @contentRef
+    Array.from(@contentRef.querySelectorAll('[data-trigger]'))
 
   _focusNext: (dir) ->
     triggers = @_triggers()
@@ -99,5 +101,5 @@ export Accordion = component
     target?.focus()
 
   render
-    div ref: "_content"
+    div ref: contentRef
       slot

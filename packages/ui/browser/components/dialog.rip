@@ -17,12 +17,8 @@ export Dialog = component
   @dismissable := true
   @initialFocus := null
 
-  _id =! "dlg-#{Math.random().toString(36).slice(2, 8)}"
   _focusRaf = null
-
-  beforeUnmount: ->
-    cancelAnimationFrame _focusRaf if _focusRaf
-    _focusRaf = null
+  _id =! "dlg-#{Math.random().toString(36).slice(2, 8)}"
 
   ~>
     # ARIA.bindDialog handles the native cancel/close events and toggles
@@ -30,7 +26,7 @@ export Dialog = component
     # onKeydown handler does NOT additionally call @close() because that
     # would emit `close` twice for the same Escape press (once from
     # native cancel via bindDialog, once from our handler).
-    ARIA.bindDialog @open, (=> @_dialog), ((isOpen) =>
+    ARIA.bindDialog @open, (=> @dialogRef), ((isOpen) =>
       if not isOpen and @open
         @open = false
         @emit 'close'
@@ -44,7 +40,7 @@ export Dialog = component
       # detached content (and possibly throw on some browsers).
       _focusRaf = requestAnimationFrame =>
         _focusRaf = null
-        panel = @_dialog
+        panel = @dialogRef
         if panel
           ARIA.wireAria panel, _id
           if @initialFocus
@@ -56,6 +52,12 @@ export Dialog = component
         cancelAnimationFrame _focusRaf if _focusRaf
         _focusRaf = null
         ARIA.unlockScroll(this)
+
+  dialogRef := null
+
+  beforeUnmount: ->
+    cancelAnimationFrame _focusRaf if _focusRaf
+    _focusRaf = null
 
   close: ->
     @open = false
@@ -69,10 +71,10 @@ export Dialog = component
 
   onBackdropClick: (e) ->
     if e.target is e.currentTarget and @dismissable
-      @_dialog?.close()
+      @dialogRef?.close()
 
   render
-    dialog ref: "_dialog"
+    dialog ref: dialogRef
       hidden: not @open
       aria-hidden: (@open ? undefined : "true")
       @click: @onBackdropClick

@@ -31,17 +31,28 @@ export Select = component
   _popupGuard =! ARIA.popupGuard()
   _listId =! "sel-#{Math.random().toString(36).slice(2, 8)}"
 
-  getOpt: (o) -> o.dataset.value ?? o.value
-
-  _readOptions: ->
-    options = Array.from(@_slot?.querySelectorAll('[data-value], option[value]') or [])
-
   selectedLabel ~=
     if @value?
       el = options.find (o) -> @getOpt(o) is String(@value)
       el?.textContent?.trim() or String(@value)
     else
       @placeholder
+
+  ~>
+    return unless _ready
+    if @listRef
+      @_applyPlacement()
+    ARIA.bindPopover open, (=> @listRef), ((isOpen) => open = isOpen), (=> @triggerRef)
+    ARIA.popupDismiss open, (=> @listRef), (=> @close(false, true)), [=> @triggerRef]
+
+  listRef := null
+  slotRef := null
+  triggerRef := null
+
+  getOpt: (o) -> o.dataset.value ?? o.value
+
+  _readOptions: ->
+    options = Array.from(@slotRef?.querySelectorAll('[data-value], option[value]') or [])
 
   openMenu: ->
     return unless _popupGuard.canOpen()
@@ -54,7 +65,7 @@ export Select = component
     open = false
     highlightedIndex = -1
     _popupGuard.block() if blockOpen
-    @_trigger?.focus() if restoreFocus
+    @triggerRef?.focus() if restoreFocus
 
   isDisabled: (opt) -> opt?.hasAttribute?('data-disabled') or opt?.disabled
 
@@ -141,29 +152,22 @@ export Select = component
       @_focusHighlighted()
 
   _focusHighlighted: ->
-    el = @_list?.querySelectorAll('[role="option"]')?.[highlightedIndex]
+    el = @listRef?.querySelectorAll('[role="option"]')?.[highlightedIndex]
     el?.focus()
     el?.scrollIntoView { block: 'nearest' }
 
   _applyPlacement: ->
-    ARIA.position @_trigger, @_list, placement: 'bottom start', offset: 4, matchWidth: true
+    ARIA.position @triggerRef, @listRef, placement: 'bottom start', offset: 4, matchWidth: true
 
   mounted: ->
     _ready = true
     requestAnimationFrame => @_readOptions()
 
-  ~>
-    return unless _ready
-    if @_list
-      @_applyPlacement()
-    ARIA.bindPopover open, (=> @_list), ((isOpen) => open = isOpen), (=> @_trigger)
-    ARIA.popupDismiss open, (=> @_list), (=> @close(false, true)), [=> @_trigger]
-
   render
     .
 
       # Button
-      button ref: "_trigger", role: "combobox"
+      button ref: triggerRef, role: "combobox"
         aria-expanded: !!open
         aria-haspopup: "listbox"
         aria-controls: open ? _listId : undefined
@@ -177,11 +181,11 @@ export Select = component
         span selectedLabel
 
       # Hidden slot for reading option definitions
-      . ref: "_slot", style: "display:none"
+      . ref: slotRef, style: "display:none"
         slot
 
       # Dropdown listbox
-      div ref: "_list"
+      div ref: listRef
         id: _listId
         role: "listbox"
         popover: "manual"

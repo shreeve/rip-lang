@@ -14,18 +14,14 @@ export Drawer = component
   @side := "right"
   @dismissable := true
 
-  _id =! "drw-#{Math.random().toString(36).slice(2, 8)}"
   _focusRaf = null
-
-  beforeUnmount: ->
-    cancelAnimationFrame _focusRaf if _focusRaf
-    _focusRaf = null
+  _id =! "drw-#{Math.random().toString(36).slice(2, 8)}"
 
   ~>
     # Same dedup as Dialog: bindDialog handles cancel/close emission;
     # onKeydown only intercepts Escape when NOT dismissable (so the
     # native dialog's default cancel behavior is suppressed).
-    ARIA.bindDialog @open, (=> @_dialog), ((isOpen) =>
+    ARIA.bindDialog @open, (=> @dialogRef), ((isOpen) =>
       if not isOpen and @open
         @open = false
         @emit 'close'
@@ -36,7 +32,7 @@ export Drawer = component
       ARIA.lockScroll(this)
       _focusRaf = requestAnimationFrame =>
         _focusRaf = null
-        panel = @_dialog
+        panel = @dialogRef
         if panel
           ARIA.wireAria panel, _id
           panel.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')?[0]?.focus()
@@ -44,6 +40,12 @@ export Drawer = component
         cancelAnimationFrame _focusRaf if _focusRaf
         _focusRaf = null
         ARIA.unlockScroll(this)
+
+  dialogRef := null
+
+  beforeUnmount: ->
+    cancelAnimationFrame _focusRaf if _focusRaf
+    _focusRaf = null
 
   close: ->
     @open = false
@@ -55,11 +57,11 @@ export Drawer = component
 
   onBackdropClick: (e) ->
     if e.target is e.currentTarget and @dismissable
-      @_dialog?.close()
+      @dialogRef?.close()
 
   render
     # $side written once (was duplicated).
-    dialog ref: "_dialog"
+    dialog ref: dialogRef
       hidden: not @open
       aria-hidden: (@open ? undefined : "true")
       $open: @open?!

@@ -14,9 +14,11 @@ export OTPField = component
 
   _id =! "otp-#{Math.random().toString(36).slice(2, 8)}"
 
+  rootRef := null
+
   _getInputs: ->
-    return [] unless @_root
-    Array.from(@_root.querySelectorAll('input'))
+    return [] unless @rootRef
+    Array.from(@rootRef.querySelectorAll('input'))
 
   _focusAt: (idx) ->
     inputs = @_getInputs()
@@ -71,7 +73,7 @@ export OTPField = component
   _onFocus: (e) -> e.target.select()
 
   render
-    div ref: "_root", role: "group", aria-label: "One-time password"
+    div ref: rootRef, role: "group", aria-label: "One-time password"
       $disabled: @disabled?!
       $complete: (@value.length is @length)?!
       for idx in [0...@length]

@@ -1197,9 +1197,9 @@ export class CodeEmitter {
 
     if (this.usesReactivity && !skip) {
       if (skipRT) {
-        code += 'var { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;\n';
+        code += 'var { __state, __computed, __effect, __batch, __detachRef, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;\n';
       } else if (typeof globalThis !== 'undefined' && globalThis.__rip) {
-        code += 'const { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;\n';
+        code += 'const { __state, __computed, __effect, __batch, __detachRef, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;\n';
       } else {
         code += this.getReactiveRuntime();
       }
@@ -4779,6 +4779,17 @@ function __batch(fn) {
   }
 }
 
+// Compare-and-clear a template ref cell on element detach. Uses the
+// NON-tracking read() so clearing never subscribes the teardown path to
+// the cell, and only nulls the cell if it still holds THIS element — a
+// keyed move or a re-render that already pointed the cell elsewhere must
+// not be clobbered. Writing null notifies subscribers (an effect reading
+// the ref re-runs when the element disappears); callers wrap teardown in
+// __batch where parent subscribers may be live.
+function __detachRef(cell, el) {
+  if (cell && typeof cell.read === 'function' && cell.read() === el) cell.value = null;
+}
+
 // Returns the AbortSignal of the currently-running effect, or null if
 // called outside an effect or before AbortController is available.
 // Designed for async-aware effect bodies — capture the signal BEFORE
@@ -4838,7 +4849,7 @@ function __catchErrors(fn) {
 
 // Register on globalThis for runtime deduplication
 if (typeof globalThis !== 'undefined') {
-  globalThis.__rip = { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors, __getEffectSignal };
+  globalThis.__rip = { __state, __computed, __effect, __batch, __detachRef, __readonly, __setErrorHandler, __handleError, __catchErrors, __getEffectSignal };
   // Stdlib-style global so user code can call getEffectSignal() in a
   // ~> body without importing or destructuring. Mirrors how p, pp,
   // assert, etc. are registered for ergonomic use.

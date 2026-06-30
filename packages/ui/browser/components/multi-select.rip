@@ -28,6 +28,24 @@ export MultiSelect = component
       label = if typeof item is 'string' then item else (item.label or item.name or String(item))
       label.toLowerCase().includes(q)
 
+  ~>
+    return unless _ready
+    if @listRef
+      @listRef.setAttribute 'popover', 'manual'
+      @_applyPlacement()
+    # ARIA.combine: both helpers register listeners that need cleanup.
+    # Without combine, only the LAST expression's value is taken as the
+    # effect's cleanup, so the bindPopover `toggle` listener leaked on
+    # every effect re-run.
+    ARIA.combine(
+      ARIA.bindPopover  open, (=> @listRef), ((isOpen) => open = isOpen), (=> @inputRef)
+      ARIA.popupDismiss open, (=> @listRef), (=> @_close(false, true)), [=> @inputRef, => @contentRef]
+    )
+
+  contentRef := null
+  inputRef := null
+  listRef := null
+
   # Block reopen briefly so the same pointer gesture that closed the popup
   # cannot immediately reopen it via focus/click side effects.
   _blockOpenBriefly: ->
@@ -95,7 +113,7 @@ export MultiSelect = component
     query = ''
     highlightedIndex = -1
     @_blockOpenBriefly() if blockOpen
-    @_input?.focus() if restoreFocus
+    @inputRef?.focus() if restoreFocus
 
   onFocusin: ->
     return unless @_canOpen()
@@ -120,12 +138,12 @@ export MultiSelect = component
       @_close(false, true)
       return
     return unless @_canOpen()
-    @_input?.focus()
-    @_openMenu() if document.activeElement is @_input
+    @inputRef?.focus()
+    @_openMenu() if document.activeElement is @inputRef
 
   onFocusout: ->
     setTimeout =>
-      return if @_content?.contains(document.activeElement)
+      return if @contentRef?.contains(document.activeElement)
       @_close(false, true)
     , 0
 
@@ -133,7 +151,7 @@ export MultiSelect = component
     _ready = true
 
   _applyPlacement: ->
-    ARIA.position @_content, @_list, placement: 'bottom start', offset: 2, matchWidth: true
+    ARIA.position @contentRef, @listRef, placement: 'bottom start', offset: 2, matchWidth: true
 
   _onKeydown: (e) ->
     len = filtered.length
@@ -164,22 +182,8 @@ export MultiSelect = component
       when 'Tab'
         @_close(false, true)
 
-  ~>
-    return unless _ready
-    if @_list
-      @_list.setAttribute 'popover', 'manual'
-      @_applyPlacement()
-    # ARIA.combine: both helpers register listeners that need cleanup.
-    # Without combine, only the LAST expression's value is taken as the
-    # effect's cleanup, so the bindPopover `toggle` listener leaked on
-    # every effect re-run.
-    ARIA.combine(
-      ARIA.bindPopover  open, (=> @_list), ((isOpen) => open = isOpen), (=> @_input)
-      ARIA.popupDismiss open, (=> @_list), (=> @_close(false, true)), [=> @_input, => @_content]
-    )
-
   render
-    . ref: "_content", $open: open?!, $disabled: @disabled?!, @focusin, @focusout
+    . ref: contentRef, $open: open?!, $disabled: @disabled?!, @focusin, @focusout
 
       # Chip area + input
       . $chips: true, @click: @_onChipsClick
@@ -188,7 +192,7 @@ export MultiSelect = component
             "#{@_chipLabel(chip)}"
             button type: "button", $remove: true, aria-label: "Remove #{@_chipLabel(chip)}", @mousedown: @_onRemoveMousedown, @click: (=> @_removeChip(chip))
               "✕"
-        input ref: "_input", type: "text", autocomplete: "off"
+        input ref: inputRef, type: "text", autocomplete: "off"
           role: "combobox"
           aria-expanded: !!open
           aria-haspopup: "listbox"
@@ -204,7 +208,7 @@ export MultiSelect = component
           @keydown: @_onKeydown
 
       # Dropdown
-      div ref: "_list"
+      div ref: listRef
         id: _listId
         role: "listbox"
         popover: "manual"

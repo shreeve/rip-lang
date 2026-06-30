@@ -22,9 +22,26 @@ export Combobox = component
   _popupGuard =! ARIA.popupGuard()
   _listId =! "cb-#{Math.random().toString(36).slice(2, 8)}"
 
+  ~>
+    return unless _ready
+    if @listRef
+      @_applyPlacement()
+    # ARIA.combine: both helpers register listeners that need cleanup.
+    # Without combine, only the LAST expression's value is taken as the
+    # effect's cleanup, so the bindPopover `toggle` listener leaked on
+    # every effect re-run.
+    ARIA.combine(
+      ARIA.bindPopover  open, (=> @listRef), ((isOpen) => open = isOpen), (=> @inputRef)
+      ARIA.popupDismiss open, (=> @listRef), (=> @close(false, true)), [=> @inputRef, => @contentRef]
+    )
+
+  contentRef := null
+  inputRef := null
+  listRef := null
+
   getItems: ->
-    return [] unless @_list
-    Array.from(@_list.querySelectorAll('[role="option"]'))
+    return [] unless @listRef
+    Array.from(@listRef.querySelectorAll('[role="option"]'))
 
   _scrollToItem: ->
     @getItems()[highlightedIndex]?.scrollIntoView({ block: 'nearest' })
@@ -49,25 +66,25 @@ export Combobox = component
     @openMenu(true)
 
   onFocusout: ->
-    setTimeout => @close(false, true) unless @_content?.contains(document.activeElement), 0
+    setTimeout => @close(false, true) unless @contentRef?.contains(document.activeElement), 0
 
   openMenu: (force = false) ->
     return unless force or _popupGuard.canOpen()
     open = true
     highlightedIndex = -1
-    @_input?.focus()
+    @inputRef?.focus()
 
   close: (restoreFocus = true, blockOpen = false) ->
     open = false
     highlightedIndex = -1
     _popupGuard.block() if blockOpen
-    @_input?.focus() if restoreFocus
+    @inputRef?.focus() if restoreFocus
 
   mounted: ->
     _ready = true
 
   _applyPlacement: ->
-    ARIA.position @_content, @_list, placement: 'bottom start', offset: 2, matchWidth: true
+    ARIA.position @contentRef, @listRef, placement: 'bottom start', offset: 2, matchWidth: true
 
   isDisabled: (item) -> item?.hasAttribute?('data-disabled')
 
@@ -100,25 +117,12 @@ export Combobox = component
       dismiss: => if open then @close() else @query = ''
       tab:     => @close(false, true)
 
-  ~>
-    return unless _ready
-    if @_list
-      @_applyPlacement()
-    # ARIA.combine: both helpers register listeners that need cleanup.
-    # Without combine, only the LAST expression's value is taken as the
-    # effect's cleanup, so the bindPopover `toggle` listener leaked on
-    # every effect re-run.
-    ARIA.combine(
-      ARIA.bindPopover  open, (=> @_list), ((isOpen) => open = isOpen), (=> @_input)
-      ARIA.popupDismiss open, (=> @_list), (=> @close(false, true)), [=> @_input, => @_content]
-    )
-
   render
-    . ref: "_content", $open: open?!, @focusin, @focusout
+    . ref: contentRef, $open: open?!, @focusin, @focusout
 
       # Text input
       . style: "position:relative;display:inline-flex;align-items:center"
-        input ref: "_input", role: "combobox"
+        input ref: inputRef, role: "combobox"
           type: "text"
           autocomplete: "off"
           aria-expanded: !!open
@@ -138,7 +142,7 @@ export Combobox = component
             "✕"
 
       # Listbox
-      div ref: "_list"
+      div ref: listRef
         id: _listId
         role: "listbox"
         popover: "auto"

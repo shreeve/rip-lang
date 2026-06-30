@@ -26,10 +26,21 @@ export Tooltip = component
   _ready := false
   _id =! "tip-#{Math.random().toString(36).slice(2, 8)}"
 
+  ~>
+    return unless _ready
+    if @tipRef
+      @tipRef.setAttribute 'popover', 'hint'
+      @_applyPlacement()
+      if open then @tipRef.setAttribute('data-open', '') else @tipRef.removeAttribute('data-open')
+      ARIA.bindPopover open, (=> @tipRef), ((isOpen) => open = isOpen), (=> @triggerRef)
+
+  tipRef := null
+  triggerRef := null
+
   _applyPlacement: ->
     [side, align] = @placement.split('-')
     align ??= 'center'
-    ARIA.position @_trigger, @_tip, placement: "#{side} #{align}", offset: @offset
+    ARIA.position @triggerRef, @tipRef, placement: "#{side} #{align}", offset: @offset
 
   show: ->
     # Clear BOTH timers before scheduling a new show. mouseenter +
@@ -75,17 +86,9 @@ export Tooltip = component
   mounted: ->
     _ready = true
 
-  ~>
-    return unless _ready
-    if @_tip
-      @_tip.setAttribute 'popover', 'hint'
-      @_applyPlacement()
-      if open then @_tip.setAttribute('data-open', '') else @_tip.removeAttribute('data-open')
-      ARIA.bindPopover open, (=> @_tip), ((isOpen) => open = isOpen), (=> @_trigger)
-
   render
     .
-      div ref: "_trigger"
+      div ref: triggerRef
         aria-describedby: open ? _id : undefined
         @mouseenter: @show
         @mouseleave: @hide
@@ -93,7 +96,7 @@ export Tooltip = component
         @focusout: @hide
         slot
 
-      div ref: "_tip"
+      div ref: tipRef
         id: _id
         role: "tooltip"
         popover: "hint"

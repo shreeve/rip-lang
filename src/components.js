@@ -1027,12 +1027,23 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       reactiveMembers.add('rest');
     }
 
+    // Writable state cells — the only valid `ref:` targets. stateVars covers
+    // `:=` state, `=`-assigned (non-method) members, and bare `@props` (each
+    // emitted as a writable `__state(...)` signal). Computed (`~=`) and
+    // readonly (`=!`) members are deliberately excluded: a computed has a
+    // get-only `.value`, and a readonly is a frozen plain field — neither can
+    // accept the live element. (`rest` is reactive but not a cell.)
+    const refTargetMembers = new Set();
+    for (const { name } of stateVars) refTargetMembers.add(name);
+
     // Save and set component context
     const prevComponentMembers = this.componentMembers;
     const prevReactiveMembers = this.reactiveMembers;
+    const prevRefTargetMembers = this.refTargetMembers;
     const prevInheritsTag = this._inheritsTag;
     this.componentMembers = memberNames;
     this.reactiveMembers = reactiveMembers;
+    this.refTargetMembers = refTargetMembers;
     this._inheritsTag = inheritsTag || null;
 
     // --- Type-check stub: typed member declarations + body expressions, no DOM ---
@@ -1524,6 +1535,18 @@ export function installComponentSupport(CodeEmitter, Lexer) {
                     constructions.push(`    (${val});${marker}`);
                     continue;
                   }
+                  if (key === 'ref') {
+                    // ref: binds the element into a state cell. Type-check the
+                    // cell (the Signal OBJECT, not its `.value`) against the
+                    // tag's element type via __ripRef — mismatched element
+                    // types, non-nullable cells, computed (`~=`) and readonly
+                    // (`=!`) targets all error here.
+                    const refName = (typeof value === 'string' || value instanceof String) ? value.valueOf() : null;
+                    if (refName && /^[A-Za-z_$][\w$]*$/.test(refName) && this.reactiveMembers?.has(refName)) {
+                      (props.refChecks ??= []).push({ code: `__ripRef('${tagName}', this.${refName})`, srcLine });
+                    }
+                    continue;
+                  }
                   if (key.startsWith('__bind_') && key.endsWith('__')) {
                     const propName = key.slice(7, -2);
                     const val = this.emitInComponent(value, 'value');
@@ -1889,6 +1912,18 @@ export function installComponentSupport(CodeEmitter, Lexer) {
             const iProps = extractIntrinsicProps(node.slice(1), tagName, node.loc?.r);
             const tagLine = node.loc?.r;
             const srcMarker = tagLine != null ? ` // @rip-src:${tagLine}` : '';
+            // Element refs check the cell against the element type separately
+            // (the cell is the Signal object, not an HTML attribute value).
+            // Emitted BEFORE the __ripEl call so that, when the ref shares its
+            // source line with the element tag, the FIRST @rip-src marker for
+            // that line is the __ripRef line — that's the statement that can
+            // error, so a `@ts-expect-error` directive lands on it (not on the
+            // never-erroring __ripEl).
+            if (iProps.refChecks) {
+              for (const r of iProps.refChecks) {
+                constructions.push(`    ${r.code};` + (r.srcLine != null ? ` // @rip-src:${r.srcLine}` : ''));
+              }
+            }
             if (iProps.length === 0) {
               constructions.push(`    ${elFn}('${tagName}');${srcMarker}`);
             } else if (iProps.length === 1) {
@@ -1923,6 +1958,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
 
       this.componentMembers = prevComponentMembers;
       this.reactiveMembers = prevReactiveMembers;
+      this.refTargetMembers = prevRefTargetMembers;
       this._inheritsTag = prevInheritsTag;
       return sl.join('\n');
     }
@@ -2152,6 +2188,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     // Restore context
     this.componentMembers = prevComponentMembers;
     this.reactiveMembers = prevReactiveMembers;
+    this.refTargetMembers = prevRefTargetMembers;
     this._inheritsTag = prevInheritsTag;
 
     // If block factories exist, wrap in IIFE so they're in scope
@@ -2866,10 +2903,46 @@ export function installComponentSupport(CodeEmitter, Lexer) {
           continue;
         }
 
-        // Element ref: ref: "name" → this.name = element
+        // Element ref: ref: cell → bind the live element into a STATE cell.
+        // `cell` is a state member declared `name := null`; we pass the signal
+        // OBJECT (never its .value) and write the element on mount / null on
+        // detach, so effects reading the ref re-run as it appears/disappears.
         if (key === 'ref') {
-          const refName = String(value).replace(/^["']|["']$/g, '');
-          this._createLines.push(`${this._self}.${refName} = ${elVar};`);
+          const refName = _str(value);
+          if (!refName || !/^[A-Za-z_$][\w$]*$/.test(refName)) {
+            this.error(
+              'ref: expects a state cell — declare `el := null` then write `ref: el` (string-name refs were removed)',
+              value
+            );
+          }
+          if (!(this.refTargetMembers && this.refTargetMembers.has(refName))) {
+            // A computed (`~=`) has a get-only `.value`; a readonly (`=!`) is a
+            // frozen plain field — neither can receive the live element.
+            const isComputedOrReadonly = this.reactiveMembers && this.reactiveMembers.has(refName);
+            this.error(
+              isComputedOrReadonly
+                ? `ref: target '${refName}' is not a writable state cell — declare it with ':=' (computed '~=' and readonly '=!' members can't hold a ref)`
+                : `ref: target '${refName}' must be a state cell declared with ':=' (e.g. \`${refName} := null\`)`,
+              value
+            );
+          }
+          // The signal object itself — `this.name` / `ctx.name`, NOT `.value`.
+          const cellExpr = `${this._self}.${refName}`;
+          if (this._factoryMode) {
+            // Dynamic ref (inside if/for): defer the write to AFTER the block
+            // is inserted (the m() phase) so a synchronous flush can never let
+            // an outer effect observe a not-yet-connected node. The enclosing
+            // reconcile / branch-swap pass is wrapped in __batch by the
+            // factory caller. Cleared on real detach (d(detaching)) only —
+            // never on a keyed move.
+            (this._refMounts ??= []).push({ cellExpr, elVar });
+          } else {
+            // Static ref: by mount order the whole subtree is built in
+            // _create(), connected to the document, and only THEN do any
+            // effects first run — so writing here is glitch-free.
+            this._createLines.push(`${cellExpr}.value = ${elVar};`);
+            this._createLines.push(`(this._refCleanups ??= []).push(() => __detachRef(${cellExpr}, ${elVar}));`);
+          }
           continue;
         }
 
@@ -3017,12 +3090,12 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     const outerExtra = outerParams ? `, ${outerParams}` : '';
 
     const thenBlockName = this.newBlockVar();
-    this.emitConditionBranch(thenBlockName, thenBlock);
+    let hasDynamicRef = this.emitConditionBranch(thenBlockName, thenBlock);
 
     let elseBlockName = null;
     if (elseBlock) {
       elseBlockName = this.newBlockVar();
-      this.emitConditionBranch(elseBlockName, elseBlock);
+      hasDynamicRef = this.emitConditionBranch(elseBlockName, elseBlock) || hasDynamicRef;
     }
 
     const setupLines = [];
@@ -3038,6 +3111,11 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     const effOpen = this._factoryMode ? 'disposers.push(__effect(() => {' : '__effect(() => {';
     const effClose = this._factoryMode ? '}, {skipRegister: true}));' : '});';
     setupLines.push(`  ${effOpen}`);
+    // A dynamic ref inside a branch writes its cell in the block's m() phase.
+    // Batching the whole create/insert/destroy pass means observers see only
+    // the final cell value and the state setter's `notifying` guard can't drop
+    // a framework write made while another subscriber is mid-flush.
+    if (hasDynamicRef) setupLines.push(`    __batch(() => {`);
     setupLines.push(`    const show = !!(${condCode});`);
     setupLines.push(`    const want = show ? 'then' : ${elseBlock ? "'else'" : 'null'};`);
     setupLines.push(`    if (want === showing) return;`);
@@ -3066,6 +3144,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       setupLines.push(`      if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');`);
       setupLines.push(`    }`);
     }
+    if (hasDynamicRef) setupLines.push(`    });`);
     setupLines.push(`  ${effClose}`);
     // Block teardown: when this conditional's enclosing scope ends
     // (factory block detach, or parent component unmount), destroy
@@ -3093,7 +3172,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
   // --------------------------------------------------------------------------
 
   proto.emitConditionBranch = function(blockName, block) {
-    const saved = [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScope];
+    const saved = [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScope, this._refMounts];
 
     this._createLines = [];
     this._setupLines = [];
@@ -3101,25 +3180,29 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     this._factoryVars = new Set();
     // Fresh render-local scope per factory function (see emitTemplateLoop).
     this._renderLocalScope = new Set();
+    this._refMounts = [];
 
     const rootVar = this.emitTemplateBlock(block);
     const createLines = this._createLines;
     const setupLines = this._setupLines;
     const factoryVars = this._factoryVars;
+    const refMounts = this._refMounts;
 
-    [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScope] = saved;
+    [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScope, this._refMounts] = saved;
 
     const outerParams = this._loopVarStack.map(v => `${v.itemVar}, ${v.indexVar}`).join(', ');
     const extraParams = outerParams ? `, ${outerParams}` : '';
 
-    this.emitBlockFactory(blockName, `ctx${extraParams}`, rootVar, createLines, setupLines, factoryVars);
+    this.emitBlockFactory(blockName, `ctx${extraParams}`, rootVar, createLines, setupLines, factoryVars, false, refMounts);
+    // Report dynamic-ref presence so emitConditional can __batch the swap.
+    return refMounts.length > 0;
   };
 
   // --------------------------------------------------------------------------
   // emitBlockFactory — shared factory generation for conditionals and loops
   // --------------------------------------------------------------------------
 
-  proto.emitBlockFactory = function(blockName, params, rootVar, createLines, setupLines, factoryVars, isStatic) {
+  proto.emitBlockFactory = function(blockName, params, rootVar, createLines, setupLines, factoryVars, isStatic, refMounts) {
     const factoryLines = [];
     factoryLines.push(`function ${blockName}(${params}) {`);
 
@@ -3165,6 +3248,16 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     } else {
       factoryLines.push(`      if (target) target.insertBefore(${rootVar}, anchor);`);
     }
+    // Dynamic refs: write the live element into its cell AFTER insertion, so
+    // the node is connected before any subscriber observes it. The enclosing
+    // reconcile / branch-swap pass is __batch-wrapped (see emitConditional /
+    // emitTemplateLoop). Idempotent on keyed-move re-inserts (the state setter
+    // no-ops when newValue === value).
+    if (refMounts && refMounts.length) {
+      for (const r of refMounts) {
+        factoryLines.push(`      ${r.cellExpr}.value = ${r.elVar};`);
+      }
+    }
     factoryLines.push(`    },`);
 
     factoryLines.push(`    p(${params}) {`);
@@ -3190,6 +3283,17 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     factoryLines.push(`      _factoryChildren = [];`);
     if (hasEffects) {
       factoryLines.push(`      disposers.forEach(d => d());`);
+    }
+    // Dynamic refs: compare-and-clear only on a real destroy (detaching===true),
+    // never on a keyed move (which reinserts via m() without calling d()). Runs
+    // AFTER this block's own effects are disposed; batched so any live parent
+    // subscriber (a forwarded ref) is notified exactly once.
+    if (refMounts && refMounts.length) {
+      factoryLines.push(`      if (detaching) __batch(() => {`);
+      for (const r of refMounts) {
+        factoryLines.push(`        __detachRef(${r.cellExpr}, ${r.elVar});`);
+      }
+      factoryLines.push(`      });`);
     }
     if (fragChildren) {
       for (const child of fragChildren) {
@@ -3267,7 +3371,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       }
     }
 
-    const saved = [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScope];
+    const saved = [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScope, this._refMounts];
 
     this._createLines = [];
     this._setupLines = [];
@@ -3277,6 +3381,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     // surrounding scope are NOT visible here. Loop vars are explicitly
     // threaded as positional parameters via _loopVarStack.
     this._renderLocalScope = new Set();
+    this._refMounts = [];
 
     const outerParams = this._loopVarStack.map(v => `${v.itemVar}, ${v.indexVar}`).join(', ');
     const outerExtra = outerParams ? `, ${outerParams}` : '';
@@ -3293,12 +3398,14 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     const itemCreateLines = this._createLines;
     const itemSetupLines = this._setupLines;
     const itemFactoryVars = this._factoryVars;
+    const itemRefMounts = this._refMounts;
 
-    [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScope] = saved;
+    [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScope, this._refMounts] = saved;
 
     const isStatic = itemSetupLines.length === 0;
     const loopParams = `ctx, ${itemVar}, ${indexVar}${outerExtra}`;
-    this.emitBlockFactory(blockName, loopParams, itemNode, itemCreateLines, itemSetupLines, itemFactoryVars, isStatic);
+    this.emitBlockFactory(blockName, loopParams, itemNode, itemCreateLines, itemSetupLines, itemFactoryVars, isStatic, itemRefMounts);
+    const hasDynamicRef = itemRefMounts.length > 0;
 
     // Build key function argument (null = use item as key)
     const hasCustomKey = keyExpr !== itemVar;
@@ -3316,7 +3423,15 @@ export function installComponentSupport(CodeEmitter, Lexer) {
     const effOpen = this._factoryMode ? 'disposers.push(__effect(() => {' : '__effect(() => {';
     const effClose = this._factoryMode ? '}, {skipRegister: true}));' : '});';
     setupLines.push(`  ${effOpen}`);
-    setupLines.push(`    __reconcile(${anchorVar}, __s, ${collectionCode}, ${this._self}, ${blockName}, ${keyFnCode}${outerArgs});`);
+    // Dynamic refs inside the loop body write their cells in each block's m()
+    // phase. Batch the whole reconcile so create/insert/destroy settle to one
+    // flush and the state setter's `notifying` guard can't drop a framework
+    // ref write made while another subscriber is mid-flush.
+    if (hasDynamicRef) {
+      setupLines.push(`    __batch(() => __reconcile(${anchorVar}, __s, ${collectionCode}, ${this._self}, ${blockName}, ${keyFnCode}${outerArgs}));`);
+    } else {
+      setupLines.push(`    __reconcile(${anchorVar}, __s, ${collectionCode}, ${this._self}, ${blockName}, ${keyFnCode}${outerArgs});`);
+    }
     setupLines.push(`  ${effClose}`);
     // Loop teardown: destroy every block in state.blocks on parent
     // unmount (or enclosing factory detach). __reconcile only destroys
@@ -4123,6 +4238,21 @@ class __Component {
         try { d(); } catch (e) { console.error('[Rip] effect disposer error:', e); }
       }
       this._disposers = null;
+    }
+    // Static template-ref cleanups run AFTER this component's own effects
+    // are disposed (nulling a ref before disposing the effects that read it
+    // could re-run them mid-teardown under the synchronous scheduler) but
+    // before the DOM detaches. Batched so a forwarded ref (a parent-owned
+    // cell filled by a child element) notifies the still-live parent
+    // subscribers exactly once.
+    if (this._refCleanups) {
+      const __cleanups = this._refCleanups;
+      this._refCleanups = null;
+      __batch(() => {
+        for (const c of __cleanups) {
+          try { c(); } catch (e) { console.error('[Rip] ref cleanup error:', e); }
+        }
+      });
     }
     try {
       if (this.unmounted) this.unmounted();

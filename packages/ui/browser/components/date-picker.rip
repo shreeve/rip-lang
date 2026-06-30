@@ -49,8 +49,8 @@ export DatePicker = component
   _hoveredDay := null
   _focusedDay := null     # currently keyboard-focused day in the grid
   _id =! "dp-#{Math.random().toString(36).slice(2, 8)}"
-
   _BASE_DAY_NAMES =! ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+  _today =! new Date()
 
   # Headers rotate with @firstDayOfWeek so the column labels match the
   # grid layout. Previously the grid shifted but the labels stayed
@@ -58,16 +58,6 @@ export DatePicker = component
   _dayNames ~=
     f = (+@firstDayOfWeek) %% 7
     [..._BASE_DAY_NAMES.slice(f), ..._BASE_DAY_NAMES.slice(0, f)]
-
-  # Coerce value to a Date if it's a serialized string (from JSON
-  # persistence). The original code crashed in dpFmt(@value) when
-  # @value was a string after rehydration.
-  _coerceDate = (v) ->
-    return null unless v
-    return v if v instanceof Date
-    d = new Date(v)
-    return null if isNaN(d.getTime())
-    d
 
   _value ~=
     if @range
@@ -120,7 +110,26 @@ export DatePicker = component
   _monthLabel ~=
     viewMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
 
-  _today =! new Date()
+  ~>
+    if open
+      onDown = (e) =>
+        unless @triggerRef?.contains(e.target) or @calRef?.contains(e.target)
+          @close()
+      document.addEventListener 'mousedown', onDown
+      return -> document.removeEventListener 'mousedown', onDown
+
+  calRef := null
+  triggerRef := null
+
+  # Coerce value to a Date if it's a serialized string (from JSON
+  # persistence). The original code crashed in dpFmt(@value) when
+  # @value was a string after rehydration.
+  _coerceDate = (v) ->
+    return null unless v
+    return v if v instanceof Date
+    d = new Date(v)
+    return null if isNaN(d.getTime())
+    d
 
   _prevMonth: ->
     viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1)
@@ -172,14 +181,14 @@ export DatePicker = component
     _hoveredDay = null
     _focusedDay = null
 
-  _position: -> ARIA.positionBelow @_trigger, @_cal, 4, false
+  _position: -> ARIA.positionBelow @triggerRef, @calRef, 4, false
 
   # Focus the day-cell whose date matches _focusedDay. Uses a
   # data-date attribute we put on each gridcell button.
   _focusGridDay: ->
-    return unless @_cal and _focusedDay
+    return unless @calRef and _focusedDay
     iso = "#{_focusedDay.getFullYear()}-#{_focusedDay.getMonth()}-#{_focusedDay.getDate()}"
-    @_cal.querySelector("[data-date='#{iso}']")?.focus()
+    @calRef.querySelector("[data-date='#{iso}']")?.focus()
 
   _shiftFocus: (delta) ->
     return unless _focusedDay
@@ -241,21 +250,13 @@ export DatePicker = component
       when 'Escape'
         e.preventDefault()
         @close()
-        @_trigger?.focus()
-
-  ~>
-    if open
-      onDown = (e) =>
-        unless @_trigger?.contains(e.target) or @_cal?.contains(e.target)
-          @close()
-      document.addEventListener 'mousedown', onDown
-      return -> document.removeEventListener 'mousedown', onDown
+        @triggerRef?.focus()
 
   render
     . $open: open?!, $disabled: @disabled?!, $range: @range?!
 
       # Trigger
-      button type: "button", ref: "_trigger", $trigger: true
+      button type: "button", ref: triggerRef, $trigger: true
         aria-haspopup: "dialog"
         aria-expanded: !!open
         disabled: @disabled
@@ -265,7 +266,7 @@ export DatePicker = component
 
       # Calendar dropdown
       if open
-        div ref: "_cal", role: "dialog", aria-label: "Date picker", $calendar: true
+        div ref: calRef, role: "dialog", aria-label: "Date picker", $calendar: true
           style: "position:fixed;z-index:50"
           @keydown: @_onGridKeydown
 

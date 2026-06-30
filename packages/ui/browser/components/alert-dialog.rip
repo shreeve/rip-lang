@@ -16,19 +16,15 @@ export AlertDialog = component
   @open := false
   @initialFocus := null
 
-  _id =! "adlg-#{Math.random().toString(36).slice(2, 8)}"
   _focusRaf = null
-
-  beforeUnmount: ->
-    cancelAnimationFrame _focusRaf if _focusRaf
-    _focusRaf = null
+  _id =! "adlg-#{Math.random().toString(36).slice(2, 8)}"
 
   ~>
     # bindDialog handles focus restoration via its own restoreEl
     # tracking — we don't need a parallel _prevFocus + manual focus()
     # in the cleanup, which used to double-restore (steal focus
     # incorrectly when nested modals or async UI was involved).
-    ARIA.bindDialog @open, (=> @_dialog), ((isOpen) =>
+    ARIA.bindDialog @open, (=> @dialogRef), ((isOpen) =>
       if not isOpen and @open
         @open = false
         @emit 'close'
@@ -39,7 +35,7 @@ export AlertDialog = component
       ARIA.lockScroll(this)
       _focusRaf = requestAnimationFrame =>
         _focusRaf = null
-        panel = @_dialog
+        panel = @dialogRef
         if panel
           ARIA.wireAria panel, _id
           if @initialFocus
@@ -52,13 +48,19 @@ export AlertDialog = component
         _focusRaf = null
         ARIA.unlockScroll(this)
 
+  dialogRef := null
+
+  beforeUnmount: ->
+    cancelAnimationFrame _focusRaf if _focusRaf
+    _focusRaf = null
+
   close: ->
     @open = false
 
   render
     # role="alertdialog" set statically (was previously set after RAF —
     # accessibility timing gap on first paint).
-    dialog ref: "_dialog", role: "alertdialog"
+    dialog ref: dialogRef, role: "alertdialog"
       hidden: not @open
       aria-hidden: (@open ? undefined : "true")
       $open: @open?!

@@ -387,3 +387,60 @@ export EqualsFormMethodTests = component
     @ref.label(42)
 
   render null
+
+# ── Element refs (timeless: ref binds a writable state cell) ──
+#
+# `ref: cell` writes the live DOM element into a state cell (declared
+# `:= null`). The cell's value type must admit null AND accept the tag's
+# element type — narrowed per tag (input → HTMLInputElement, div →
+# HTMLDivElement, svg → SVGSVGElement). A widened `Element | null` cell
+# accepts any tag. The cell is passed as the Signal OBJECT, not its value.
+
+export RefTests = component
+  inputEl: HTMLInputElement | null := null
+  divEl: HTMLDivElement | null := null
+  svgEl: SVGSVGElement | null := null
+  anyEl: Element | null := null
+
+  render
+    div
+      input ref: inputEl
+      div ref: divEl
+      svg ref: svgEl
+      # widened Element cell accepts any tag
+      section ref: anyEl
+
+# ── Negative: ref cell type must match the element and admit null ──
+
+export RefMismatchTests = component
+  inputCell: HTMLInputElement | null := null
+  # A non-nullable cell (no `| null`) — seeded with a real element so the
+  # declaration itself is clean; the ref site is where it must be rejected.
+  nonNull: HTMLDivElement := document.createElement('div')
+
+  render
+    div
+      # @ts-expect-error — a div element can't be stored in an HTMLInputElement cell
+      div ref: inputCell
+      # @ts-expect-error — ref cell type must admit null (non-nullable rejected)
+      div ref: nonNull
+
+# ── Forwarded ref: parent owns the cell, child fills it via a state prop ──
+#
+# A child exposes its DOM node by binding a public state prop two-way (<=>);
+# the parent owns the cell and the child writes its element into it with
+# `ref:`. Both endpoints type-check: the <=> channel passes Signal<T> under
+# __bind_, and the child's `ref: field` checks the same element type.
+
+export RefForwardChild = component
+  @field: HTMLInputElement | null := null
+
+  render
+    input ref: field
+
+export RefForwardParent = component
+  myInput: HTMLInputElement | null := null
+
+  render
+    RefForwardChild
+      field <=> myInput

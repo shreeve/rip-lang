@@ -7,7 +7,7 @@
 // Rip's render block            → React's JSX return
 // Rip's <=> two-way bind        → React's value + onChange (no direct equivalent)
 
-import { SubmitEventHandler, useState, ComponentProps, MouseEventHandler } from 'react'
+import { SubmitEventHandler, useState, useRef, ComponentProps, MouseEventHandler } from 'react'
 
 // ── Prop types ──
 
@@ -323,4 +323,38 @@ function _negativeTests() {
   const bad3 = cart.item
   // @ts-expect-error — nonexistent path
   const bad4 = cart.tax
+}
+
+// ── Element refs ──
+//
+// React equivalent of Rip's `ref: cell`. useRef<E | null>(null) is the
+// state cell; <input ref={cell}/> binds the element. A widened
+// Element cell accepts any tag.
+
+function RefTests() {
+  const inputEl = useRef<HTMLInputElement | null>(null)
+  const divEl = useRef<HTMLDivElement | null>(null)
+  const svgEl = useRef<SVGSVGElement | null>(null)
+  return (
+    <div>
+      <input ref={inputEl} />
+      <div ref={divEl} />
+      <svg ref={svgEl} />
+    </div>
+  )
+}
+
+// ── Negative: ref cell element type must match ──
+
+function RefMismatchTests() {
+  const inputCell = useRef<HTMLInputElement | null>(null)
+  const divCell = useRef<HTMLDivElement | null>(null)
+  return (
+    <div>
+      {/* @ts-expect-error — a div ref can't bind an input element */}
+      <input ref={divCell} />
+      {/* @ts-expect-error — an input ref can't bind an svg element */}
+      <svg ref={inputCell} />
+    </div>
+  )
 }

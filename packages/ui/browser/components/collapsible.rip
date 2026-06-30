@@ -16,24 +16,10 @@ export Collapsible = component
 
   _ready := false
 
-  mounted: ->
-    _ready = true
-    trigger = @_root?.querySelector('[data-trigger]')
-    return unless trigger
-    trigger.addEventListener 'click', => @toggle() unless @disabled
-    trigger.addEventListener 'keydown', (e) =>
-      if e.key in ['Enter', ' '] and not @disabled
-        e.preventDefault()
-        @toggle()
-
-  toggle: ->
-    @open = not @open
-    @emit 'change', @open
-
   ~>
     return unless _ready
-    trigger = @_root?.querySelector('[data-trigger]')
-    content = @_root?.querySelector('[data-content]')
+    trigger = @rootRef?.querySelector('[data-trigger]')
+    content = @rootRef?.querySelector('[data-content]')
     if trigger
       trigger.setAttribute 'aria-expanded', !!@open
       if @disabled then trigger.setAttribute 'aria-disabled', true else trigger.removeAttribute 'aria-disabled'
@@ -45,6 +31,22 @@ export Collapsible = component
         content.style.setProperty '--collapsible-height', "#{rect.height}px"
         content.style.setProperty '--collapsible-width', "#{rect.width}px"
 
+  rootRef := null
+
+  mounted: ->
+    _ready = true
+    trigger = @rootRef?.querySelector('[data-trigger]')
+    return unless trigger
+    trigger.addEventListener 'click', => @toggle() unless @disabled
+    trigger.addEventListener 'keydown', (e) =>
+      if e.key in ['Enter', ' '] and not @disabled
+        e.preventDefault()
+        @toggle()
+
+  toggle: ->
+    @open = not @open
+    @emit 'change', @open
+
   render
-    div ref: "_root", $open: @open?!, $disabled: @disabled?!
+    div ref: rootRef, $open: @open?!, $disabled: @disabled?!
       slot

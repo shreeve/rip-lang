@@ -20,12 +20,17 @@ export ContextMenu = component
   posY := 0
 
   _menuItems ~=
-    return [] unless @_slot
-    Array.from(@_slot.querySelectorAll('[data-item]') or [])
+    return [] unless @slotRef
+    Array.from(@slotRef.querySelectorAll('[data-item]') or [])
 
   _triggerEl ~=
-    return null unless @_slot
-    @_slot.querySelector('[data-trigger]')
+    return null unless @slotRef
+    @slotRef.querySelector('[data-trigger]')
+
+  ~> ARIA.popupDismiss open, (=> @listRef), (=> @close())
+
+  listRef := null
+  slotRef := null
 
   _onContextMenu: (e) ->
     return if @disabled
@@ -35,7 +40,7 @@ export ContextMenu = component
     open = true
     highlightedIndex = 0
     requestAnimationFrame =>
-      @_list?.querySelectorAll('[role="menuitem"]')[0]?.focus()
+      @listRef?.querySelectorAll('[role="menuitem"]')[0]?.focus()
 
   close: ->
     open = false
@@ -50,7 +55,7 @@ export ContextMenu = component
 
   _focusItem: (idx) ->
     highlightedIndex = idx
-    @_list?.querySelectorAll('[role="menuitem"]')[idx]?.focus()
+    @listRef?.querySelectorAll('[role="menuitem"]')[idx]?.focus()
 
   _onKeydown: (e) ->
     return unless _menuItems.length
@@ -64,19 +69,17 @@ export ContextMenu = component
       dismiss: => @close()
       tab:     => @close()
 
-  ~> ARIA.popupDismiss open, (=> @_list), (=> @close())
-
   render
     . @contextmenu: @_onContextMenu
 
-      . ref: "_slot", style: "display:none"
+      . ref: slotRef, style: "display:none"
         slot
 
       if _triggerEl
         . innerHTML: _triggerEl.innerHTML
 
       if open
-        div ref: "_list", role: "menu", $open: true, @keydown: @_onKeydown
+        div ref: listRef, role: "menu", $open: true, @keydown: @_onKeydown
           style: "position:fixed;left:#{posX}px;top:#{posY}px;z-index:50"
           for item, idx in _menuItems
             div role: "menuitem", tabIndex: -1

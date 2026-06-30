@@ -9289,11 +9289,16 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         memberNames.add("rest");
         reactiveMembers.add("rest");
       }
+      const refTargetMembers = new Set;
+      for (const { name } of stateVars)
+        refTargetMembers.add(name);
       const prevComponentMembers = this.componentMembers;
       const prevReactiveMembers = this.reactiveMembers;
+      const prevRefTargetMembers = this.refTargetMembers;
       const prevInheritsTag = this._inheritsTag;
       this.componentMembers = memberNames;
       this.reactiveMembers = reactiveMembers;
+      this.refTargetMembers = refTargetMembers;
       this._inheritsTag = inheritsTag || null;
       if (this.options.stubComponents) {
         const expandType = (t) => t ? t.replace(/::/g, ":") : null;
@@ -9675,6 +9680,13 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                       constructions.push(`    (${val});${marker}`);
                       continue;
                     }
+                    if (key === "ref") {
+                      const refName = typeof value === "string" || value instanceof String ? value.valueOf() : null;
+                      if (refName && /^[A-Za-z_$][\w$]*$/.test(refName) && this.reactiveMembers?.has(refName)) {
+                        (props.refChecks ??= []).push({ code: `__ripRef('${tagName}', this.${refName})`, srcLine });
+                      }
+                      continue;
+                    }
                     if (key.startsWith("__bind_") && key.endsWith("__")) {
                       const propName = key.slice(7, -2);
                       const val = this.emitInComponent(value, "value");
@@ -9954,6 +9966,11 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
               const iProps = extractIntrinsicProps(node.slice(1), tagName, node.loc?.r);
               const tagLine = node.loc?.r;
               const srcMarker = tagLine != null ? ` // @rip-src:${tagLine}` : "";
+              if (iProps.refChecks) {
+                for (const r of iProps.refChecks) {
+                  constructions.push(`    ${r.code};` + (r.srcLine != null ? ` // @rip-src:${r.srcLine}` : ""));
+                }
+              }
               if (iProps.length === 0) {
                 constructions.push(`    ${elFn}('${tagName}');${srcMarker}`);
               } else if (iProps.length === 1) {
@@ -9987,6 +10004,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         sl.push("}");
         this.componentMembers = prevComponentMembers;
         this.reactiveMembers = prevReactiveMembers;
+        this.refTargetMembers = prevRefTargetMembers;
         this._inheritsTag = prevInheritsTag;
         return sl.join(`
 `);
@@ -10170,6 +10188,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       lines.push("}");
       this.componentMembers = prevComponentMembers;
       this.reactiveMembers = prevReactiveMembers;
+      this.refTargetMembers = prevRefTargetMembers;
       this._inheritsTag = prevInheritsTag;
       if (blockFactoriesCode) {
         return `(() => {
@@ -10700,8 +10719,21 @@ ${blockFactoriesCode}return ${lines.join(`
             continue;
           }
           if (key === "ref") {
-            const refName = String(value).replace(/^["']|["']$/g, "");
-            this._createLines.push(`${this._self}.${refName} = ${elVar};`);
+            const refName = _str(value);
+            if (!refName || !/^[A-Za-z_$][\w$]*$/.test(refName)) {
+              this.error("ref: expects a state cell — declare `el := null` then write `ref: el` (string-name refs were removed)", value);
+            }
+            if (!(this.refTargetMembers && this.refTargetMembers.has(refName))) {
+              const isComputedOrReadonly = this.reactiveMembers && this.reactiveMembers.has(refName);
+              this.error(isComputedOrReadonly ? `ref: target '${refName}' is not a writable state cell — declare it with ':=' (computed '~=' and readonly '=!' members can't hold a ref)` : `ref: target '${refName}' must be a state cell declared with ':=' (e.g. \`${refName} := null\`)`, value);
+            }
+            const cellExpr = `${this._self}.${refName}`;
+            if (this._factoryMode) {
+              (this._refMounts ??= []).push({ cellExpr, elVar });
+            } else {
+              this._createLines.push(`${cellExpr}.value = ${elVar};`);
+              this._createLines.push(`(this._refCleanups ??= []).push(() => __detachRef(${cellExpr}, ${elVar}));`);
+            }
             continue;
           }
           if (key.startsWith(BIND_PREFIX) && key.endsWith(BIND_SUFFIX)) {
@@ -10817,11 +10849,11 @@ ${blockFactoriesCode}return ${lines.join(`
       const outerParams = this._loopVarStack.map((v) => `${v.itemVar}, ${v.indexVar}`).join(", ");
       const outerExtra = outerParams ? `, ${outerParams}` : "";
       const thenBlockName = this.newBlockVar();
-      this.emitConditionBranch(thenBlockName, thenBlock);
+      let hasDynamicRef = this.emitConditionBranch(thenBlockName, thenBlock);
       let elseBlockName = null;
       if (elseBlock) {
         elseBlockName = this.newBlockVar();
-        this.emitConditionBranch(elseBlockName, elseBlock);
+        hasDynamicRef = this.emitConditionBranch(elseBlockName, elseBlock) || hasDynamicRef;
       }
       const setupLines = [];
       setupLines.push(`// Conditional: ${thenBlockName}${elseBlockName ? " / " + elseBlockName : ""}`);
@@ -10832,6 +10864,8 @@ ${blockFactoriesCode}return ${lines.join(`
       const effOpen = this._factoryMode ? "disposers.push(__effect(() => {" : "__effect(() => {";
       const effClose = this._factoryMode ? "}, {skipRegister: true}));" : "});";
       setupLines.push(`  ${effOpen}`);
+      if (hasDynamicRef)
+        setupLines.push(`    __batch(() => {`);
       setupLines.push(`    const show = !!(${condCode});`);
       setupLines.push(`    const want = show ? 'then' : ${elseBlock ? "'else'" : "null"};`);
       setupLines.push(`    if (want === showing) return;`);
@@ -10860,6 +10894,8 @@ ${blockFactoriesCode}return ${lines.join(`
         setupLines.push(`      if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');`);
         setupLines.push(`    }`);
       }
+      if (hasDynamicRef)
+        setupLines.push(`    });`);
       setupLines.push(`  ${effClose}`);
       if (this._factoryMode) {
         setupLines.push(`  disposers.push(() => { if (currentBlock) { currentBlock.d(true); currentBlock = null; } });`);
@@ -10872,22 +10908,25 @@ ${blockFactoriesCode}return ${lines.join(`
       return anchorVar;
     };
     proto.emitConditionBranch = function(blockName, block) {
-      const saved = [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScope];
+      const saved = [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScope, this._refMounts];
       this._createLines = [];
       this._setupLines = [];
       this._factoryMode = true;
       this._factoryVars = new Set;
       this._renderLocalScope = new Set;
+      this._refMounts = [];
       const rootVar = this.emitTemplateBlock(block);
       const createLines = this._createLines;
       const setupLines = this._setupLines;
       const factoryVars = this._factoryVars;
-      [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScope] = saved;
+      const refMounts = this._refMounts;
+      [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScope, this._refMounts] = saved;
       const outerParams = this._loopVarStack.map((v) => `${v.itemVar}, ${v.indexVar}`).join(", ");
       const extraParams = outerParams ? `, ${outerParams}` : "";
-      this.emitBlockFactory(blockName, `ctx${extraParams}`, rootVar, createLines, setupLines, factoryVars);
+      this.emitBlockFactory(blockName, `ctx${extraParams}`, rootVar, createLines, setupLines, factoryVars, false, refMounts);
+      return refMounts.length > 0;
     };
-    proto.emitBlockFactory = function(blockName, params, rootVar, createLines, setupLines, factoryVars, isStatic) {
+    proto.emitBlockFactory = function(blockName, params, rootVar, createLines, setupLines, factoryVars, isStatic, refMounts) {
       const factoryLines = [];
       factoryLines.push(`function ${blockName}(${params}) {`);
       if (factoryVars.size > 0) {
@@ -10918,6 +10957,11 @@ ${blockFactoriesCode}return ${lines.join(`
       } else {
         factoryLines.push(`      if (target) target.insertBefore(${rootVar}, anchor);`);
       }
+      if (refMounts && refMounts.length) {
+        for (const r of refMounts) {
+          factoryLines.push(`      ${r.cellExpr}.value = ${r.elVar};`);
+        }
+      }
       factoryLines.push(`    },`);
       factoryLines.push(`    p(${params}) {`);
       if (hasEffects) {
@@ -10933,6 +10977,13 @@ ${blockFactoriesCode}return ${lines.join(`
       factoryLines.push(`      _factoryChildren = [];`);
       if (hasEffects) {
         factoryLines.push(`      disposers.forEach(d => d());`);
+      }
+      if (refMounts && refMounts.length) {
+        factoryLines.push(`      if (detaching) __batch(() => {`);
+        for (const r of refMounts) {
+          factoryLines.push(`        __detachRef(${r.cellExpr}, ${r.elVar});`);
+        }
+        factoryLines.push(`      });`);
       }
       if (fragChildren) {
         for (const child of fragChildren) {
@@ -10987,12 +11038,13 @@ ${blockFactoriesCode}return ${lines.join(`
           }
         }
       }
-      const saved = [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScope];
+      const saved = [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScope, this._refMounts];
       this._createLines = [];
       this._setupLines = [];
       this._factoryMode = true;
       this._factoryVars = new Set;
       this._renderLocalScope = new Set;
+      this._refMounts = [];
       const outerParams = this._loopVarStack.map((v) => `${v.itemVar}, ${v.indexVar}`).join(", ");
       const outerExtra = outerParams ? `, ${outerParams}` : "";
       const reactiveSource = this.hasReactiveDeps(collection);
@@ -11002,10 +11054,12 @@ ${blockFactoriesCode}return ${lines.join(`
       const itemCreateLines = this._createLines;
       const itemSetupLines = this._setupLines;
       const itemFactoryVars = this._factoryVars;
-      [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScope] = saved;
+      const itemRefMounts = this._refMounts;
+      [this._createLines, this._setupLines, this._factoryMode, this._factoryVars, this._renderLocalScope, this._refMounts] = saved;
       const isStatic = itemSetupLines.length === 0;
       const loopParams = `ctx, ${itemVar}, ${indexVar}${outerExtra}`;
-      this.emitBlockFactory(blockName, loopParams, itemNode, itemCreateLines, itemSetupLines, itemFactoryVars, isStatic);
+      this.emitBlockFactory(blockName, loopParams, itemNode, itemCreateLines, itemSetupLines, itemFactoryVars, isStatic, itemRefMounts);
+      const hasDynamicRef = itemRefMounts.length > 0;
       const hasCustomKey = keyExpr !== itemVar;
       const keyFnCode = hasCustomKey ? `(${itemVar}, ${indexVar}) => ${keyExpr}` : "null";
       const outerArgs = outerParams ? `, ${outerParams}` : "";
@@ -11016,7 +11070,11 @@ ${blockFactoriesCode}return ${lines.join(`
       const effOpen = this._factoryMode ? "disposers.push(__effect(() => {" : "__effect(() => {";
       const effClose = this._factoryMode ? "}, {skipRegister: true}));" : "});";
       setupLines.push(`  ${effOpen}`);
-      setupLines.push(`    __reconcile(${anchorVar}, __s, ${collectionCode}, ${this._self}, ${blockName}, ${keyFnCode}${outerArgs});`);
+      if (hasDynamicRef) {
+        setupLines.push(`    __batch(() => __reconcile(${anchorVar}, __s, ${collectionCode}, ${this._self}, ${blockName}, ${keyFnCode}${outerArgs}));`);
+      } else {
+        setupLines.push(`    __reconcile(${anchorVar}, __s, ${collectionCode}, ${this._self}, ${blockName}, ${keyFnCode}${outerArgs});`);
+      }
       setupLines.push(`  ${effClose}`);
       if (this._factoryMode) {
         setupLines.push(`  disposers.push(() => { for (const __b of __s.blocks) { try { __b.d(true); } catch {} } __s.blocks = []; __s.keys = []; __s.items = []; });`);
@@ -11659,6 +11717,21 @@ class __Component {
         try { d(); } catch (e) { console.error('[Rip] effect disposer error:', e); }
       }
       this._disposers = null;
+    }
+    // Static template-ref cleanups run AFTER this component's own effects
+    // are disposed (nulling a ref before disposing the effects that read it
+    // could re-run them mid-teardown under the synchronous scheduler) but
+    // before the DOM detaches. Batched so a forwarded ref (a parent-owned
+    // cell filled by a child element) notifies the still-live parent
+    // subscribers exactly once.
+    if (this._refCleanups) {
+      const __cleanups = this._refCleanups;
+      this._refCleanups = null;
+      __batch(() => {
+        for (const c of __cleanups) {
+          try { c(); } catch (e) { console.error('[Rip] ref cleanup error:', e); }
+        }
+      });
     }
     try {
       if (this.unmounted) this.unmounted();
@@ -13239,10 +13312,10 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
       }
       if (this.usesReactivity && !skip) {
         if (skipRT) {
-          code += `var { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;
+          code += `var { __state, __computed, __effect, __batch, __detachRef, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;
 `;
         } else if (typeof globalThis !== "undefined" && globalThis.__rip) {
-          code += `const { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;
+          code += `const { __state, __computed, __effect, __batch, __detachRef, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;
 `;
         } else {
           code += this.getReactiveRuntime();
@@ -16673,6 +16746,17 @@ function __batch(fn) {
   }
 }
 
+// Compare-and-clear a template ref cell on element detach. Uses the
+// NON-tracking read() so clearing never subscribes the teardown path to
+// the cell, and only nulls the cell if it still holds THIS element — a
+// keyed move or a re-render that already pointed the cell elsewhere must
+// not be clobbered. Writing null notifies subscribers (an effect reading
+// the ref re-runs when the element disappears); callers wrap teardown in
+// __batch where parent subscribers may be live.
+function __detachRef(cell, el) {
+  if (cell && typeof cell.read === 'function' && cell.read() === el) cell.value = null;
+}
+
 // Returns the AbortSignal of the currently-running effect, or null if
 // called outside an effect or before AbortController is available.
 // Designed for async-aware effect bodies — capture the signal BEFORE
@@ -16732,7 +16816,7 @@ function __catchErrors(fn) {
 
 // Register on globalThis for runtime deduplication
 if (typeof globalThis !== 'undefined') {
-  globalThis.__rip = { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors, __getEffectSignal };
+  globalThis.__rip = { __state, __computed, __effect, __batch, __detachRef, __readonly, __setErrorHandler, __handleError, __catchErrors, __getEffectSignal };
   // Stdlib-style global so user code can call getEffectSignal() in a
   // ~> body without importing or destructuring. Mirrors how p, pp,
   // assert, etc. are registered for ergonomic use.
@@ -17084,7 +17168,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.17.4";
-  var BUILD_DATE = "2026-06-29@14:13:05GMT";
+  var BUILD_DATE = "2026-06-29@22:27:55GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

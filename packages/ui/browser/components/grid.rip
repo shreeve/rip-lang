@@ -20,7 +20,6 @@
 #     @afterEdit: (row, col, oldVal, newVal) -> null
 
 export Grid = component
-
   @data := []
   @columns := []
   @rowHeight := 32
@@ -31,32 +30,7 @@ export Grid = component
   @afterEdit := null
 
   formatRegistry = []
-
-  registerFormat = (code, formatFn, parseFn) ->
-    id = formatRegistry.length
-    formatRegistry.push({ code, format: formatFn, parse: parseFn })
-    id
-
   formatMap := new Map()
-
-  _resolveCol = (ci) ->
-    fid = formatMap.get("0,#{ci + 1}")
-    if fid isnt undefined then return formatRegistry[fid]
-    gid = formatMap.get("0,0")
-    if gid isnt undefined then formatRegistry[gid] else null
-
-  colFormatCache ~=
-    cache = []
-    ci = 0
-    while ci < @columns.length
-      cache.push(_resolveCol(ci))
-      ci++
-    cache
-
-  cellFormat = (row, col) ->
-    fid = formatMap.get("#{row + 1},#{col + 1}")
-    if fid isnt undefined then formatRegistry[fid] else colFormatCache[col]
-
   _ready          := false
   scrollTop       := 0
   containerHeight := 0
@@ -70,8 +44,18 @@ export Grid = component
   _enterCommit    = false
   dataVersion     := 0
   sortKeys        := []
+  _trPool = []
+  _topSpacer = null
+  _botSpacer = null
+  _selBorder = null
 
-  cmp = (a, b) -> (a > b) - (a < b)
+  colFormatCache ~=
+    cache = []
+    ci = 0
+    while ci < @columns.length
+      cache.push(_resolveCol(ci))
+      ci++
+    cache
 
   sortIndex ~=
     dataVersion
@@ -112,49 +96,10 @@ export Grid = component
   offsetY     ~= startRow * @rowHeight
   bottomSpace ~= Math.max(0, (totalRows - endRow - 1) * @rowHeight)
 
-  # --------------------------------------------------------------------------
-  # DOM Recycling — pooled <tr>/<td> elements, imperative updates on scroll
-  # --------------------------------------------------------------------------
-  #
-  # Instead of letting the reactive render loop recreate row components on
-  # every scroll frame, we maintain a fixed pool of <tr> elements and update
-  # cell textContent directly. This eliminates DOM allocation and GC pressure
-  # during fast scrolling — the most performance-critical path in the grid.
-
-  _trPool = []
-  _topSpacer = null
-  _botSpacer = null
-  _selBorder = null
-
-  _createSpacer: ->
-    tr = document.createElement('tr')
-    tr.className = 'spacer'
-    td = document.createElement('td')
-    td.style.padding = '0'
-    td.style.border = 'none'
-    td.style.lineHeight = '0'
-    td.style.fontSize = '0'
-    tr.appendChild(td)
-    tr
-
-  _ensurePool: (needed, numCols) ->
-    while _trPool.length < needed
-      tr = document.createElement('tr')
-      ci = 0
-      while ci < numCols
-        td = document.createElement('td')
-        tr.appendChild(td)
-        ci++
-      _trPool.push(tr)
-    # Add cells if column count grew
-    for tr in _trPool
-      while tr.children.length < numCols
-        tr.appendChild(document.createElement('td'))
-
   # Effect: update tbody rows from pool on every viewport/data change
   ~>
     return unless _ready
-    tbody = @_body
+    tbody = @bodyRef
     return unless tbody
     numCols = @columns.length
     count = endRow - startRow + 1
@@ -227,7 +172,7 @@ export Grid = component
   # Selection overlay — applies data-* attributes to active/selected cells
   ~>
     return unless _ready
-    tbody = @_body
+    tbody = @bodyRef
     return unless tbody
     trs = tbody.querySelectorAll('tr:not(.spacer)')
 
@@ -239,7 +184,7 @@ export Grid = component
     unless _selBorder
       _selBorder = document.createElement('div')
       _selBorder.style.cssText = 'position:absolute;pointer-events:none;border:0;outline:1px solid #3b82f6;outline-offset:-1px;z-index:1;display:none'
-      @_container.appendChild(_selBorder)
+      @containerRef.appendChild(_selBorder)
 
     if anchorRow >= 0 and activeRow >= 0 and anchorCol >= 0 and activeCol >= 0
       minR = Math.min(anchorRow, activeRow)
@@ -267,11 +212,11 @@ export Grid = component
           topTd = topTr.children[minC]
           botTd = botTr.children[maxC]
           if topTd and botTd
-            cRect = @_container.getBoundingClientRect()
+            cRect = @containerRef.getBoundingClientRect()
             tl = topTd.getBoundingClientRect()
             br = botTd.getBoundingClientRect()
-            _selBorder.style.top = "#{tl.top - cRect.top + @_container.scrollTop}px"
-            _selBorder.style.left = "#{tl.left - cRect.left + @_container.scrollLeft}px"
+            _selBorder.style.top = "#{tl.top - cRect.top + @containerRef.scrollTop}px"
+            _selBorder.style.left = "#{tl.left - cRect.left + @containerRef.scrollLeft}px"
             _selBorder.style.width = "#{br.right - tl.left}px"
             _selBorder.style.height = "#{br.bottom - tl.top}px"
             _selBorder.style.display = 'block'
@@ -293,8 +238,62 @@ export Grid = component
         if td
           td.dataset.active = ''
 
+  bodyRef := null
+  containerRef := null
+
+  registerFormat = (code, formatFn, parseFn) ->
+    id = formatRegistry.length
+    formatRegistry.push({ code, format: formatFn, parse: parseFn })
+    id
+
+  _resolveCol = (ci) ->
+    fid = formatMap.get("0,#{ci + 1}")
+    if fid isnt undefined then return formatRegistry[fid]
+    gid = formatMap.get("0,0")
+    if gid isnt undefined then formatRegistry[gid] else null
+
+  cellFormat = (row, col) ->
+    fid = formatMap.get("#{row + 1},#{col + 1}")
+    if fid isnt undefined then formatRegistry[fid] else colFormatCache[col]
+
+  cmp = (a, b) -> (a > b) - (a < b)
+
+  # --------------------------------------------------------------------------
+  # DOM Recycling — pooled <tr>/<td> elements, imperative updates on scroll
+  # --------------------------------------------------------------------------
+  #
+  # Instead of letting the reactive render loop recreate row components on
+  # every scroll frame, we maintain a fixed pool of <tr> elements and update
+  # cell textContent directly. This eliminates DOM allocation and GC pressure
+  # during fast scrolling — the most performance-critical path in the grid.
+
+  _createSpacer: ->
+    tr = document.createElement('tr')
+    tr.className = 'spacer'
+    td = document.createElement('td')
+    td.style.padding = '0'
+    td.style.border = 'none'
+    td.style.lineHeight = '0'
+    td.style.fontSize = '0'
+    tr.appendChild(td)
+    tr
+
+  _ensurePool: (needed, numCols) ->
+    while _trPool.length < needed
+      tr = document.createElement('tr')
+      ci = 0
+      while ci < numCols
+        td = document.createElement('td')
+        tr.appendChild(td)
+        ci++
+      _trPool.push(tr)
+    # Add cells if column count grew
+    for tr in _trPool
+      while tr.children.length < numCols
+        tr.appendChild(document.createElement('td'))
+
   _removeEditor: ->
-    @_container.querySelector('.rip-grid-editor')?.remove()
+    @containerRef.querySelector('.rip-grid-editor')?.remove()
 
   openEditor: (initial, cursorEnd) ->
     if activeRow < 0 or activeCol < 0 or editing
@@ -337,17 +336,17 @@ export Grid = component
       el.addEventListener 'input', (e) =>
         editValue = e.target.value
       el.addEventListener 'keydown', (e) => @_editorKeydown(e)
-    @_container.appendChild(el)
+    @containerRef.appendChild(el)
     requestAnimationFrame =>
-      trs = @_body.querySelectorAll('tr:not(.spacer)')
+      trs = @bodyRef.querySelectorAll('tr:not(.spacer)')
       tr = trs[activeRow - startRow]
       if tr
         td = tr.children[activeCol]
         if td
           tdRect = td.getBoundingClientRect()
-          cRect = @_container.getBoundingClientRect()
-          el.style.top = "#{tdRect.top - cRect.top + @_container.scrollTop}px"
-          el.style.left = "#{tdRect.left - cRect.left + @_container.scrollLeft}px"
+          cRect = @containerRef.getBoundingClientRect()
+          el.style.top = "#{tdRect.top - cRect.top + @containerRef.scrollTop}px"
+          el.style.left = "#{tdRect.left - cRect.left + @containerRef.scrollLeft}px"
           el.style.width = "#{tdRect.width}px"
           el.style.height = "#{tdRect.height}px"
           if el.selectionStart isnt undefined
@@ -371,7 +370,7 @@ export Grid = component
       dataVersion++
       editing = false
       @_removeEditor()
-      @_container.focus() if @_container
+      @containerRef.focus() if @containerRef
       if @afterEdit
         @afterEdit(di, activeCol, oldVal, val)
 
@@ -380,7 +379,7 @@ export Grid = component
     @_removeEditor()
     anchorRow = activeRow
     anchorCol = activeCol
-    @_container.focus() if @_container
+    @containerRef.focus() if @containerRef
 
   _editorKeydown: (e) ->
     numCols = @columns.length
@@ -425,7 +424,7 @@ export Grid = component
     startW = @columns[ci].width
     handle = e.target
     handle.classList.add('active')
-    colEl = @_container.querySelector("colgroup").children[ci]
+    colEl = @containerRef.querySelector("colgroup").children[ci]
     onMove = (ev) =>
       w = Math.max(40, startW + ev.clientX - startX)
       colEl.style.width = "#{w}px"
@@ -479,7 +478,7 @@ export Grid = component
         @_rafPending = false
 
   scrollToRow: (row) ->
-    el = @_container
+    el = @containerRef
     if el
       top = row * @rowHeight
       if top < el.scrollTop
@@ -496,9 +495,9 @@ export Grid = component
     td = e.target.closest('td')
     if td and not td.parentElement.classList.contains('spacer')
       e.preventDefault()
-      @_container.focus() if @_container
+      @containerRef.focus() if @containerRef
       selecting = true
-      el = @_container
+      el = @containerRef
       rect = el.getBoundingClientRect()
       ri = Math.floor((e.clientY - rect.top + el.scrollTop - @headerHeight) / @rowHeight)
       if ri >= 0 and ri < totalRows
@@ -518,7 +517,7 @@ export Grid = component
   onMousemove: (e) ->
     if not selecting or e.buttons isnt 1
       return
-    el = @_container
+    el = @containerRef
     rect = el.getBoundingClientRect()
     ri = Math.floor((e.clientY - rect.top + el.scrollTop - @headerHeight) / @rowHeight)
     ri = Math.max(0, Math.min(totalRows - 1, ri))
@@ -867,19 +866,19 @@ export Grid = component
     _topSpacer = @_createSpacer()
     _botSpacer = @_createSpacer()
     _ready = true
-    if @_container
+    if @containerRef
       handler = (entries) =>
         for entry in entries
           containerHeight = entry.contentRect.height
       @_resizeObs = new ResizeObserver(handler)
-      @_resizeObs.observe(@_container)
+      @_resizeObs.observe(@containerRef)
 
   unmounted: ->
     if @_resizeObs
       @_resizeObs.disconnect()
 
   render
-    div.grid-container ref: "_container", role: "grid", tabIndex: 0
+    div.grid-container ref: containerRef, role: "grid", tabIndex: 0
       $editing: editing?!
       $selecting: selecting?!
       @dblclick
@@ -904,4 +903,4 @@ export Grid = component
                   span.sort-badge
                     "#{sortInfo.ranks[ci]}"
                 span.resize-handle @mousedown: @_resizeStart
-        tbody ref: "_body"
+        tbody ref: bodyRef

@@ -30,10 +30,22 @@ export Carousel = component
 
   _slides ~=
     return [] unless _ready
-    return [] unless @_content
-    Array.from(@_content.querySelectorAll('[data-slide]') or [])
+    return [] unless @contentRef
+    Array.from(@contentRef.querySelectorAll('[data-slide]') or [])
 
   totalSlides ~= _slides.length
+
+  ~>
+    return unless _ready
+    _slides.forEach (el, idx) =>
+      isActive = idx is activeIndex
+      el.hidden = not isActive
+      el.toggleAttribute 'data-active', isActive
+      el.setAttribute 'role', 'tabpanel'
+      el.setAttribute 'aria-roledescription', 'slide'
+      el.setAttribute 'aria-label', "Slide #{idx + 1} of #{totalSlides}"
+
+  contentRef := null
 
   mounted: ->
     _ready = true
@@ -79,16 +91,6 @@ export Carousel = component
         e.preventDefault()
         @goto(totalSlides - 1)
 
-  ~>
-    return unless _ready
-    _slides.forEach (el, idx) =>
-      isActive = idx is activeIndex
-      el.hidden = not isActive
-      el.toggleAttribute 'data-active', isActive
-      el.setAttribute 'role', 'tabpanel'
-      el.setAttribute 'aria-roledescription', 'slide'
-      el.setAttribute 'aria-label', "Slide #{idx + 1} of #{totalSlides}"
-
   onMouseenter: -> @_stopAutoplay() if @autoplay
   onMouseleave: -> @_startAutoplay() if @autoplay
 
@@ -102,7 +104,7 @@ export Carousel = component
         disabled: not @loop and activeIndex <= 0
         $disabled: (not @loop and activeIndex <= 0)?!
         @click: (=> @prev())
-      div ref: "_content"
+      div ref: contentRef
         slot
       button $next: true, aria-label: "Next slide"
         disabled: not @loop and activeIndex >= totalSlides - 1

@@ -13,12 +13,9 @@ export Pagination = component
   @perPage := 10
   @siblingCount := 1
 
-  totalPages ~= Math.max(1, Math.ceil(@total / @perPage))
   _ready := false
-
-  _range: (start, fin) ->
-    len = fin - start + 1
-    Array.from {length: len}, (_, i) -> start + i
+  _prevPages = null
+  totalPages ~= Math.max(1, Math.ceil(@total / @perPage))
 
   visiblePages ~=
     tp = totalPages
@@ -47,6 +44,22 @@ export Pagination = component
     midRange = @_range(leftSib, rightSib)
     [1, -2, ...midRange, -1, tp]
 
+  ~>
+    return unless _ready
+    inner = @navRef?.querySelector('[data-pages]')
+    return unless inner
+
+    key = visiblePages.join ','
+    if key isnt _prevPages
+      @_rebuild inner
+    @_syncActive inner
+
+  navRef := null
+
+  _range: (start, fin) ->
+    len = fin - start + 1
+    Array.from {length: len}, (_, i) -> start + i
+
   goto: (pg) ->
     pg = Math.max(1, Math.min(pg, totalPages))
     return if pg is @page
@@ -70,8 +83,6 @@ export Pagination = component
 
   mounted: ->
     _ready = true
-
-  _prevPages = null
 
   _rebuild: (inner) ->
     frag = document.createDocumentFragment()
@@ -100,18 +111,8 @@ export Pagination = component
         btn.removeAttribute 'aria-current'
         btn.removeAttribute 'data-active'
 
-  ~>
-    return unless _ready
-    inner = @_nav?.querySelector('[data-pages]')
-    return unless inner
-
-    key = visiblePages.join ','
-    if key isnt _prevPages
-      @_rebuild inner
-    @_syncActive inner
-
   render
-    nav ref: "_nav", aria-label: "Pagination", @keydown: @onKeydown
+    nav ref: navRef, aria-label: "Pagination", @keydown: @onKeydown
       button $prev: true, aria-label: "Previous page"
         disabled: @page <= 1
         $disabled: (@page <= 1)?!

@@ -44,10 +44,20 @@ export const INTRINSIC_TYPE_DECLS = [
   // out, which would wrongly drop every SVG attribute. So — like JSX/React — we
   // hand-author the attribute surface as string | number and add it for SVG tags.
   "type __RipSvgAttrs = { cx?: string | number; cy?: string | number; r?: string | number; rx?: string | number; ry?: string | number; x?: string | number; y?: string | number; x1?: string | number; y1?: string | number; x2?: string | number; y2?: string | number; dx?: string | number; dy?: string | number; width?: string | number; height?: string | number; d?: string; points?: string; pathLength?: string | number; viewBox?: string; preserveAspectRatio?: string; transform?: string; 'transform-origin'?: string; fill?: string; 'fill-opacity'?: string | number; 'fill-rule'?: string; stroke?: string; 'stroke-width'?: string | number; 'stroke-linecap'?: string; 'stroke-linejoin'?: string; 'stroke-dasharray'?: string | number; 'stroke-dashoffset'?: string | number; 'stroke-opacity'?: string | number; 'stroke-miterlimit'?: string | number; opacity?: string | number; color?: string; 'clip-path'?: string; 'clip-rule'?: string; mask?: string; filter?: string; 'text-anchor'?: string; 'dominant-baseline'?: string; 'alignment-baseline'?: string; 'font-family'?: string; 'font-size'?: string | number; 'font-weight'?: string | number; 'font-style'?: string; 'letter-spacing'?: string | number; 'word-spacing'?: string | number; 'text-decoration'?: string; 'marker-start'?: string; 'marker-mid'?: string; 'marker-end'?: string; offset?: string | number; 'stop-color'?: string; 'stop-opacity'?: string | number; gradientUnits?: string; gradientTransform?: string; spreadMethod?: string; fx?: string | number; fy?: string | number; fr?: string | number; display?: string; visibility?: string; overflow?: string; 'pointer-events'?: string; cursor?: string; 'vector-effect'?: string; 'shape-rendering'?: string; 'color-interpolation-filters'?: string; href?: string; 'xlink:href'?: string };",
-  "type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents<K> & { ref?: string; class?: __RipClassValue | __RipClassValue[]; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };",
+  "type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents<K> & { class?: __RipClassValue | __RipClassValue[]; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };",
+  // Template-ref validator. `ref:` binds a DOM element into a writable state
+  // cell. __RipRefCell<V, K> resolves to `unknown` (an identity intersection)
+  // only when V — the cell's full value type — both accepts the tag's element
+  // type AND admits null; otherwise it resolves to `never`, collapsing the
+  // parameter to `never` so the cell argument fails to assign. The cell shape
+  // is written inline (`{ value: V; read(): V }`) rather than `Signal<V>` so
+  // the decl is self-contained (no dependency on the Signal interface being in
+  // scope) and so a computed (`readonly value`) or a readonly plain field is
+  // rejected structurally.
+  "type __RipRefCell<V, K extends __RipTag> = [__RipElementMap[K]] extends [NonNullable<V>] ? (null extends V ? unknown : never) : never;",
 ];
 
-export const INTRINSIC_FN_DECL = 'declare function __ripEl<K extends __RipTag>(tag: K, props?: __RipProps<K>): void;\ndeclare function __ripSvgEl<K extends keyof Omit<SVGElementTagNameMap, keyof HTMLElementTagNameMap>>(tag: K, props?: __RipProps<K> & __RipSvgAttrs): void;\ndeclare function __ripRoute<const T extends string>(s: T): T;';
+export const INTRINSIC_FN_DECL = 'declare function __ripEl<K extends __RipTag>(tag: K, props?: __RipProps<K>): void;\ndeclare function __ripSvgEl<K extends keyof Omit<SVGElementTagNameMap, keyof HTMLElementTagNameMap>>(tag: K, props?: __RipProps<K> & __RipSvgAttrs): void;\ndeclare function __ripRoute<const T extends string>(s: T): T;\ndeclare function __ripRef<K extends __RipTag, V>(tag: K, cell: { value: V; read(): V } & __RipRefCell<V, K>): void;';
 
 export const SIGNAL_INTERFACE = 'interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }';
 export const SIGNAL_FN = 'declare function __state<T>(value: T | Signal<T>): Signal<T>;';

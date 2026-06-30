@@ -18,6 +18,7 @@ export Autocomplete = component
   open := false
   _ready := false
   _popupGuard =! ARIA.popupGuard()
+  _listId =! "ac-list-#{Math.random().toString(36).slice(2, 8)}"
 
   filteredItems ~=
     q = @value.trim()
@@ -26,11 +27,19 @@ export Autocomplete = component
       label = if typeof item is 'string' then item else (item.label or item.name or String(item))
       acCollator.compare(label.slice(0, q.length), q) is 0
 
-  _listId =! "ac-list-#{Math.random().toString(36).slice(2, 8)}"
+  ~>
+    return unless _ready
+    if @listRef
+      @_applyPlacement()
+    ARIA.bindPopover open, (=> @listRef), ((isOpen) => open = isOpen), (=> @inputRef)
+    ARIA.popupDismiss open, (=> @listRef), (=> @close(false, true)), [=> @inputRef]
+
+  inputRef := null
+  listRef := null
 
   _getItems: ->
-    return [] unless @_list
-    Array.from(@_list.querySelectorAll('[role="option"]'))
+    return [] unless @listRef
+    Array.from(@listRef.querySelectorAll('[role="option"]'))
 
   _updateHighlight: ->
     idx = @_hlIdx
@@ -39,33 +48,33 @@ export Autocomplete = component
       el.id = "#{@_listId}-opt-#{ndx}" unless el.id
       el.toggleAttribute 'data-highlighted', ndx is idx
     activeId = if idx >= 0 and opts[idx] then opts[idx].id else undefined
-    if @_input
-      if activeId then @_input.setAttribute 'aria-activedescendant', activeId
-      else @_input.removeAttribute 'aria-activedescendant'
+    if @inputRef
+      if activeId then @inputRef.setAttribute 'aria-activedescendant', activeId
+      else @inputRef.removeAttribute 'aria-activedescendant'
     opts[idx]?.scrollIntoView({ block: 'nearest' })
 
   openMenu: ->
     return unless _popupGuard.canOpen()
     open = true
     @_hlIdx = -1
-    @_input?.focus()
+    @inputRef?.focus()
 
   close: (restoreFocus = true, blockOpen = false) ->
     open = false
     @_hlIdx = -1
-    @_input?.removeAttribute 'aria-activedescendant'
+    @inputRef?.removeAttribute 'aria-activedescendant'
     _popupGuard.block() if blockOpen
-    @_input?.focus() if restoreFocus
+    @inputRef?.focus() if restoreFocus
 
   _applyPlacement: ->
-    ARIA.position @_input, @_list, placement: 'bottom start', offset: 2, matchWidth: true
+    ARIA.position @inputRef, @listRef, placement: 'bottom start', offset: 2, matchWidth: true
 
   selectIndex: (idx) ->
     item = filteredItems[idx]
     return unless item
     label = if typeof item is 'string' then item else (item.label or item.name or String(item))
     @value = label
-    @_input?.value = label
+    @inputRef?.value = label
     @emit 'select', item
     @close(true, true)
 
@@ -88,22 +97,15 @@ export Autocomplete = component
       dismiss: => @close()
       tab:     => @close(false, true)
 
-  ~>
-    return unless _ready
-    if @_list
-      @_applyPlacement()
-    ARIA.bindPopover open, (=> @_list), ((isOpen) => open = isOpen), (=> @_input)
-    ARIA.popupDismiss open, (=> @_list), (=> @close(false, true)), [=> @_input]
-
   mounted: ->
     _ready = true
     @_hlIdx = -1
-    @_input.value = @value if @_input and @value
+    @inputRef.value = @value if @inputRef and @value
 
   render
     . $open: open?!
 
-      input ref: "_input", role: "combobox", type: "text"
+      input ref: inputRef, role: "combobox", type: "text"
         autocomplete: "off"
         aria-expanded: !!open
         aria-haspopup: "listbox"
@@ -115,7 +117,7 @@ export Autocomplete = component
         @input: @onInput
         @keydown: @onKeydown
 
-      div ref: "_list"
+      div ref: listRef
         id: _listId
         role: "listbox"
         popover: "auto"
