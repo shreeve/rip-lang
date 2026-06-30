@@ -7,4 +7,4 @@ export Card = component
     div.card
       if title
         h3 "#{title}"
-      @children
+      slot
