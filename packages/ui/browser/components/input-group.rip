@@ -13,10 +13,11 @@
 #     button $suffix: true, @click: doSearch, "Go"
 
 export InputGroup = component
-  rootRef := null
   @disabled := false
 
   focused := false
+
+  rootRef := null
 
   mounted: ->
     ctrl = @rootRef?.querySelector('input, select, textarea')

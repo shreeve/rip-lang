@@ -22,9 +22,9 @@ export NumberField = component
   @readOnly := false
   @name := null
 
+  _ready := false
   _timer = null
   _interval = null
-  _ready := false
   _id =! "nf-#{Math.random().toString(36).slice(2, 8)}"
 
   ~>
