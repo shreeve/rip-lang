@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { readFileSync, writeFileSync, unlinkSync } from 'fs';
+import { readFileSync, writeFileSync, unlinkSync, cpSync } from 'fs';
 import { brotliCompressSync } from 'zlib';
 import { spawnSync } from 'child_process';
 import { compileToJS } from '../src/compiler.js';
@@ -116,5 +116,18 @@ if (uiBundle.status !== 0) {
   console.error('\nAborting build — bundle:ui failed.');
   process.exit(uiBundle.status ?? 1);
 }
+
+// Refresh the gallery's static shell (CSS, syntax grammar, HTML) so docs/ui/
+// stays in sync with packages/ui/ for static hosting. Component sources ship
+// in bundle.json above — no per-component .rip files are copied.
+cpSync('packages/ui/index.css', 'docs/ui/index.css');
+cpSync('packages/ui/browser/hljs-rip.js', 'docs/ui/hljs-rip.js');
+const galleryHtml = readFileSync('packages/ui/index.html', 'utf-8')
+  .replace('src="/rip/rip.min.js"', 'src="../dist/rip.min.js"')
+  .replace(/\n\s+\/(\S+\.rip)/g, '\n      $1')
+  .replace(/  <script>\n    let ready = false;\n    const es[\s\S]*?<\/script>\n/, '')
+  .replace('fetch! "/#{id}.rip"', 'fetch! "#{id}.rip"')
+  .replace("'/hljs-rip.js'", "'hljs-rip.js'");
+writeFileSync('docs/ui/index.html', galleryHtml);
 
 console.log(`\n✨ rip.min.js ready • Version ${version} • ${buildDate}`);
