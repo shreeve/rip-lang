@@ -358,3 +358,28 @@ function RefMismatchTests() {
     </div>
   )
 }
+
+// ── const members: =! → readonly, siblings stay mutable ──
+//
+// Mirrors the Rip ConstMembers/ConstMemberTests. Rip compiles a `=!` member to
+// a `readonly` field, `:=` to a Signal, `~=` to a Computed, and `=` to a plain
+// field; here we model the readonly-vs-mutable distinction with a class. A
+// consumer reassigning the readonly member is TS2540, while the others are
+// freely writable.
+
+class ConstMembers {
+  readonly a: number = 5
+  b: number = 10
+  c: number = 20
+  d: number = 30
+}
+
+function ConstMemberTests() {
+  const ref = new ConstMembers()
+  // @ts-expect-error — `a` is readonly (TS2540)
+  ref.a = 6
+  ref.b = 11
+  console.log(ref.c)
+  ref.d = 31
+  return null
+}

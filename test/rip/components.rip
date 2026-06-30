@@ -2046,6 +2046,74 @@ code "plain `=` member read + reassigned only in an effect is NOT a silent-freez
   }
   ''', opts
 
+# ── `=!` const-member semantics ──
+# A `=!` component member is a genuine SHALLOW const (like JS `const`):
+# rebinding the member is a compile error, but mutating the value it holds
+# (array push, object property set) is allowed. The Rip-native check runs in
+# the erasure core — no type-checking required.
+
+fail "reassigning a =! member is a compile error", '''
+  export A = component
+    c =! 5
+    bump: -> @c = 6
+    render
+      div "#{c}"
+''', "const member 'c'"
+
+fail "compound-assigning a =! member is a compile error", '''
+  export A = component
+    n =! 0
+    inc: -> n += 1
+    render
+      div "#{n}"
+''', "const member 'n'"
+
+# Content mutation of the value a `=!` member holds is allowed (shallow const).
+test "content mutation of a =! array member is allowed", '''
+  A = component
+    items =! []
+    add: -> @items.push("x")
+  a = A.new()
+  a.add()
+  a.add()
+  a.items.length
+  ''', 2
+
+test "property mutation of a =! object member is allowed", '''
+  A = component
+    cfg =! {}
+    set: -> @cfg.ready = true
+  a = A.new()
+  a.set()
+  a.cfg.ready
+  ''', true
+
+# A method's OWN top-level param does NOT shadow a member: rip member-transforms
+# the method body, so a bare member-named read becomes `this.member`. Assigning
+# it therefore rebinds the const — matching that runtime rewrite, the const
+# check flags it (prevents a silent "I meant the param" footgun).
+fail "a top-level method param named like a =! member does not shadow it", '''
+  export A = component
+    c =! 5
+    use: (c) -> c = c + 1
+    render
+      div "#{c}"
+''', "const member 'c'"
+
+# A NESTED arrow's param DOES shadow (the transform seeds nested-arrow params),
+# so assigning it inside the inner arrow is a normal local write, not a rebind.
+test "a nested-arrow param shadowing a =! member is assignable", '''
+  A = component
+    c =! 5
+    use: ->
+      f = (c) ->
+        c = c + 1
+        c
+      f(10)
+  a = A.new()
+  a.use()
+  ''', 11
+
 # Runtime ref behavior — mount with a faithful in-memory DOM. `mkDoc`
 # builds nodes tracking parentNode/childNodes/nextSibling and an
 # isConnected getter (true when an ancestor is flagged _connected), so we
@@ -2528,7 +2596,7 @@ test "context propagates from outer to inner across re-push", '''
   Outer = component
     init = -> setContext("greeting", "hi")
   Inner = component
-    val =! null
+    val = null
     _init = -> @val = getContext("greeting")
   outer = Outer.new()
   __pushComponent(outer)

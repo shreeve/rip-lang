@@ -9337,6 +9337,67 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           }
         }
       }
+      if (readonlyVars.length > 0) {
+        const constNames = new Set(readonlyVars.map((r) => r.name));
+        const CONST_ASSIGN_OPS = new Set(["=", "+=", "-=", "*=", "/=", "%=", "**=", "//=", "%%=", "&&=", "||=", "??=", "?=", "&=", "|=", "^=", "<<=", ">>=", ">>>="]);
+        const paramName = (p) => _str(Array.isArray(p) && (p[0] === "default" || p[0] === "rest") ? p[1] : p);
+        const reportConstAssign = (name, node) => this.error(`cannot assign to const member '${name}' (declared with =!); use '=' for a mutable field or ':=' for reactive state`, node);
+        const checkConst = (node, scope) => {
+          if (!Array.isArray(node))
+            return;
+          const h = node[0]?.valueOf?.() ?? node[0];
+          if (h === "->" || h === "=>") {
+            const child = new Set(scope);
+            const params = node[1];
+            if (Array.isArray(params))
+              for (const p of params) {
+                const pn = paramName(p);
+                if (pn)
+                  child.add(pn);
+              }
+            checkConst(node[2], child);
+            return;
+          }
+          if (h === "block" || h === "program") {
+            const child = new Set(scope);
+            for (let i = 1;i < node.length; i++) {
+              const item = node[i];
+              checkConst(item, child);
+              if (Array.isArray(item) && item[0] === "=") {
+                const tn = _str(item[1]);
+                if (tn && !constNames.has(tn))
+                  child.add(tn);
+              }
+            }
+            return;
+          }
+          if (CONST_ASSIGN_OPS.has(h) || h === "++" || h === "--") {
+            const target = node[1];
+            if (Array.isArray(target) && target[0] === "." && target[1] === "this") {
+              const mn = _str(target[2]);
+              if (mn && constNames.has(mn))
+                reportConstAssign(mn, node);
+            } else {
+              const tn = _str(target);
+              if (tn && constNames.has(tn) && !scope.has(tn))
+                reportConstAssign(tn, node);
+            }
+          }
+          for (let i = 1;i < node.length; i++)
+            checkConst(node[i], scope);
+        };
+        const bodyOf = (fn) => Array.isArray(fn) && (fn[0] === "->" || fn[0] === "=>") ? fn[2] : fn;
+        for (const m of methods)
+          checkConst(bodyOf(m.func), new Set);
+        for (const e of effects)
+          checkConst(e[2], new Set);
+        for (const h of lifecycleHooks)
+          checkConst(bodyOf(h.value), new Set);
+        for (const d of derivedVars)
+          checkConst(d.expr, new Set);
+        if (renderBlock)
+          checkConst(renderBlock, new Set);
+      }
       const inheritsTag = rest[0]?.valueOf?.() ?? null;
       const publicPropNames = new Set;
       for (const { name, isPublic } of stateVars)
@@ -9415,7 +9476,20 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           let propsType = parts.length ? parts.join(" & ") : "{}";
           if (inheritsTag)
             propsType += ` & __RipProps<'${inheritsTag}'>`;
-          sl.push(`  constructor(_props${propsOpt}: ${propsType}) {}`);
+          const ctorInits = [];
+          for (const { name, value, isPublic, srcLine } of readonlyVars) {
+            const val = this.emitInComponent(value, "value");
+            const marker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
+            ctorInits.push((isPublic ? `    this.${name} = _props?.${name} ?? ${val};` : `    this.${name} = ${val};`) + marker);
+          }
+          if (ctorInits.length) {
+            sl.push(`  constructor(_props${propsOpt}: ${propsType}) {`);
+            for (const line of ctorInits)
+              sl.push(line);
+            sl.push("  }");
+          } else {
+            sl.push(`  constructor(_props${propsOpt}: ${propsType}) {}`);
+          }
         }
         const inferLiteralType = (v) => {
           const s = v?.valueOf?.() ?? v;
@@ -9460,7 +9534,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         }
         for (const { name, type, value } of readonlyVars) {
           const ts = expandType(type) || inferLiteralType(value);
-          sl.push(ts ? `  declare ${name}: ${ts};` : `  declare ${name}: any;`);
+          sl.push(ts ? `  declare readonly ${name}: ${ts};` : `  declare readonly ${name}: any;`);
         }
         for (const { name, type, value } of plainVars) {
           const ts = expandType(type) || inferLiteralType(value);
@@ -9490,11 +9564,6 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           sl.push(`  ${name} = __state(${val});` + marker);
         }
         sl.push("  _init(props) {");
-        for (const { name, value, isPublic, srcLine } of readonlyVars) {
-          const val = this.emitInComponent(value, "value");
-          const marker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
-          sl.push((isPublic ? `    this.${name} = props.${name} ?? ${val};` : `    this.${name} = ${val};`) + marker);
-        }
         for (const { name, value, isPublic, srcLine } of plainVars) {
           const val = this.emitInComponent(value, "value");
           const marker = srcLine != null ? ` // @rip-src:${srcLine}` : "";
@@ -17247,7 +17316,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.17.4";
-  var BUILD_DATE = "2026-06-30@01:00:50GMT";
+  var BUILD_DATE = "2026-06-30@01:22:17GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

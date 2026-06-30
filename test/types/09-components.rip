@@ -444,3 +444,35 @@ export RefForwardParent = component
   render
     RefForwardChild
       field <=> myInput
+
+# ── `=!` const members surface as `readonly`; siblings do NOT ──
+#
+# A `=!` member is a genuine const. The Rip-native check forbids reassigning it
+# inside the SAME component (a compile error that fires before TS runs), so the
+# TS2540 surface is observed by a CONSUMER holding an instance: the shadow class
+# declares the `=!` member `readonly`, while `=`/`:=`/`~=` members stay mutable
+# (`Signal<T>.value` writable, `Computed<T>` readable, plain field reassignable).
+
+export ConstMembers = component
+  a: number =! 5     # =! → readonly a: number
+  b: number := 10    # := → b: Signal<number>   (NOT readonly; .value writable)
+  c: number ~= 20    # ~= → c: Computed<number>  (NOT readonly)
+  d: number = 30     # =  → plain d: number      (NOT readonly; reassignable)
+
+  render
+    div "#{a}"
+
+export ConstMemberTests = component
+  ref ~= new ConstMembers({})
+
+  checks: ->
+    # @ts-expect-error — `a` is a =! const member → readonly (TS2540)
+    @ref.a = 6
+    # `:=` state stays writable through its signal's `.value` — no error
+    @ref.b.value = 11
+    # `~=` computed is readable as Computed<number> — no error
+    p @ref.c.value
+    # plain `=` field is reassignable — no error
+    @ref.d = 31
+
+  render null

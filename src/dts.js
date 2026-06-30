@@ -1039,9 +1039,16 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, so
         optional = isProp ? !!target[2]?.optional : !!target?.optional;
         if (!isProp) {
           componentVars.add(propName);
-          let wrapper = (mHead === 'computed') ? 'Computed' : 'Signal';
           let typeStr = type ? tsType(type) : (inferLiteralType(member[2]) || 'any');
-          bodyMembers.push(`  ${propName}: ${wrapper}<${typeStr}>;`);
+          if (mHead === 'readonly') {
+            // `=!` member: a genuine const plain field — surface as `readonly`,
+            // NOT Signal-wrapped (the runtime emits `this.name = value`, not a
+            // signal). `readonly` makes a consumer reassignment TS2540.
+            bodyMembers.push(`  readonly ${propName}: ${typeStr};`);
+          } else {
+            let wrapper = (mHead === 'computed') ? 'Computed' : 'Signal';
+            bodyMembers.push(`  ${propName}: ${wrapper}<${typeStr}>;`);
+          }
           continue;
         }
       } else if (mHead === '.') {
@@ -1105,6 +1112,10 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars, so
       publicProps.push(`    ${propName}${opt}: ${typeStr};`);
       if (mHead === 'state') {
         publicProps.push(`    __bind_${propName}__?: Signal<${typeStr}>;`);
+      } else if (mHead === 'readonly') {
+        // Public `=!` prop: also surface the instance member as `readonly` so a
+        // consumer reading `instance.name` sees its const-ness (TS2540 on write).
+        bodyMembers.push(`  readonly ${propName}: ${typeStr};`);
       }
     }
 
