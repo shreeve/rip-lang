@@ -1281,6 +1281,14 @@ body:has(.source-overlay) { overflow: hidden; }
     border: none; outline: none; padding: 0 12px; height: 36px;
     font: inherit; font-size: 14px; flex: 1; min-width: 0;
   }
+
+  /* Round the end children to the inner radius (12px border-radius − 1px
+     border) so an addon fills flush into the corner. Without this, the
+     square-cornered addon is clipped by overflow:hidden to a slightly
+     different curve than the border, leaving a faint sliver at the corners
+     (most visible on the gray prefix/suffix when focused). */
+  & > :first-child { border-top-left-radius: 11px; border-bottom-left-radius: 11px; }
+  & > :last-child  { border-top-right-radius: 11px; border-bottom-right-radius: 11px; }
 }
 
 /* ── ButtonGroup ── */
