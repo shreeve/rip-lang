@@ -4464,7 +4464,12 @@ class __Component {
     if (this._refCleanups) {
       const __cleanups = this._refCleanups;
       this._refCleanups = null;
-      __batch(() => {
+      // __batch lives in the reactive-runtime eval scope; the component
+      // runtime is a separate bundle that doesn't destructure it, so resolve
+      // through globalThis.__rip when the bare binding isn't in scope (same
+      // pattern as __computed above).
+      const __b = typeof __batch !== 'undefined' ? __batch : globalThis.__rip.__batch;
+      __b(() => {
         for (const c of __cleanups) {
           try { c(); } catch (e) { console.error('[Rip] ref cleanup error:', e); }
         }

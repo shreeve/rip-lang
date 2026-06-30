@@ -9826,9 +9826,13 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
                     }
                     if (key === "ref") {
                       const refName = typeof value === "string" || value instanceof String ? value.valueOf() : null;
+                      let cellCode;
                       if (refName && /^[A-Za-z_$][\w$]*$/.test(refName) && this.reactiveMembers?.has(refName)) {
-                        (props.refChecks ??= []).push({ code: `__ripRef('${tagName}', this.${refName})`, srcLine });
+                        cellCode = `this.${refName}`;
+                      } else {
+                        cellCode = this.emitInComponent(value, "value");
                       }
+                      (props.refChecks ??= []).push({ code: `__ripRef('${tagName}', ${cellCode})`, srcLine });
                       continue;
                     }
                     if (key.startsWith("__bind_") && key.endsWith("__")) {
@@ -11875,7 +11879,12 @@ class __Component {
     if (this._refCleanups) {
       const __cleanups = this._refCleanups;
       this._refCleanups = null;
-      __batch(() => {
+      // __batch lives in the reactive-runtime eval scope; the component
+      // runtime is a separate bundle that doesn't destructure it, so resolve
+      // through globalThis.__rip when the bare binding isn't in scope (same
+      // pattern as __computed above).
+      const __b = typeof __batch !== 'undefined' ? __batch : globalThis.__rip.__batch;
+      __b(() => {
         for (const c of __cleanups) {
           try { c(); } catch (e) { console.error('[Rip] ref cleanup error:', e); }
         }
@@ -17316,7 +17325,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.17.5";
-  var BUILD_DATE = "2026-06-30@02:46:06GMT";
+  var BUILD_DATE = "2026-06-30@12:03:39GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
