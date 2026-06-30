@@ -1028,9 +1028,11 @@ export function installComponentSupport(CodeEmitter, Lexer) {
 
     // ── Safety diagnostic: silent-freeze guard for now-plain `=` members ──
     // Under uniform semantics a private `=` field is plain (non-reactive). If
-    // such a field is READ in a reactive position (render / `~=` computed /
-    // `~>` effect) AND reassigned anywhere in the component, the UI would read
-    // it once and never update — the classic silent-freeze. Steer to `:=`.
+    // such a field is READ in a *display* position (render / `~=` computed)
+    // AND reassigned anywhere in the component, the UI would read it once and
+    // never update — the classic silent-freeze. Steer to `:=`. Reads inside
+    // `~>` effect bodies don't count: an effect re-runs on its own tracked
+    // deps and legitimately drives plain imperative fields.
     if (plainVars.length > 0) {
       const ASSIGN_OPS = new Set(['=', '+=', '-=', '*=', '/=', '%=', '**=', '//=', '%%=', '&&=', '||=', '??=', '?=', '&=', '|=', '^=', '<<=', '>>=', '>>>=']);
       const occursRead = (node, name) => {
@@ -1071,10 +1073,15 @@ export function installComponentSupport(CodeEmitter, Lexer) {
       for (const d of derivedVars) collectAssigned(d.expr, reassigned);
       if (renderBlock) collectAssigned(renderBlock, reassigned);
 
+      // Only render and `~=` computed bodies are true "reactive reads" — they
+      // produce values the DOM displays and must re-derive when the source
+      // changes. `~>` effects are deliberately EXCLUDED: an effect re-runs on
+      // its own tracked deps and legitimately reads/writes plain imperative
+      // fields (RAF handles, drag flags, memo caches), so a plain `=` field
+      // touched only in effects is not a silent-freeze.
       const readReactively = (name) => {
         if (renderBlock && occursRead(renderBlock, name)) return true;
         for (const d of derivedVars) if (occursRead(d.expr, name)) return true;
-        for (const e of effects) if (occursRead(e[2], name)) return true;
         return false;
       };
 
@@ -1083,7 +1090,7 @@ export function installComponentSupport(CodeEmitter, Lexer) {
         if (pv.isPublic) continue;
         if (reassigned.has(pv.name) && readReactively(pv.name)) {
           this.error(
-            `'${pv.name}' is declared with '=' (a plain, non-reactive field) but it is read in render/computed/effect AND reassigned — the UI will read it once and never update.`,
+            `'${pv.name}' is declared with '=' (a plain, non-reactive field) but it is read in render/computed AND reassigned — the UI will read it once and never update.`,
             pv.node,
             { suggestion: `Declare it as reactive state: \`${pv.name} := ...\`` }
           );

@@ -2015,6 +2015,37 @@ fail "plain `=` member read in render + reassigned is a silent-freeze error", ''
       button "#{open}"
 ''', "non-reactive field"
 
+# Regression guard: the silent-freeze diagnostic scans only *display* reads
+# (render / `~=` computed). A plain `=` field read AND reassigned solely
+# inside a `~>` effect is a legitimate imperative field (RAF handle, drag
+# flag, memo cache) — the effect re-runs on its own tracked deps — so it must
+# NOT trip the diagnostic. (Six shipped ui widgets rely on this.)
+code "plain `=` member read + reassigned only in an effect is NOT a silent-freeze", '''
+  export A = component
+    count = 0
+    ~>
+      count = count + 1
+      p count
+    render
+      div "hi"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+      this.count = 0;
+      __effect(() => {
+    this.count = this.count + 1;
+    return p(this.count);
+  });
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      this._t0 = document.createTextNode("hi");
+      this._el0.appendChild(this._t0);
+      return this._el0;
+    }
+  }
+  ''', opts
+
 # Runtime ref behavior — mount with a faithful in-memory DOM. `mkDoc`
 # builds nodes tracking parentNode/childNodes/nextSibling and an
 # isConnected getter (true when an ancestor is flagged _connected), so we

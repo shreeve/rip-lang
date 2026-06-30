@@ -9327,16 +9327,13 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           for (const d of derivedVars)
             if (occursRead(d.expr, name))
               return true;
-          for (const e of effects)
-            if (occursRead(e[2], name))
-              return true;
           return false;
         };
         for (const pv of plainVars) {
           if (pv.isPublic)
             continue;
           if (reassigned.has(pv.name) && readReactively(pv.name)) {
-            this.error(`'${pv.name}' is declared with '=' (a plain, non-reactive field) but it is read in render/computed/effect AND reassigned — the UI will read it once and never update.`, pv.node, { suggestion: `Declare it as reactive state: \`${pv.name} := ...\`` });
+            this.error(`'${pv.name}' is declared with '=' (a plain, non-reactive field) but it is read in render/computed AND reassigned — the UI will read it once and never update.`, pv.node, { suggestion: `Declare it as reactive state: \`${pv.name} := ...\`` });
           }
         }
       }
@@ -17250,7 +17247,7 @@ if (typeof globalThis !== 'undefined') {
   }
   // src/browser.js
   var VERSION = "3.17.4";
-  var BUILD_DATE = "2026-06-30@00:19:59GMT";
+  var BUILD_DATE = "2026-06-30@01:00:50GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
