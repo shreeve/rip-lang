@@ -985,7 +985,7 @@ function publishDiagnostics(filePath) {
           endPos.line = adj.line; endPos.character = adj.col + adj.len;
         }
 
-        const rawMessage = tc.cleanDiagnosticMessage(ts.flattenDiagnosticMessageText(d.messageText, '\n'));
+        const rawMessage = tc.unifyRefDiagnostic(d.code, tc.cleanDiagnosticMessage(ts.flattenDiagnosticMessageText(d.messageText, '\n')), c, d.start);
         const { code, message } = tc.unifyRouteDiagnostic(d.code, rawMessage, c, d.start, filePath);
 
         // Snap route diagnostics to the meaningful token (`href` / `push`).

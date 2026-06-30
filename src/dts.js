@@ -47,14 +47,36 @@ export const INTRINSIC_TYPE_DECLS = [
   "type __RipProps<K extends __RipTag> = { [P in __RipAttrKeys<__RipElementMap[K]>]?: __RipElementMap[K][P] } & __RipEvents<K> & { class?: __RipClassValue | __RipClassValue[]; style?: string; [k: `data-${string}`]: any; [k: `aria-${string}`]: any };",
   // Template-ref validator. `ref:` binds a DOM element into a writable state
   // cell. __RipRefCell<V, K> resolves to `unknown` (an identity intersection)
-  // only when V — the cell's full value type — both accepts the tag's element
-  // type AND admits null; otherwise it resolves to `never`, collapsing the
-  // parameter to `never` so the cell argument fails to assign. The cell shape
-  // is written inline (`{ value: V; read(): V }`) rather than `Signal<V>` so
-  // the decl is self-contained (no dependency on the Signal interface being in
-  // scope) and so a computed (`readonly value`) or a readonly plain field is
+  // only when V — the cell's full value type — admits null AND can legitimately
+  // hold the tag's element type; otherwise it resolves to `never`, collapsing
+  // the parameter to `never` so the cell argument fails to assign. The cell
+  // shape is written inline (`{ value: V; read(): V }`) rather than `Signal<V>`
+  // so the decl is self-contained (no dependency on the Signal interface being
+  // in scope) and so a computed (`readonly value`) or a readonly plain field is
   // rejected structurally.
-  "type __RipRefCell<V, K extends __RipTag> = [__RipElementMap[K]] extends [NonNullable<V>] ? (null extends V ? unknown : never) : never;",
+  //
+  // "Can hold the element" is two cases, because lib.dom's element interfaces
+  // are structural, not nominal: a sibling like HTMLDivElement is nearly empty,
+  // so the richer HTMLInputElement structurally satisfies it (`HTMLInputElement
+  // extends HTMLDivElement` is *true*), which a plain `element extends V` test
+  // would wrongly accept for `input ref: divCell`. So V is accepted only when:
+  //   1. the tag's EXACT element type is one of V's constituents — tested with
+  //      `[element] extends [Extract<NonNullable<V>, element>]`. This admits the
+  //      exact type AND a union that contains it (e.g. one cell reused across an
+  //      <input> and a <div> as `HTMLInputElement | HTMLDivElement | null`),
+  //      while a pure sibling (`divCell` on <input>) extracts to `never` and is
+  //      rejected; or
+  //   2. NonNullable<V> is a recognized base element type (__RipBaseEl) AND the
+  //      tag's element actually extends it (`[element] extends [NonNullable<V>]`).
+  //      That second clause is what keeps base-widening sound: `Element` /
+  //      `HTMLMediaElement` / … only accept tags whose element really derives
+  //      from them, so `svg ref: htmlCell` (SVGSVGElement is not an HTMLElement)
+  //      and `div ref: mediaCell` are both rejected. __RipBaseEl must use an
+  //      exact (`__RipEqEl`) test per base — a plain `extends` union would
+  //      readmit every sibling, since HTMLDivElement extends HTMLElement.
+  "type __RipEqEl<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false;",
+  "type __RipBaseEl<T> = __RipEqEl<T, EventTarget> extends true ? true : __RipEqEl<T, Node> extends true ? true : __RipEqEl<T, Element> extends true ? true : __RipEqEl<T, HTMLElement> extends true ? true : __RipEqEl<T, SVGElement> extends true ? true : __RipEqEl<T, HTMLMediaElement> extends true ? true : __RipEqEl<T, SVGGraphicsElement> extends true ? true : false;",
+  "type __RipRefCell<V, K extends __RipTag> = null extends V ? ([__RipElementMap[K]] extends [Extract<NonNullable<V>, __RipElementMap[K]>] ? unknown : __RipBaseEl<NonNullable<V>> extends true ? ([__RipElementMap[K]] extends [NonNullable<V>] ? unknown : never) : never) : never;",
 ];
 
 export const INTRINSIC_FN_DECL = 'declare function __ripEl<K extends __RipTag>(tag: K, props?: __RipProps<K>): void;\ndeclare function __ripSvgEl<K extends keyof Omit<SVGElementTagNameMap, keyof HTMLElementTagNameMap>>(tag: K, props?: __RipProps<K> & __RipSvgAttrs): void;\ndeclare function __ripRoute<const T extends string>(s: T): T;\ndeclare function __ripRef<K extends __RipTag, V>(tag: K, cell: { value: V; read(): V } & __RipRefCell<V, K>): void;';

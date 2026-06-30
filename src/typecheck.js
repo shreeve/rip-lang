@@ -1033,6 +1033,25 @@ export function unifyRouteDiagnostic(code, message, entry, start, filePath) {
   return { code, message };
 }
 
+// Friendlier `ref:` errors. A bad ref binding compiles to a synthetic
+// `__ripRef('<tag>', <cell>)` call whose `never` parameter collapse surfaces as
+// TS2345 "not assignable to parameter of type 'never'" — true but opaque.
+// Rewrite it in terms of the ref contract: the cell must be a writable state
+// cell whose type holds the <tag> element. Returns the message unchanged when
+// the diagnostic isn't a ref-cell collapse. Shared by the CLI checker
+// (runCheck) and the LSP so the editor shows the same message.
+export function unifyRefDiagnostic(code, message, entry, start) {
+  if (code !== 2345 || !/ 'never'\.?$/.test(message)) return message;
+  const ls = entry.tsContent.lastIndexOf('\n', start - 1) + 1;
+  const le = entry.tsContent.indexOf('\n', start);
+  const genLineText = entry.tsContent.slice(ls, le < 0 ? undefined : le);
+  const refM = genLineText.match(/__ripRef\('([\w-]+)'/);
+  if (!refM) return message;
+  const got = message.match(/Argument of type '(.+?)' is not assignable/);
+  return `ref: must bind a writable state cell whose type holds the <${refM[1]}> element (e.g. \`el: HTMLInputElement | null := null\`)`
+    + (got ? `; got '${got[1]}'` : '') + '.';
+}
+
 // Rewrite `${string}` placeholders in route patterns to their source-form
 // `$paramName` (from `[id].rip` → `$id`). Used by diagnostics and hover.
 export function prettifyRoutePatterns(text, tree) {
@@ -3019,10 +3038,23 @@ export function mapToSourcePos(entry, offset) {
   // on their correct source lines instead of a sibling attribute line.
   if (entry.srcColToGen) {
     const origSrcLine = srcLine;
+    // Does the @rip-src-designated source line itself contribute a column
+    // mapping to this gen line? When it doesn't, the only candidates are
+    // *leaked* token mappings from synthetic stub code — e.g. a refCheck
+    // `__ripRef('input', this.listRef)` reuses the `this.listRef` token, whose
+    // source map points back to the member's first textual use elsewhere. Those
+    // must not drag the diagnostic onto an unrelated source line; the @rip-src
+    // marker is authoritative, so we keep its line and only refine the column
+    // from entries on that same line.
+    let origLineParticipates = false;
+    for (const e of (entry.srcColToGen.get(origSrcLine) || [])) {
+      if (e.genLine === tsLine) { origLineParticipates = true; break; }
+    }
     let bestDist = Infinity;
     for (const [sl, entries] of entry.srcColToGen) {
       for (const e of entries) {
         if (e.genLine === tsLine) {
+          if (!origLineParticipates && sl !== origSrcLine) continue;
           const dist = Math.abs(e.genCol - genCol);
           if (dist < bestDist || (dist === bestDist && sl === origSrcLine)) {
             bestDist = dist;
@@ -4114,7 +4146,8 @@ export async function runCheck(targetDir, opts = {}) {
       const endPos = adj ? { line: adj.line, col: adj.col + adj.len } : (d.length ? mapToSourcePos(entry, d.start + d.length) : null);
       let len = endPos && endPos.line === pos.line ? endPos.col - pos.col : 1;
 
-      const message = cleanDiagnosticMessage(ts.flattenDiagnosticMessageText(d.messageText, '\n'));
+      let message = cleanDiagnosticMessage(ts.flattenDiagnosticMessageText(d.messageText, '\n'));
+      message = unifyRefDiagnostic(d.code, message, entry, d.start);
       const severity = d.category === 1 ? 'error' : d.category === 0 ? 'warning' : 'info';
       const srcLine = srcLines[pos.line] || '';
 

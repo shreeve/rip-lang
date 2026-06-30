@@ -1732,14 +1732,25 @@ export function installComponentSupport(CodeEmitter, Lexer) {
                   }
                   if (key === 'ref') {
                     // ref: binds the element into a state cell. Type-check the
-                    // cell (the Signal OBJECT, not its `.value`) against the
-                    // tag's element type via __ripRef — mismatched element
-                    // types, non-nullable cells, computed (`~=`) and readonly
-                    // (`=!`) targets all error here.
+                    // cell against the tag's element type via __ripRef —
+                    // mismatched element types, non-nullable cells, computed
+                    // (`~=`) and readonly (`=!`) targets all error here.
                     const refName = (typeof value === 'string' || value instanceof String) ? value.valueOf() : null;
+                    let cellCode;
                     if (refName && /^[A-Za-z_$][\w$]*$/.test(refName) && this.reactiveMembers?.has(refName)) {
-                      (props.refChecks ??= []).push({ code: `__ripRef('${tagName}', this.${refName})`, srcLine });
+                      // A reactive member — pass the Signal OBJECT (never its
+                      // `.value`) so __ripRef checks both the element type and
+                      // that the cell is writable.
+                      cellCode = `this.${refName}`;
+                    } else {
+                      // Anything else (a string/number/boolean literal or a
+                      // non-cell identifier) is not a valid ref target. Emit it
+                      // so TS rejects it at the ref site — __ripRef's parameter
+                      // requires a writable `{ value; read() }` cell, which a
+                      // literal or unknown name can't satisfy.
+                      cellCode = this.emitInComponent(value, 'value');
                     }
+                    (props.refChecks ??= []).push({ code: `__ripRef('${tagName}', ${cellCode})`, srcLine });
                     continue;
                   }
                   if (key.startsWith('__bind_') && key.endsWith('__')) {

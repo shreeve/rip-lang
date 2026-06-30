@@ -1378,6 +1378,128 @@ check('a no-`@` event binding types the param as the specific event, not any', a
   assert(/clientX/.test(r.out), 'unexpected output:\n' + r.out);
 });
 
+// ── A `ref:` cell typed as a *sibling* element rejects the binding ──
+//
+// lib.dom element interfaces are structural, not nominal. A sibling like
+// HTMLDivElement is nearly empty, so the richer HTMLInputElement structurally
+// satisfies it (`HTMLInputElement extends HTMLDivElement` is *true*). The old
+// `element extends cell` assignability test therefore let a div-typed cell bind
+// to an <input> — the bug found in a real component (`input ref: divCell`).
+// __RipRefCell now requires an EXACT element-type match or a recognized base.
+
+check('a `ref:` cell typed as a sibling element (div cell on <input>) is rejected', async () => {
+  const r = await checkProject({
+    'box.rip': `export Box = component
+  divRef: HTMLDivElement | null := null
+  render
+    input ref: divRef
+`,
+  });
+  assert(!r.ok, 'expected an error (HTMLDivElement cell cannot bind an <input>)');
+  assert(/divRef/.test(r.out), 'error should point at the ref site:\n' + r.out);
+  assert(/ref: must bind a writable state cell whose type holds the <input>/.test(r.out),
+    'expected the ref-specific message, got:\n' + r.out);
+});
+
+// A `ref:` bound to a non-cell value (a literal, or any non-state-cell
+// expression) used to type-check clean — the stub path only emitted the
+// __ripRef validator for known reactive members and silently dropped everything
+// else, so the build-time "ref: expects a state cell" error never reached the
+// editor. Now every ref value is validated, with a ref-specific message.
+
+check('a `ref:` bound to a literal value is rejected with a ref-specific message', async () => {
+  const r = await checkProject({
+    'box.rip': `export Box = component
+  render
+    div
+      input ref: 42
+      input ref: "x"
+`,
+  });
+  assert(!r.ok, 'expected errors for non-cell ref values');
+  assert(/ref: must bind a writable state cell/.test(r.out), 'expected the ref-specific message, got:\n' + r.out);
+  assert(/got '42'/.test(r.out) && /got '"x"'/.test(r.out), 'message should name the offending value:\n' + r.out);
+});
+
+check('a `ref:` cell typed exactly or as a base element still binds cleanly', async () => {
+  const r = await checkProject({
+    'box.rip': `export Box = component
+  inputRef: HTMLInputElement | null := null
+  divRef:   HTMLDivElement   | null := null
+  anyRef:   Element          | null := null
+  htmlRef:  HTMLElement      | null := null
+  render
+    div
+      input ref: inputRef
+      div ref: divRef
+      section ref: anyRef
+      span ref: htmlRef
+`,
+  });
+  assert(r.ok, 'expected a clean check, got:\n' + r.out);
+});
+
+// A union cell whose type *contains* the tag's exact element type binds
+// cleanly — the same ref reused across an <input> and a <div> in different
+// branches is typed as the union of both element types. The exact-match-only
+// rule rejected this; the constituent test (the element must be one of the
+// union's members) accepts it for whichever tag matches a member, while still
+// rejecting a sibling-only union (no member equal to the tag's element).
+
+check('a `ref:` cell typed as a union containing the element binds; a sibling-only union does not', async () => {
+  const ok = await checkProject({
+    'box.rip': `export Box = component
+  bothRef: HTMLInputElement | HTMLDivElement | null := null
+  render
+    div
+      input ref: bothRef
+      div ref: bothRef
+`,
+  });
+  assert(ok.ok, 'expected a clean check for a union containing both element types, got:\n' + ok.out);
+
+  const bad = await checkProject({
+    'box.rip': `export Box = component
+  noInputRef: HTMLDivElement | HTMLSpanElement | null := null
+  render
+    input ref: noInputRef
+`,
+  });
+  assert(!bad.ok, 'expected an error: a union with no <input> member cannot bind an <input>');
+  assert(/ref: must bind a writable state cell whose type holds the <input>/.test(bad.out),
+    'expected the ref-specific message, got:\n' + bad.out);
+});
+
+// An intermediate base element type (not just Element/HTMLElement) binds when
+// the tag's element genuinely derives from it. HTMLVideoElement and
+// HTMLAudioElement both extend HTMLMediaElement, so a `HTMLMediaElement | null`
+// cell is a valid widening for <video>/<audio> — but binding it to a <div>
+// (which does not derive from HTMLMediaElement) is still rejected.
+
+check('a `ref:` cell typed as a recognized intermediate base (HTMLMediaElement) binds for derived tags only', async () => {
+  const ok = await checkProject({
+    'box.rip': `export Box = component
+  mediaRef: HTMLMediaElement | null := null
+  render
+    div
+      video ref: mediaRef
+      audio ref: mediaRef
+`,
+  });
+  assert(ok.ok, 'expected a clean check binding HTMLMediaElement to <video>/<audio>, got:\n' + ok.out);
+
+  const bad = await checkProject({
+    'box.rip': `export Box = component
+  mediaRef: HTMLMediaElement | null := null
+  render
+    div ref: mediaRef
+`,
+  });
+  assert(!bad.ok, 'expected an error: a <div> does not derive from HTMLMediaElement');
+  assert(/ref: must bind a writable state cell whose type holds the <div>/.test(bad.out),
+    'expected the ref-specific message, got:\n' + bad.out);
+});
+
 // ── Drain the queued checks with bounded concurrency ──
 // Workers pull from a shared cursor; results are stored by index and printed in
 // definition order afterward, so output is deterministic regardless of which
