@@ -213,7 +213,7 @@ CSV.write rows, drop: true
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `sep` | string | auto | Field delimiter (`,` `\t` `\|` `;` or any string) |
-| `quote` | string | `"` | Quote/enclosure character |
+| `quote` | string | `"` | Quote character |
 | `escape` | string | same as `quote` | Escape character (`"` for doubled, `\` for backslash) |
 | `headers` | boolean | `false` | First row as keys — return objects |
 | `excel` | boolean | `false` | Handle `="01"` literals |

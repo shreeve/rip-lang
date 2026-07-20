@@ -413,7 +413,6 @@ the callable — so the variable name itself becomes the verb.
 ## Requirements
 
 - **Bun** 1.3.5+ (for native PTY support via `Bun.Terminal`)
-- **rip-lang** 3.x (installed automatically as a dependency)
 - **ssh** binary on PATH (for SSH connections)
 
 ## License
